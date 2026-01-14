@@ -1829,11 +1829,12 @@
            ctx.stroke();
          }
 
-         // === CHAMBER (Gravitationsgefängnis) - ab 20% charge (1 Ring) ===
+         // === CHAMBER (Gravitationsgefängnis) - auch bei red particles sichtbar ===
          const chamberOpenThreshold = 0.2;
-         if (cursorEnergy >= chamberOpenThreshold && chamberActive) {
-          const chamberOuterRadius = cursorSize;
-          const chamberInnerRadius = cursorSize - CHAMBER_RADIUS;
+         const hasParticlesInChamber = chamberParticles.length > 0;
+         if ((cursorEnergy >= chamberOpenThreshold && chamberActive) || hasParticlesInChamber) {
+           const chamberOuterRadius = cursorSize;
+           const chamberInnerRadius = cursorSize - CHAMBER_RADIUS;
           
           // Donut-Shape zeichnen (Kammer-Wand)
           ctx.beginPath();
