@@ -2326,12 +2326,17 @@
             }, 150);
           }
           
-          // Inversion und Stack zurücksetzen nach Discharge
-          if (isInverted) {
-            isInverted = false;
-            canvas.style.filter = '';
-          }
-          redStackCount = 0;
+           // Reset redStackCount only if max stack bonus was used (to prevent infinite bonus)
+           if (isMaxStack) {
+             redStackCount = 0;
+             isInverted = false;
+             canvas.style.filter = '';
+           } else if (isInverted) {
+             // Bei Inversion: nur Inversion zurücksetzen, Stack behalten
+             isInverted = false;
+             canvas.style.filter = '';
+           }
+           // Bei normalem Discharge: redStackCount behalten für stacking!
           
           // Start background music on first discharge (earlier than before)
           if (!AudioSystem.bgMusicStarted) {
