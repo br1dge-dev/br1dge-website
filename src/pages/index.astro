@@ -1435,8 +1435,12 @@
         const dx = cursorX - redParticle.x;
         const dy = cursorY - redParticle.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        
-        if (dist < 30 && chamberParticles.length < CHAMBER_THRESHOLD) {
+
+        // Red particles can be captured even if chamber is at threshold (for red stacking)
+        // But only if we don't already have 5 colored particles waiting for discharge
+        const hasColoredParticlesWaiting = chamberParticles.length >= CHAMBER_THRESHOLD && !logoReadyForDischarge;
+
+        if (dist < 30 && !hasColoredParticlesWaiting) {
           // CAPTURED! - Jetzt geht Red Particle in die Kammer
           redParticle.active = false;
           redParticleCatches++;
