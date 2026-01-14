@@ -1815,14 +1815,17 @@
 
            // Ringe von außen nach innen cyan färben basierend auf redStackCount
            const isStackedRing = redStackCount >= (totalLayers - layer);
-          
-          ctx.beginPath();
-          ctx.arc(0, 0, ringRadius, -Math.PI/2, -Math.PI/2 + layerProgress * Math.PI * 2);
-          // Idle = grau, sonst normal
-          ctx.strokeStyle = isIdle ? '#555555' : (isStackedRing ? '#00ffff' : '#ffffff');
-          ctx.lineWidth = ringWidth;
-          ctx.lineCap = 'butt';
-          ctx.stroke();
+
+           // Draw full ring if stacked, otherwise use layerProgress
+           const arcEnd = isStackedRing ? Math.PI * 2 : (-Math.PI/2 + layerProgress * Math.PI * 2);
+
+           ctx.beginPath();
+           ctx.arc(0, 0, ringRadius, -Math.PI/2, arcEnd);
+           // Idle = grau, sonst normal
+           ctx.strokeStyle = isIdle ? '#555555' : (isStackedRing ? '#00ffff' : '#ffffff');
+           ctx.lineWidth = ringWidth;
+           ctx.lineCap = 'butt';
+           ctx.stroke();
         }
         
         // === CHAMBER (Gravitationsgefängnis) - ab 20% charge (1 Ring) ===
