@@ -1436,9 +1436,9 @@
         const dy = cursorY - redParticle.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        // Red particles can be captured even if chamber is at threshold
-        // Only block if logo is ready for discharge (waiting for user to click)
-        if (dist < 30 && !logoReadyForDischarge) {
+        // Red particles can always be captured, even when chamber has colored particles
+        // This allows stacking red particles up to MAX_RED_STACK (6) for instant Level 10
+        if (dist < 30) {
           // CAPTURED! - Jetzt geht Red Particle in die Kammer
           redParticle.active = false;
           redParticleCatches++;
