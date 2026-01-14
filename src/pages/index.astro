@@ -1308,8 +1308,8 @@
             }
           }
           
-          // Partikel wird vom Cursor absorbiert - nur wenn nicht voll UND nicht idle
-          if (dist < 20 && !p.absorbed && cursorEnergy < MAX_ENERGY && !isIdle) {
+           // Partikel wird vom Cursor absorbiert - nur wenn nicht voll, nicht idle, und nicht im Tutorial-Warte-Modus
+           if (dist < 20 && !p.absorbed && cursorEnergy < MAX_ENERGY && !isIdle && !(gamePhase === GAME_PHASE_TUTORIAL && logoReadyForDischarge)) {
             p.absorbed = true;
             const prevEnergy = cursorEnergy;
             cursorEnergy = Math.min(MAX_ENERGY, cursorEnergy + 0.008);
@@ -1436,11 +1436,9 @@
         const dy = cursorY - redParticle.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        // Red particles can be captured even if chamber is at threshold (for red stacking)
-        // But only if we don't already have 5 colored particles waiting for discharge
-        const hasColoredParticlesWaiting = chamberParticles.length >= CHAMBER_THRESHOLD && !logoReadyForDischarge;
-
-        if (dist < 30 && !hasColoredParticlesWaiting) {
+        // Red particles can be captured even if chamber is at threshold
+        // Only block if logo is ready for discharge (waiting for user to click)
+        if (dist < 30 && !logoReadyForDischarge) {
           // CAPTURED! - Jetzt geht Red Particle in die Kammer
           redParticle.active = false;
           redParticleCatches++;
