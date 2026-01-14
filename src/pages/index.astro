@@ -1804,12 +1804,17 @@
             continue;
           }
           
-          const layerStart = layer * energyPerLayer;
-          const layerProgress = Math.max(0, Math.min(1, (cursorEnergy - layerStart) / energyPerLayer));
-          if (layerProgress <= 0) continue;
-          
-          // Ringe von außen nach innen cyan färben basierend auf redStackCount
-          const isStackedRing = redStackCount >= (totalLayers - layer);
+           const layerStart = layer * energyPerLayer;
+           const layerProgress = Math.max(0, Math.min(1, (cursorEnergy - layerStart) / energyPerLayer));
+
+           // Show ring if: has energy progress OR has red stack OR isInverted
+           const hasRedStackForRing = redStackCount > 0 && redStackCount >= (totalLayers - layer);
+           const shouldShowRing = layerProgress > 0 || hasRedStackForRing || isInverted;
+
+           if (!shouldShowRing) continue;
+
+           // Ringe von außen nach innen cyan färben basierend auf redStackCount
+           const isStackedRing = redStackCount >= (totalLayers - layer);
           
           ctx.beginPath();
           ctx.arc(0, 0, ringRadius, -Math.PI/2, -Math.PI/2 + layerProgress * Math.PI * 2);
