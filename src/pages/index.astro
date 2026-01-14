@@ -729,7 +729,7 @@
           return TUTORIAL_RINGS_PHASE2;
         }
         if (gamePhase >= GAME_PHASE_COLORED && gamePhase < GAME_PHASE_COMPLETE) {
-          return RINGS_PER_PHASE[gamePhase - GAME_PHASE_COLORED];
+          return RINGS_PER_PHASE[currentColorPhase];
         }
         return RINGS_PER_PHASE[RINGS_PER_PHASE.length - 1];
       }
