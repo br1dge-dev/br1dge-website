@@ -1826,11 +1826,11 @@
            ctx.lineWidth = ringWidth;
            ctx.lineCap = 'butt';
            ctx.stroke();
-        }
-        
-        // === CHAMBER (Gravitationsgefängnis) - ab 20% charge (1 Ring) ===
-        const chamberOpenThreshold = 0.2;
-        if (cursorEnergy >= chamberOpenThreshold && chamberActive) {
+         }
+
+         // === CHAMBER (Gravitationsgefängnis) - ab 20% charge (1 Ring) ===
+         const chamberOpenThreshold = 0.2;
+         if (cursorEnergy >= chamberOpenThreshold && chamberActive) {
           const chamberOuterRadius = cursorSize;
           const chamberInnerRadius = cursorSize - CHAMBER_RADIUS;
           
@@ -1903,15 +1903,15 @@
             ctx.arc(p.x, p.y, p.size * 1.5, 0, Math.PI * 2);
             ctx.fillStyle = hexToRgba(p.color, 0.3);
             ctx.fill();
-          }
-        } else {
-          // Normaler Core (ohne Kammer)
-          const isCoreStacked = redStackCount >= MAX_RED_STACK;
-          ctx.beginPath();
-          ctx.arc(0, 0, cursorSize, 0, Math.PI * 2);
-          ctx.fillStyle = isCoreStacked ? '#00ffff' : '#ffffff';
-          ctx.fill();
-        }
+           }
+         } else {
+           // Normaler Core (ohne Kammer) - aber auch wenn chamberActive aber cursorEnergy < threshold
+           const isCoreStacked = redStackCount >= MAX_RED_STACK;
+           ctx.beginPath();
+           ctx.arc(0, 0, cursorSize, 0, Math.PI * 2);
+           ctx.fillStyle = isIdle ? '#555555' : (isCoreStacked ? '#00ffff' : '#ffffff');
+           ctx.fill();
+         }
         
         ctx.restore();
       }
