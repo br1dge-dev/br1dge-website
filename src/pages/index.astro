@@ -1458,14 +1458,15 @@
             isRed: true
           });
           
-          // Erster Red Particle: Aktiviere Inversion
-          if (!isInverted) {
-            isInverted = true;
-            canvas.style.filter = 'invert(1)';
-            redStackCount = 1;
-          } else if (redStackCount < MAX_RED_STACK) {
-            redStackCount++;
-          }
+           // Erster Red Particle: Aktiviere Inversion
+           // Wenn wir schon redStackCount haben (von vorherigem Zyklus), increment statt reset
+           if (!isInverted && redStackCount === 0) {
+             isInverted = true;
+             canvas.style.filter = 'invert(1)';
+             redStackCount = 1;
+           } else if (redStackCount < MAX_RED_STACK) {
+             redStackCount++;
+           }
           
           // Kleiner Partikel-Burst (weniger dramatisch, da in Kammer)
           for (let i = 0; i < 20; i++) {
