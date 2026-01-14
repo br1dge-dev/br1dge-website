@@ -662,7 +662,31 @@
       let cursorEnergy = 0;
       const ENERGY_THRESHOLD = 0.2;
       const MAX_ENERGY = 1.0;
-      
+
+      // ========================================
+      // GAME PHASE SYSTEM
+      // ========================================
+      // Tutorial Phase 0: Learn to charge (2 rings → minimal twitch → 3 rings → vibrate → colored)
+      // Colored Phase 1-3: Orange -> Brown -> Green particles
+      // Complete Phase 4: All done
+      let gamePhase = 0;
+      const GAME_PHASE_TUTORIAL = 0;
+      const GAME_PHASE_COLORED = 1;
+      const GAME_PHASE_COMPLETE = 4;
+
+      // Tutorial sub-phases
+      let tutorialSubPhase = 0;
+      let tutorialDischargeCount = 0;
+      const TUTORIAL_RINGS_PHASE0 = 2;
+      const TUTORIAL_RINGS_PHASE1 = 3;
+      const TUTORIAL_RINGS_PHASE2 = 4;
+
+      // Tutorial vibration state
+      let tutorialVibrationIntensity = 0;
+      let tutorialVibrationTime = 0;
+      const TUTORIAL_TWITCH_INTENSITY = 0.5;
+      const TUTORIAL_VIBRATE_INTENSITY = 1.5;
+
       // Red particle state (legacy - now integrated into chamber)
       let redParticleActive = false;
       let redParticleSpawnTime = 0;
@@ -696,6 +720,41 @@
       // Current phase: 0 = orange, 1 = brown, 2 = green, 3 = complete
       let currentColorPhase = 0;
       const RINGS_PER_PHASE = [3, 4, 5]; // Rings available per phase
+
+      // Get current rings based on game phase
+      function getCurrentRings() {
+        if (gamePhase === GAME_PHASE_TUTORIAL) {
+          if (tutorialSubPhase === 0) return TUTORIAL_RINGS_PHASE0;
+          if (tutorialSubPhase === 1) return TUTORIAL_RINGS_PHASE1;
+          return TUTORIAL_RINGS_PHASE2;
+        }
+        if (gamePhase >= GAME_PHASE_COLORED && gamePhase < GAME_PHASE_COMPLETE) {
+          return RINGS_PER_PHASE[gamePhase - GAME_PHASE_COLORED];
+        }
+        return RINGS_PER_PHASE[RINGS_PER_PHASE.length - 1];
+      }
+
+      // Check if we should trigger tutorial progression
+      function checkTutorialProgression() {
+        if (gamePhase !== GAME_PHASE_TUTORIAL) return;
+
+        const rings = getCurrentRings();
+        const threshold = rings / 5;
+
+        if (cursorEnergy >= threshold && !logoReadyForDischarge) {
+          if (tutorialSubPhase === 0) {
+            logoReadyForDischarge = true;
+            tutorialVibrationTime = Date.now();
+            tutorialVibrationIntensity = TUTORIAL_TWITCH_INTENSITY;
+            AudioSystem.playModalEnter();
+          } else if (tutorialSubPhase === 1) {
+            logoReadyForDischarge = true;
+            tutorialVibrationTime = Date.now();
+            tutorialVibrationIntensity = TUTORIAL_VIBRATE_INTENSITY;
+            AudioSystem.playLevelUp(1);
+          }
+        }
+      }
       
       // Idle mode - cursor must move for progression
       let lastMouseMoveTime = Date.now();
@@ -1040,14 +1099,24 @@
         
         const exactCenterX = W / 2;
         const exactCenterY = H / 2;
-        
-        // Vibration wenn ready for discharge
+
+        // Vibration wenn ready for discharge (colored OR tutorial)
         let vibrationX = 0, vibrationY = 0;
+        let vibIntensity = 0;
+
         if (logoReadyForDischarge) {
-          const vibTime = (Date.now() - logoVibrationTime) / 1000;
-          const vibIntensity = Math.min(1, vibTime * 2) * 1.5; // Ramp up
-          vibrationX = Math.sin(vibTime * 60) * vibIntensity;
-          vibrationY = Math.cos(vibTime * 73) * vibIntensity * 0.7;
+          // Check if tutorial mode (subtle twitch) or colored mode (full vibration)
+          if (gamePhase === GAME_PHASE_TUTORIAL && tutorialSubPhase < 2) {
+            // Tutorial: subtle twitch based on tutorialVibrationIntensity
+            const vibTime = (Date.now() - tutorialVibrationTime) / 1000;
+            vibIntensity = tutorialVibrationIntensity * Math.sin(vibTime * 15) * Math.min(1, vibTime * 2);
+          } else {
+            // Regular colored particle mode: full vibration
+            const vibTime = (Date.now() - logoVibrationTime) / 1000;
+            vibIntensity = Math.min(1, vibTime * 2) * 1.5;
+          }
+          vibrationX = Math.sin(Date.now() / 16) * vibIntensity;
+          vibrationY = Math.cos(Date.now() / 14) * vibIntensity * 0.7;
         }
         
         ctx.save();
@@ -1451,10 +1520,16 @@
       // ========================================
       function drawColoredParticles() {
         const time = Date.now() / 1000;
-        
+
         // Skip wenn alle 3 Phasen abgeschlossen
         if (currentColorPhase >= 3) {
           coloredBridgePhaseComplete = true;
+          return;
+        }
+
+        // Check tutorial progression
+        if (gamePhase === GAME_PHASE_TUTORIAL) {
+          checkTutorialProgression();
           return;
         }
         
@@ -1703,9 +1778,9 @@
         // === POWER METER - Rings with unlock system ===
         const totalLayers = 5;
         const energyPerLayer = MAX_ENERGY / totalLayers;
-        
-        // Available rings based on current phase (3 -> 4 -> 5)
-        const unlockedRings = currentColorPhase >= 3 ? 5 : RINGS_PER_PHASE[currentColorPhase];
+
+        // Available rings based on current game phase (tutorial or colored)
+        const unlockedRings = getCurrentRings();
         
         for (let layer = 0; layer < totalLayers; layer++) {
           const ringRadius = cursorSize + 5 + layer * 5;
@@ -2155,12 +2230,56 @@
           hue: 0
         });
         
-        // CHAMBER DISCHARGE: Wenn Logo ready und auf Logo geklickt
-        if (dist < logoRadius && logoReadyForDischarge && chamberParticles.length >= CHAMBER_THRESHOLD) {
+        // CHAMBER DISCHARGE: Wenn Logo ready und auf Logo geklickt (Colored Particles)
+        if (gamePhase !== GAME_PHASE_TUTORIAL &&
+            dist < logoRadius && logoReadyForDischarge && chamberParticles.length >= CHAMBER_THRESHOLD) {
           spawnMiniBridge();
           return;
         }
-        
+
+        // TUTORIAL DISCHARGE: Click logo at threshold to progress tutorial
+        if (gamePhase === GAME_PHASE_TUTORIAL && dist < logoRadius && logoReadyForDischarge) {
+          // Start background music on first discharge
+          if (!AudioSystem.bgMusicStarted) {
+            AudioSystem.startBgMusic();
+          }
+
+          // Progress tutorial
+          if (tutorialSubPhase === 0) {
+            // First discharge → minimal twitch, then 3 rings
+            tutorialDischargeCount++;
+            tutorialSubPhase = 1;
+            logoReadyForDischarge = false;
+            cursorEnergy = 0;
+            AudioSystem.playDischarge(1);
+            // Subtle effect
+            logoOutlines.push({ alpha: 0.5, radius: 10, hue: 180 });
+            logoTargetScale = 1.1;
+            setTimeout(() => { logoTargetScale = 1; }, 100);
+          } else if (tutorialSubPhase === 1) {
+            // Second discharge → full vibration, then 4 rings, then transition to colored
+            tutorialDischargeCount++;
+            tutorialSubPhase = 2;
+            logoReadyForDischarge = false;
+            cursorEnergy = 0;
+            AudioSystem.playLevelUp(1);
+            // More noticeable effect
+            logoOutlines.push({ alpha: 0.8, radius: 10, hue: 200 });
+            logoTargetScale = 1.15;
+            setTimeout(() => { logoTargetScale = 1; }, 150);
+
+            // Transition to colored particles after short delay
+            setTimeout(() => {
+              gamePhase = GAME_PHASE_COLORED;
+              currentColorPhase = 0;
+              chamberActive = true;
+              // Play transition sound
+              AudioSystem.playBridgeSpawn();
+            }, 500);
+          }
+          return;
+        }
+
         // Nur wenn auf Logo geklickt UND Threshold erreicht UND nicht in Chamber-Phase
         if (dist < logoRadius && cursorEnergy >= ENERGY_THRESHOLD && upgradeLevel < 10 && coloredBridgePhaseComplete) {
           let levelsToAdd = 1;
@@ -2202,8 +2321,8 @@
           }
           redStackCount = 0;
           
-          // Start background music on first discharge (with at least 20% charge)
-          if (!AudioSystem.bgMusicStarted && cursorEnergy >= ENERGY_THRESHOLD) {
+          // Start background music on first discharge (earlier than before)
+          if (!AudioSystem.bgMusicStarted) {
             AudioSystem.startBgMusic();
           }
           
