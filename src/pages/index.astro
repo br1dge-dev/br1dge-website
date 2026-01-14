@@ -1,0 +1,2506 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Basic Meta -->
+    <title>br1dge ∩ Interactive Experience</title>
+    <meta name="description" content="An interactive visual experience. Collect energy, catch particles, unlock the bridge." />
+    <meta name="author" content="br1dge" />
+    <meta name="theme-color" content="#000000" />
+    
+    <!-- Favicon - using ∩ symbol -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' fill='white'>∩</text></svg>" />
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='black' width='100' height='100'/><text y='.9em' font-size='90' fill='white' text-anchor='middle' x='50'>∩</text></svg>" />
+    
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://br1dge.xyz/" />
+    <meta property="og:title" content="br1dge ∩" />
+    <meta property="og:description" content="An interactive visual experience. Collect energy, catch particles, unlock the bridge." />
+    <meta property="og:site_name" content="br1dge" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="https://br1dge.xyz/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="br1dge ∩ logo on black background" />
+    
+    <!-- Twitter/X Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@br1dge_eth" />
+    <meta name="twitter:creator" content="@br1dge_eth" />
+    <meta name="twitter:title" content="br1dge ∩" />
+    <meta name="twitter:description" content="An interactive visual experience. Collect energy, catch particles, unlock the bridge." />
+    <meta name="twitter:image" content="https://br1dge.xyz/twitter-image.png" />
+    <meta name="twitter:image:alt" content="br1dge ∩ logo on black background" />
+    
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
+      html, body { height: 100%; width: 100%; overflow: hidden; background: #000; cursor: none; }
+      #canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+      #sound-toggle {
+        position: fixed;
+        bottom: 1.2rem;
+        right: 1.2rem;
+        z-index: 100;
+        background: transparent;
+        border: none;
+        padding: 0.5rem;
+        cursor: none;
+        transition: all 0.3s ease;
+        opacity: 0.5;
+      }
+      #sound-toggle:hover {
+        opacity: 1;
+      }
+      #sound-toggle.muted {
+        opacity: 0.3;
+      }
+      #sound-toggle svg {
+        width: 28px;
+        height: 28px;
+        fill: none;
+        stroke: #fff;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      #sound-hint {
+        position: fixed;
+        left: 50%;
+        top: calc(50% + 18vh);
+        transform: translateX(-50%);
+        z-index: 50;
+        font-family: "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+        font-size: 0.9rem;
+        letter-spacing: 0.25em;
+        color: rgba(255, 255, 255, 0.5);
+        pointer-events: auto;
+        cursor: none;
+        display: flex;
+        align-items: center;
+        gap: 0.08em;
+        transition: color 0.3s ease;
+      }
+      #sound-hint:hover {
+        color: rgba(255, 255, 255, 0.8);
+      }
+      #sound-hint:hover span {
+        animation-play-state: paused;
+        opacity: 0.9;
+      }
+      #sound-hint .speaker {
+        margin-left: 0.6em;
+        display: flex;
+        align-items: center;
+      }
+      #sound-hint .speaker svg {
+        width: 22px;
+        height: 22px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      #sound-hint span {
+        display: inline-block;
+        animation: pop 2s ease-in-out infinite;
+      }
+      #sound-hint.hidden {
+        opacity: 0;
+        transition: opacity 0.5s ease;
+        pointer-events: none;
+      }
+      @keyframes pop {
+        0%, 100% { transform: translateY(0) scale(1); opacity: 0.5; }
+        50% { transform: translateY(-3px) scale(1.1); opacity: 0.9; }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <button id="sound-toggle" aria-label="Toggle sound">
+      <svg viewBox="0 0 24 24" class="sound-on">
+        <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+      </svg>
+      <svg viewBox="0 0 24 24" class="sound-off" style="display:none;">
+        <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+        <line x1="23" y1="9" x2="17" y2="15"/>
+        <line x1="17" y1="9" x2="23" y2="15"/>
+      </svg>
+    </button>
+    <div id="sound-hint">
+      <span>P</span><span>L</span><span>E</span><span>A</span><span>S</span><span>E</span><span>&nbsp;</span><span>E</span><span>N</span><span>A</span><span>B</span><span>L</span><span>E</span><span>&nbsp;</span><span>S</span><span>O</span><span>U</span><span>N</span><span>D</span><span class="speaker"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
+    </div>
+    <script>
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // ========================================
+      // AUDIO SYSTEM - Web Audio API
+      // ========================================
+      const AudioSystem = {
+        ctx: null,
+        masterGain: null,
+        compressor: null,
+        initialized: false,
+        muted: false,
+        
+        init() {
+          if (this.initialized) return;
+          try {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Master chain: masterGain -> compressor -> destination
+            this.compressor = this.ctx.createDynamicsCompressor();
+            this.compressor.threshold.setValueAtTime(-24, this.ctx.currentTime);
+            this.compressor.knee.setValueAtTime(30, this.ctx.currentTime);
+            this.compressor.ratio.setValueAtTime(12, this.ctx.currentTime);
+            this.compressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
+            this.compressor.release.setValueAtTime(0.25, this.ctx.currentTime);
+            this.compressor.connect(this.ctx.destination);
+            
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+            this.masterGain.connect(this.compressor);
+            
+            this.initialized = true;
+          } catch (e) {
+            console.warn('Web Audio API not supported');
+          }
+        },
+        
+        async resume() {
+          if (this.ctx && this.ctx.state === 'suspended') {
+            await this.ctx.resume();
+          }
+        },
+        
+        toggleMute() {
+          if (!this.initialized) return false;
+          this.muted = !this.muted;
+          const targetVol = this.muted ? 0 : 0.6;
+          this.masterGain.gain.linearRampToValueAtTime(targetVol, this.ctx.currentTime + 0.1);
+          return this.muted;
+        },
+        
+        // --- SFX GENERATORS (tuned to G minor) ---
+        // G minor scale: G, A, Bb, C, D, Eb, F
+        // Key frequencies: G3=196, Bb3=233, D4=294, G4=392, Bb4=466, D5=587, G5=784
+        
+        // Energy collect - soft detuned triangle blip
+        playCollect(pitch = 0) {
+          if (!this.initialized || this.muted) return;
+          const now = this.ctx.currentTime;
+          
+          // G minor pentatonic: G5, Bb5, C6, D6, F6
+          const gMinorPenta = [784, 932, 1047, 1175, 1397];
+          const baseFreq = gMinorPenta[Math.min(pitch, gMinorPenta.length - 1)];
+          
+          // Soft detuned triangle pair
+          [-8, 8].forEach(detune => {
+            const osc = this.ctx.createOscillator();
+            const filter = this.ctx.createBiquadFilter();
+            const gain = this.ctx.createGain();
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(baseFreq, now);
+            osc.detune.setValueAtTime(detune, now);
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(3000, now);
+            filter.frequency.exponentialRampToValueAtTime(800, now + 0.12);
+            
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(this.masterGain);
+            
+            // Soft attack, gentle release
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.07, now + 0.015);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+            
+            osc.start(now);
+            osc.stop(now + 0.18);
+          });
+        },
+        
+        // Red particle capture - warm sine bass thump
+        playCapture() {
+          if (!this.initialized || this.muted) return;
+          const now = this.ctx.currentTime;
+          
+          // Layered sine + triangle for warm bass
+          const osc1 = this.ctx.createOscillator();
+          const osc2 = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          
+          osc1.type = 'sine';
+          osc1.frequency.setValueAtTime(98, now); // G2
+          osc1.frequency.exponentialRampToValueAtTime(49, now + 0.2);
+          
+          osc2.type = 'triangle';
+          osc2.frequency.setValueAtTime(98, now);
+          osc2.frequency.exponentialRampToValueAtTime(49, now + 0.2);
+          
+          osc1.connect(gain);
+          osc2.connect(gain);
+          gain.connect(this.masterGain);
+          
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.2, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+          
+          osc1.start(now);
+          osc2.start(now);
+          osc1.stop(now + 0.35);
+          osc2.stop(now + 0.35);
+        },
+        
+        // Discharge - soft filtered triangle drop
+        playDischarge(level = 1) {
+          if (!this.initialized || this.muted) return;
+          const now = this.ctx.currentTime;
+          
+          // Warm detuned triangles
+          [-10, 0, 10].forEach(detune => {
+            const osc = this.ctx.createOscillator();
+            const filter = this.ctx.createBiquadFilter();
+            const gain = this.ctx.createGain();
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(98 + level * 2, now);
+            osc.frequency.exponentialRampToValueAtTime(49, now + 0.3);
+            osc.detune.setValueAtTime(detune, now);
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(600 + level * 50, now);
+            filter.frequency.exponentialRampToValueAtTime(150, now + 0.35);
+            
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(this.masterGain);
+            
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.12, now + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+            
+            osc.start(now);
+            osc.stop(now + 0.45);
+          });
+        },
+        
+        // Level up - warm pad swell (G minor triad)
+        playLevelUp(level = 1) {
+          if (!this.initialized || this.muted) return;
+          const now = this.ctx.currentTime;
+          
+          // G minor triad - soft triangle pad
+          const chord = [392, 466, 587]; // G4, Bb4, D5
+          const detunes = [-8, 0, 8];
+          
+          chord.forEach((freq) => {
+            detunes.forEach(detune => {
+              const osc = this.ctx.createOscillator();
+              const filter = this.ctx.createBiquadFilter();
+              const gain = this.ctx.createGain();
+              
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(freq, now);
+              osc.detune.setValueAtTime(detune, now);
+              
+              filter.type = 'lowpass';
+              filter.frequency.setValueAtTime(800, now);
+              filter.frequency.linearRampToValueAtTime(2500, now + 0.25);
+              filter.frequency.exponentialRampToValueAtTime(600, now + 0.9);
+              
+              osc.connect(filter);
+              filter.connect(gain);
+              gain.connect(this.masterGain);
+              
+              gain.gain.setValueAtTime(0, now);
+              gain.gain.linearRampToValueAtTime(0.045, now + 0.2);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+              
+              osc.start(now);
+              osc.stop(now + 1.05);
+            });
+          });
+        },
+        
+        // Max stack - lush warm chord (Gm7)
+        playMaxStack() {
+          if (!this.initialized || this.muted) return;
+          const now = this.ctx.currentTime;
+          
+          // Gm7: G3, Bb3, D4, F4 - warm triangle pad
+          const freqs = [196, 233, 294, 349];
+          const detunes = [-10, 0, 10];
+          
+          freqs.forEach((freq) => {
+            detunes.forEach(detune => {
+              const osc = this.ctx.createOscillator();
+              const filter = this.ctx.createBiquadFilter();
+              const gain = this.ctx.createGain();
+              
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(freq, now);
+              osc.detune.setValueAtTime(detune, now);
+              
+              filter.type = 'lowpass';
+              filter.frequency.setValueAtTime(500, now);
+              filter.frequency.linearRampToValueAtTime(3000, now + 0.4);
+              filter.frequency.setValueAtTime(3000, now + 1.0);
+              filter.frequency.exponentialRampToValueAtTime(400, now + 1.8);
+              
+              osc.connect(filter);
+              filter.connect(gain);
+              gain.connect(this.masterGain);
+              
+              gain.gain.setValueAtTime(0, now);
+              gain.gain.linearRampToValueAtTime(0.035, now + 0.3);
+              gain.gain.setValueAtTime(0.035, now + 1.1);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+              
+              osc.start(now);
+              osc.stop(now + 2.1);
+            });
+          });
+        },
+        
+        // Modal enter - soft sine chime (D5)
+        playModalEnter() {
+          if (!this.initialized || this.muted) return;
+          const now = this.ctx.currentTime;
+          
+          // Soft sine with gentle overtone
+          [587, 1174].forEach((freq, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now);
+            
+            osc.connect(gain);
+            gain.connect(this.masterGain);
+            
+            const vol = i === 0 ? 0.1 : 0.03;
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(vol, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+            
+            osc.start(now);
+            osc.stop(now + 0.85);
+          });
+        },
+        
+        // Modal close - gentle sine release (G4)
+        playModalClose() {
+          if (!this.initialized || this.muted) return;
+          const now = this.ctx.currentTime;
+          
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(392, now); // G4
+          osc.frequency.exponentialRampToValueAtTime(370, now + 0.4);
+          
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+          
+          osc.start(now);
+          osc.stop(now + 0.5);
+        },
+        
+        // Chamber capture - shimmer sound (higher pitch, sparkly)
+        playChamberCapture(count = 1) {
+          if (!this.initialized || this.muted) return;
+          const now = this.ctx.currentTime;
+          
+          // Sparkly arpeggio based on count
+          const baseFreqs = [784, 988, 1175, 1397, 1568]; // G5, B5, D6, F#6, G6
+          const freq = baseFreqs[Math.min(count - 1, baseFreqs.length - 1)];
+          
+          // Shimmer with detuned oscillators
+          [-15, 0, 15].forEach((detune, i) => {
+            const osc = this.ctx.createOscillator();
+            const filter = this.ctx.createBiquadFilter();
+            const gain = this.ctx.createGain();
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now);
+            osc.detune.setValueAtTime(detune, now);
+            
+            filter.type = 'highpass';
+            filter.frequency.setValueAtTime(400, now);
+            
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(this.masterGain);
+            
+            const delay = i * 0.02;
+            gain.gain.setValueAtTime(0, now + delay);
+            gain.gain.linearRampToValueAtTime(0.06, now + delay + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.25);
+            
+            osc.start(now + delay);
+            osc.stop(now + delay + 0.3);
+          });
+        },
+        
+        // Mini-bridge spawn - triumphant chime (big bang effect)
+        playBridgeSpawn() {
+          if (!this.initialized || this.muted) return;
+          const now = this.ctx.currentTime;
+          
+          // Big bang: Low rumble + ascending chime
+          // Rumble
+          const rumble = this.ctx.createOscillator();
+          const rumbleGain = this.ctx.createGain();
+          rumble.type = 'sine';
+          rumble.frequency.setValueAtTime(60, now);
+          rumble.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+          rumble.connect(rumbleGain);
+          rumbleGain.connect(this.masterGain);
+          rumbleGain.gain.setValueAtTime(0.15, now);
+          rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+          rumble.start(now);
+          rumble.stop(now + 0.5);
+          
+          // Ascending chime
+          const chord = [392, 494, 587, 784, 988]; // G4, B4, D5, G5, B5
+          chord.forEach((freq, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + 0.1 + i * 0.06);
+            osc.connect(gain);
+            gain.connect(this.masterGain);
+            gain.gain.setValueAtTime(0, now + 0.1 + i * 0.06);
+            gain.gain.linearRampToValueAtTime(0.1, now + 0.1 + i * 0.06 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1 + i * 0.06 + 0.6);
+            osc.start(now + 0.1 + i * 0.06);
+            osc.stop(now + 0.1 + i * 0.06 + 0.7);
+          });
+        },
+        
+        // Collection complete - 5/5 particles collected
+        playCollectionComplete() {
+          if (!this.initialized || this.muted) return;
+          const now = this.ctx.currentTime;
+          
+          // Quick ascending ping
+          const notes = [523, 659, 784]; // C5, E5, G5
+          notes.forEach((freq, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + i * 0.08);
+            osc.connect(gain);
+            gain.connect(this.masterGain);
+            gain.gain.setValueAtTime(0, now + i * 0.08);
+            gain.gain.linearRampToValueAtTime(0.12, now + i * 0.08 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.3);
+            osc.start(now + i * 0.08);
+            osc.stop(now + i * 0.08 + 0.35);
+          });
+        },
+        
+        // Helper: Noise burst
+        playNoiseBurst(duration = 0.1, filterFreq = 1000) {
+          if (!this.initialized || this.muted) return;
+          const now = this.ctx.currentTime;
+          const bufferSize = this.ctx.sampleRate * duration;
+          const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+          }
+          
+          const noise = this.ctx.createBufferSource();
+          const filter = this.ctx.createBiquadFilter();
+          const gain = this.ctx.createGain();
+          
+          noise.buffer = buffer;
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(filterFreq, now);
+          
+          noise.connect(filter);
+          filter.connect(gain);
+          gain.connect(this.masterGain);
+          
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+          
+          noise.start(now);
+        },
+        
+        // --- BACKGROUND MUSIC (MP3) ---
+        bgMusic: null,
+        bgMusicGain: null,
+        bgMusicStarted: false,
+        
+        async loadBgMusic() {
+          if (this.bgMusic || !this.initialized || !this.ctx) return;
+          try {
+            const response = await fetch('/bg-music.mp3');
+            const arrayBuffer = await response.arrayBuffer();
+            this.bgMusic = await this.ctx.decodeAudioData(arrayBuffer);
+          } catch (e) {
+            console.warn('Failed to load background music:', e);
+          }
+        },
+        
+        async startBgMusic() {
+          if (!this.initialized || this.muted || this.bgMusicStarted) return;
+          if (!this.bgMusic) {
+            await this.loadBgMusic();
+            if (!this.bgMusic) return;
+          }
+          this.bgMusicStarted = true;
+          
+          const source = this.ctx.createBufferSource();
+          this.bgMusicGain = this.ctx.createGain();
+          
+          source.buffer = this.bgMusic;
+          source.loop = true;
+          source.connect(this.bgMusicGain);
+          this.bgMusicGain.connect(this.masterGain);
+          
+          // Fade in
+          this.bgMusicGain.gain.setValueAtTime(0, this.ctx.currentTime);
+          this.bgMusicGain.gain.linearRampToValueAtTime(0.25, this.ctx.currentTime + 2);
+          
+          source.start(0);
+          this.bgMusicSource = source;
+        },
+        
+        stopBgMusic() {
+          if (!this.bgMusicStarted || !this.bgMusicSource) return;
+          const now = this.ctx.currentTime;
+          
+          this.bgMusicGain.gain.linearRampToValueAtTime(0, now + 1);
+          setTimeout(() => {
+            try {
+              this.bgMusicSource.stop();
+            } catch(e) {}
+            this.bgMusicStarted = false;
+          }, 1100);
+        }
+      };
+      
+      // ========================================
+      // HAPTIC MANAGER - Vibration API
+      // ========================================
+      const HapticManager = {
+        supported: 'vibrate' in navigator,
+        
+        vibrate(pattern) {
+          if (this.supported && !AudioSystem.muted) {
+            navigator.vibrate(pattern);
+          }
+        },
+        
+        // Predefined patterns
+        collect() { this.vibrate(15); },
+        capture() { this.vibrate(50); },
+        discharge() { this.vibrate(100); },
+        levelUp() { this.vibrate([25, 50, 25]); },
+        maxStack() { this.vibrate([40, 80, 40, 80, 40]); },
+        modalEnter() { this.vibrate(60); }
+      };
+      
+      // ========================================
+      // INIT AUDIO ON FIRST INTERACTION
+      // ========================================
+      let audioInitialized = false;
+      function initAudioOnInteraction() {
+        if (audioInitialized) return;
+        audioInitialized = true;
+        AudioSystem.init();
+        AudioSystem.resume();
+      }
+      
+      document.addEventListener('click', initAudioOnInteraction, { once: false });
+      document.addEventListener('touchstart', initAudioOnInteraction, { once: false });
+      
+      // Pause/resume background music when tab visibility changes
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && AudioSystem.bgMusicStarted && AudioSystem.bgMusicGain) {
+          AudioSystem.bgMusicGain.gain.linearRampToValueAtTime(0, AudioSystem.ctx.currentTime + 0.5);
+        } else if (!document.hidden && AudioSystem.bgMusicStarted && !AudioSystem.muted && AudioSystem.bgMusicGain) {
+          AudioSystem.bgMusicGain.gain.linearRampToValueAtTime(0.25, AudioSystem.ctx.currentTime + 0.5);
+        }
+      });
+      
+      let W, H, centerX, centerY;
+      let mouseX = 0, mouseY = 0;
+      let cursorX = 0, cursorY = 0;
+      
+      // Logo state
+      let logoScale = 1;
+      let logoTargetScale = 1;
+      let logoBaseScale = 1; // Wächst permanent mit jedem Upgrade
+      let logoGlow = 0;
+      let upgradeLevel = 0; // Anzahl der Upgrades
+      let logoBreathPhase = 0; // Für organisches Atmen
+      
+      // Logo Energie-Ringe (akkumulierte Energie-Releases)
+      const logoOutlines = [];
+      
+      // Cursor energy (von Partikeln gesammelt)
+      let cursorEnergy = 0;
+      const ENERGY_THRESHOLD = 0.2;
+      const MAX_ENERGY = 1.0;
+      
+      // Red particle state (legacy - now integrated into chamber)
+      let redParticleActive = false;
+      let redParticleSpawnTime = 0;
+      let redParticleCatches = 0; // Wie oft gefangen in dieser Ladung
+      let redStackCount = 0; // Gestackte red particles im inverted mode (max 6: 5 Ringe + Core)
+      const MAX_RED_STACK = 6; // 5 Ringe + 1 Core
+      let isInverted = false;
+      const redParticle = { x: 0, y: 0, vx: 0, vy: 0, active: false, phase: 0, turnTimer: 0 };
+      
+      // ========================================
+      // CHAMBER SYSTEM - Gravitationsgefängnis
+      // ========================================
+      const chamberParticles = [];        // Gefangene Partikel in der Kammer
+      const CHAMBER_THRESHOLD = 5;        // Anzahl zum Spawnen eines Mini-Bridge
+      const CHAMBER_RADIUS = 12;          // Radius der Kammer im Cursor
+      // Sequential color order: Orange -> Brown -> Green
+      const CHAMBER_COLORS_SEQUENCE = [
+        '#ff6b35',  // 1. Orange (Coral Flame)
+        '#d4a574',  // 2. Hellbraun/Sand (Desert Gold)
+        '#39ff14'   // 3. Neongrün (Electric Lime)
+      ];
+      const CHAMBER_COLORS = [...CHAMBER_COLORS_SEQUENCE, '#ff2222']; // + Rot
+      
+      // Color to URL mapping for clickable bridges
+      const COLOR_URLS = {
+        '#39ff14': 'https://sword-gamma.vercel.app/',    // Neongrün
+        '#ff6b35': 'https://birth.br1dge.xyz/',          // Orange
+        '#d4a574': 'https://wocl.br1dge.xyz/'            // Hellbraun/Sand
+      };
+      
+      // Current phase: 0 = orange, 1 = brown, 2 = green, 3 = complete
+      let currentColorPhase = 0;
+      const RINGS_PER_PHASE = [3, 4, 5]; // Rings available per phase
+      
+      // Idle mode - cursor must move for progression
+      let lastMouseMoveTime = Date.now();
+      let isIdle = false;
+      const IDLE_TIMEOUT = 1500; // 1.5s ohne Bewegung = idle
+      
+      // Colored particles flying in space (to be caught)
+      const coloredParticles = [];
+      let coloredParticleSpawnTime = 0;
+      
+      // Floating Mini-Bridges (spawned from chamber)
+      const floatingBridges = [];
+      
+      // Chamber state
+      let chamberActive = false;
+      let chamberSpawnPhase = 0;
+      let prevCursorX = 0;
+      let prevCursorY = 0;
+      
+      // Logo ready for discharge (vibration state)
+      let logoReadyForDischarge = false;
+      let logoVibrationTime = 0;
+      
+      // Phase tracking: colored bridges first, then red particles
+      let coloredBridgePhaseComplete = false;
+      
+      // Game complete state (für Restart-Button nach Modal)
+      let gameCompleted = false;
+      
+      // Particles
+      const particles = [];
+      
+      // Ripples
+      const ripples = [];
+      
+      // Ambient floating particles
+      const ambientParticles = [];
+      
+      function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+        centerX = W / 2;
+        centerY = H / 2;
+      }
+      
+      // Distance from logo (Logo ist IMMER in der Mitte)
+      function distFromLogo(x, y) {
+        const dx = x - centerX;
+        const dy = y - centerY;
+        return Math.sqrt(dx * dx + dy * dy);
+      }
+      
+      // Modal für Level 10 - INVERTIERT (weiß), CLEAN, MINIMAL
+      let modalShown = false;
+      let modalCursorX = 0, modalCursorY = 0;
+      let modalTargetX = 0, modalTargetY = 0;
+      
+      function closeModal(modal) {
+        // Audio: Modal close
+        AudioSystem.playModalClose();
+        
+        modal.style.opacity = '0';
+        setTimeout(() => {
+          modal.remove();
+          modalShown = false;
+          // Restart-Button unter Logo anzeigen (nur bei Level 10)
+          if (gameCompleted) {
+            showRestartButton();
+          }
+        }, 800);
+      }
+      
+      function restartGame(modal) {
+        // Reset game state
+        upgradeLevel = 0;
+        logoBaseScale = 1;
+        cursorEnergy = 0;
+        redParticleActive = false;
+        redParticleCatches = 0;
+        redStackCount = 0;
+        redParticle.active = false;
+        isInverted = false;
+        logoBreathPhase = 0;
+        gameCompleted = false;
+        
+        // Chamber system reset
+        chamberParticles.length = 0;
+        chamberActive = false;
+        coloredParticles.length = 0;
+        floatingBridges.length = 0;
+        coloredBridgePhaseComplete = false;
+        currentColorPhase = 0;
+        logoReadyForDischarge = false;
+        
+        // Entferne Restart-Button falls vorhanden
+        const existingBtn = document.getElementById('restart-overlay-btn');
+        if (existingBtn) existingBtn.remove();
+        
+        if (modal) closeModal(modal);
+      }
+      
+      function showRestartButton() {
+        // Entferne vorherigen falls vorhanden
+        const existingBtn = document.getElementById('restart-overlay-btn');
+        if (existingBtn) existingBtn.remove();
+        
+        const btn = document.createElement('button');
+        btn.id = 'restart-overlay-btn';
+        btn.textContent = 'RESTART';
+        // Fester Offset unter dem Logo (Logo ist bei 50%, Button darunter)
+        const logoVisualSize = Math.min(W, H) * 0.18; // Basis-Logo-Größe ohne Scale
+        const buttonOffset = logoVisualSize + 60; // Unter dem Logo mit Abstand
+        btn.style.cssText = `
+          position: fixed;
+          left: 50%;
+          top: calc(50% + ${buttonOffset}px);
+          transform: translateX(-50%);
+          background: transparent;
+          border: 1px solid rgba(255,255,255,0.2);
+          color: rgba(255,255,255,0.4);
+          padding: 0.5rem 1.2rem;
+          font-size: 0.75rem;
+          cursor: none;
+          transition: all 0.3s;
+          letter-spacing: 0.15em;
+          font-family: "SF Pro Display", system-ui, sans-serif;
+          z-index: 9999;
+          opacity: 0;
+        `;
+        
+        btn.addEventListener('mouseenter', () => {
+          btn.style.borderColor = 'rgba(255,255,255,0.5)';
+          btn.style.color = '#fff';
+        });
+        btn.addEventListener('mouseleave', () => {
+          btn.style.borderColor = 'rgba(255,255,255,0.2)';
+          btn.style.color = 'rgba(255,255,255,0.4)';
+        });
+        btn.addEventListener('click', () => restartGame(null));
+        
+        document.body.appendChild(btn);
+        
+        // Fade in
+        requestAnimationFrame(() => {
+          btn.style.opacity = '1';
+        });
+      }
+      
+      function showModal() {
+        if (modalShown) return;
+        modalShown = true;
+        
+        // Audio & Haptic: Modal enter
+        AudioSystem.playModalEnter();
+        HapticManager.modalEnter();
+        
+        // Inversion zurücksetzen für Modal
+        canvas.style.filter = '';
+        isInverted = false;
+        
+        const modal = document.createElement('div');
+        modal.id = 'level10-modal';
+        modal.style.cssText = `
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background: #fff; color: #000; display: flex; flex-direction: column;
+          justify-content: center; align-items: center; z-index: 1000;
+          font-family: "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+          opacity: 0; transition: opacity 2.5s ease; cursor: none;
+        `;
+        modal.innerHTML = `
+          <button id="close-btn" style="position: absolute; top: 2rem; right: 2rem; background: transparent; border: none; color: #000; font-size: 1.5rem; cursor: none; padding: 0.5rem; opacity: 0.4; transition: opacity 0.3s;">✕</button>
+          
+          <div style="font-size: 7rem; font-weight: 100; margin-bottom: 0.5rem; letter-spacing: -0.05em;">∩</div>
+          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+            <h1 style="font-size: 2rem; font-weight: 200; letter-spacing: 0.3em; text-transform: uppercase; margin: 0;">Level 10</h1>
+            <button id="restart-btn" style="background: transparent; border: none; color: rgba(0,0,0,0.3); font-size: 0.9rem; cursor: none; transition: all 0.3s; font-family: inherit;" title="Restart">↻</button>
+          </div>
+          <p style="font-size: 0.9rem; margin-bottom: 2rem; opacity: 0.5; font-weight: 300;">Good job! You may now follow me</p>
+          
+          <div style="display: flex; gap: 1.2rem; margin-bottom: 1.5rem;">
+            <a href="https://x.com/br1dge_eth" target="_blank" class="modal-link" style="color: #000; text-decoration: none; font-size: 0.9rem; padding: 0.7rem 1.8rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">X / TWITTER</a>
+            <a href="https://farcaster.xyz/br1dge" target="_blank" class="modal-link" style="color: #000; text-decoration: none; font-size: 0.9rem; padding: 0.7rem 1.8rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">FARCASTER</a>
+          </div>
+          
+          <details id="projects-details" style="width: 100%; max-width: 320px; margin-bottom: 2rem;">
+            <summary style="font-size: 0.7rem; font-weight: 400; letter-spacing: 0.2em; opacity: 0.5; text-transform: uppercase; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+              <span>Projects</span>
+              <span class="arrow" style="transition: transform 0.2s;">▼</span>
+            </summary>
+            <div style="margin-top: 1rem;">
+              <a href="https://birth.br1dge.xyz/" target="_blank" class="project-link" style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); text-decoration: none; color: #000;">
+                <span style="color: #ff6b35; font-size: 1rem; font-weight: bold;">∩</span>
+                <div style="flex: 1; text-align: left;"><div style="font-size: 0.8rem; font-weight: 500;">Birth</div><div style="font-size: 0.65rem; opacity: 0.5;">A simplistic info card</div></div>
+                <span style="opacity: 0.3;">→</span>
+              </a>
+              <a href="https://sword-gamma.vercel.app/" target="_blank" class="project-link" style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); text-decoration: none; color: #000;">
+                <span style="color: #39ff14; font-size: 1rem; font-weight: bold;">∩</span>
+                <div style="flex: 1; text-align: left;"><div style="font-size: 0.8rem; font-weight: 500;">GR1FTSWORD</div><div style="font-size: 0.65rem; opacity: 0.5;">An ASCII music crypto art project</div></div>
+                <span style="opacity: 0.3;">→</span>
+              </a>
+              <a href="https://wocl.br1dge.xyz/" target="_blank" class="project-link" style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; text-decoration: none; color: #000;">
+                <span style="color: #d4a574; font-size: 1rem; font-weight: bold;">∩</span>
+                <div style="flex: 1; text-align: left;"><div style="font-size: 0.8rem; font-weight: 500;">Word of Choice</div><div style="font-size: 0.65rem; opacity: 0.5;">Express yourself onchain</div></div>
+                <span style="opacity: 0.3;">→</span>
+              </a>
+            </div>
+          </details>
+          
+          <p style="font-size: 0.75rem; opacity: 0.5; font-weight: 300; text-align: center; max-width: 280px; line-height: 1.5;">Kudos to Switch Angel for the awesome track! Make sure to <a href="https://www.youtube.com/watch?v=hFSwWzxrqUA" target="_blank" style="color: #000; text-decoration: underline;">subscribe to her channel</a> →</p>
+          
+          <div id="modal-cursor" style="position: fixed; pointer-events: none; z-index: 1001;">
+            <div style="width: 6px; height: 6px; background: #000; border-radius: 50%;"></div>
+            <div style="position: absolute; top: -9px; left: -9px; width: 24px; height: 24px; border: 1px solid rgba(0,0,0,0.3); border-radius: 50%;"></div>
+          </div>
+          
+          <style>
+            details[open] .arrow { transform: rotate(180deg); }
+            .project-link:hover { background: rgba(0,0,0,0.03); }
+          </style>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        const modalCursor = document.getElementById('modal-cursor');
+        const closeBtn = document.getElementById('close-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        
+        // Modal cursor tracking
+        modal.addEventListener('mousemove', (e) => {
+          modalTargetX = e.clientX;
+          modalTargetY = e.clientY;
+        });
+        
+        // Animate modal cursor
+        function animateModalCursor() {
+          if (!modalShown) return;
+          modalCursorX += (modalTargetX - modalCursorX) * 0.2;
+          modalCursorY += (modalTargetY - modalCursorY) * 0.2;
+          if (modalCursor) {
+            modalCursor.style.left = (modalCursorX - 3) + 'px';
+            modalCursor.style.top = (modalCursorY - 3) + 'px';
+          }
+          requestAnimationFrame(animateModalCursor);
+        }
+        animateModalCursor();
+        
+        // Close button
+        if (closeBtn) {
+          closeBtn.addEventListener('mouseenter', () => { closeBtn.style.opacity = '1'; });
+          closeBtn.addEventListener('mouseleave', () => { closeBtn.style.opacity = '0.4'; });
+          closeBtn.addEventListener('click', () => closeModal(modal));
+        }
+        
+        // Hover-Effekte für Links
+        modal.querySelectorAll('.modal-link').forEach(link => {
+          link.addEventListener('mouseenter', () => {
+            link.style.background = 'rgba(0,0,0,0.05)';
+            link.style.borderColor = '#000';
+          });
+          link.addEventListener('mouseleave', () => {
+            link.style.background = 'transparent';
+            link.style.borderColor = 'rgba(0,0,0,0.2)';
+          });
+        });
+        
+        // Restart button
+        if (restartBtn) {
+          restartBtn.addEventListener('mouseenter', () => {
+            restartBtn.style.borderColor = 'rgba(0,0,0,0.4)';
+            restartBtn.style.color = '#000';
+          });
+          restartBtn.addEventListener('mouseleave', () => {
+            restartBtn.style.borderColor = 'rgba(0,0,0,0.15)';
+            restartBtn.style.color = 'rgba(0,0,0,0.4)';
+          });
+          restartBtn.addEventListener('click', () => restartGame(modal));
+        }
+        
+        // Fade in
+        requestAnimationFrame(() => {
+          modal.style.opacity = '1';
+        });
+      }
+      
+      // 2026 Minimal Background - Clean, Dark, Sophisticated
+      function drawGrid() {
+        const time = Date.now() / 1000;
+        
+        // Pure black with subtle depth
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, W, H);
+        
+        // Sehr subtiler radialer Gradient - kaum sichtbar
+        const subtleGradient = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W, H) * 0.7);
+        subtleGradient.addColorStop(0, 'rgba(20, 20, 25, 0.5)');
+        subtleGradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = subtleGradient;
+        ctx.fillRect(0, 0, W, H);
+        
+        // Minimales Dot-Grid statt Linien (moderner)
+        const dotSpacing = 80;
+        const dotSize = 1;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+        
+        for (let x = dotSpacing; x < W; x += dotSpacing) {
+          for (let y = dotSpacing; y < H; y += dotSpacing) {
+            ctx.beginPath();
+            ctx.arc(x, y, dotSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        
+        // Subtile vertikale Linien (sehr dünn, sehr transparent)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.015)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < W; x += 200) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+        }
+      }
+      
+      // Draw the logo - CLEAN, MINIMAL, ALWAYS CENTERED + VIBRATION
+      function drawLogo() {
+        const time = Date.now() / 1000;
+        // Feste Basis-Schriftgröße - Skalierung nur über ctx.scale()
+        const baseLogoSize = Math.min(W, H) * 0.32;
+        
+        logoScale += (logoTargetScale - logoScale) * 0.12;
+        logoGlow *= 0.9;
+        
+        // Organisches Atmen - mehrere überlagerte Sinuswellen für natürlichen Rhythmus
+        logoBreathPhase += 0.008; // Langsamer
+        const breath1 = Math.sin(logoBreathPhase) * 0.008; // Hauptatmung
+        const breath2 = Math.sin(logoBreathPhase * 1.7) * 0.003; // Sekundär
+        const breath3 = Math.sin(logoBreathPhase * 0.5) * 0.005; // Langwelle
+        const breathScale = 1 + breath1 + breath2 + breath3;
+        
+        // Gesamtskalierung: Base + Upgrades + Breath + Animation
+        const totalScale = logoBaseScale * logoScale * breathScale;
+        
+        const exactCenterX = W / 2;
+        const exactCenterY = H / 2;
+        
+        // Vibration wenn ready for discharge
+        let vibrationX = 0, vibrationY = 0;
+        if (logoReadyForDischarge) {
+          const vibTime = (Date.now() - logoVibrationTime) / 1000;
+          const vibIntensity = Math.min(1, vibTime * 2) * 1.5; // Ramp up
+          vibrationX = Math.sin(vibTime * 60) * vibIntensity;
+          vibrationY = Math.cos(vibTime * 73) * vibIntensity * 0.7;
+        }
+        
+        ctx.save();
+        ctx.translate(exactCenterX + vibrationX, exactCenterY + vibrationY);
+        ctx.scale(totalScale, totalScale);
+        
+        // Feste Schriftgröße - Skalierung passiert über ctx.scale()
+        ctx.font = `200 ${baseLogoSize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Chromatic Aberration - sichtbar, ab Level 5 nur noch geringe Verstärkung
+        if (upgradeLevel > 0) {
+          // Offset: Level 1-4 linear wachsend, ab Level 5 stark abflachend
+          let offset;
+          if (upgradeLevel <= 4) {
+            offset = 2 + upgradeLevel * 1.0; // Sichtbarer Start (2-6px)
+          } else {
+            // Ab Level 5: logarithmische Dämpfung
+            const base = 2 + 4 * 1.0; // Wert bei Level 4 = 6
+            offset = base + Math.log(upgradeLevel - 3) * 1.5; // Flacht ab (6-8px max)
+          }
+          
+          const effectiveOffset = offset;
+          
+          // Alpha: sichtbar, ab Level 5 nur noch minimal steigend
+          let alphaBase;
+          if (upgradeLevel <= 4) {
+            alphaBase = 0.15 + upgradeLevel * 0.04; // 0.19 - 0.31
+          } else {
+            // Ab Level 5: sehr langsam steigend
+            alphaBase = 0.31 + Math.log(upgradeLevel - 3) * 0.025; // Max ~0.37
+          }
+          
+          // Ein Layer - cleaner Look
+          ctx.globalAlpha = alphaBase;
+          ctx.fillStyle = '#ff0066';
+          ctx.fillText('∩', -effectiveOffset, 0);
+          ctx.fillStyle = '#00ffff';
+          ctx.fillText('∩', effectiveOffset, 0);
+          
+          ctx.globalAlpha = 1;
+        }
+        
+        // Haupt-Symbol - weiß
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('∩', 0, 0);
+        
+        ctx.restore();
+        
+        // Level Anzeige rechts unten
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.fillText(`lvl:${upgradeLevel}`, W - 20, H - 20);
+        
+        // Expanding Rings bei Entladung - mit Farbe (immer zentriert)
+        for (let i = logoOutlines.length - 1; i >= 0; i--) {
+          const outline = logoOutlines[i];
+          outline.alpha *= 0.96;
+          outline.radius = (outline.radius || 10) + 5;
+          
+          if (outline.alpha < 0.01) {
+            logoOutlines.splice(i, 1);
+            continue;
+          }
+          
+          ctx.beginPath();
+          // Ringe skalieren mit logoBaseScale für konsistente Größe
+          ctx.arc(exactCenterX, exactCenterY, outline.radius * logoBaseScale, 0, Math.PI * 2);
+          ctx.strokeStyle = outline.hue !== undefined
+            ? `hsla(${outline.hue}, 100%, 70%, ${outline.alpha})`
+            : `rgba(255, 255, 255, ${outline.alpha})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+      
+      // Draw particles - CLEAN
+      function drawParticles() {
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vx *= 0.96;
+          p.vy *= 0.96;
+          p.life -= 0.02;
+          
+          if (p.life <= 0) {
+            particles.splice(i, 1);
+            continue;
+          }
+          
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+          ctx.fillStyle = p.hue 
+            ? `hsla(${p.hue}, 100%, 70%, ${p.life})`
+            : `rgba(255, 255, 255, ${p.life})`;
+          ctx.fill();
+        }
+      }
+      
+      // Ambient floating particles - CURSOR Gravitation
+      function drawAmbientParticles() {
+        const time = Date.now() / 1000;
+        
+        // Partikel spawnen - gleichmäßige Verteilung über gesamten Bildschirm
+        const maxParticles = 180;
+        const spawnRate = 0.45;
+        
+        if (ambientParticles.length < maxParticles && Math.random() < spawnRate) {
+          let x, y, vx, vy;
+          
+          // Einfache gleichmäßige Verteilung über gesamten Bildschirm
+          // Kein Polar, kein Rechteck-Grid - einfach random mit Jitter
+          const rand = Math.random();
+          
+          if (rand < 0.2) {
+            // 20% von Rändern - für kontinuierlichen Nachschub
+            const edge = Math.floor(Math.random() * 4);
+            switch(edge) {
+              case 0: x = Math.random() * W; y = -10; break;
+              case 1: x = W + 10; y = Math.random() * H; break;
+              case 2: x = Math.random() * W; y = H + 10; break;
+              default: x = -10; y = Math.random() * H;
+            }
+            // Sanfter Drift zur Mitte
+            const centerX = W / 2, centerY = H / 2;
+            const dx = centerX - x, dy = centerY - y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            vx = (dx / dist) * (0.3 + Math.random() * 0.3);
+            vy = (dy / dist) * (0.3 + Math.random() * 0.3);
+          } else {
+            // 80% überall im Bildschirm - komplett zufällig
+            // Nutze Gaussian-ähnliche Verteilung für natürlicheren Look
+            // Box-Muller für weichere Verteilung
+            const u1 = Math.random();
+            const u2 = Math.random();
+            const gaussian1 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+            const gaussian2 = Math.sqrt(-2 * Math.log(u1)) * Math.sin(2 * Math.PI * u2);
+            
+            // Zentriert mit Standardabweichung ~0.35 der Bildschirmgröße
+            x = W / 2 + gaussian1 * W * 0.35;
+            y = H / 2 + gaussian2 * H * 0.35;
+            
+            // Clamp auf sichtbaren Bereich mit etwas Rand
+            x = Math.max(20, Math.min(W - 20, x));
+            y = Math.max(20, Math.min(H - 20, y));
+            
+            // Sehr langsame zufällige Drift
+            const driftAngle = Math.random() * Math.PI * 2;
+            const driftSpeed = 0.05 + Math.random() * 0.15;
+            vx = Math.cos(driftAngle) * driftSpeed;
+            vy = Math.sin(driftAngle) * driftSpeed;
+          }
+          
+          ambientParticles.push({
+            x, y, vx, vy,
+            size: 0.8 + Math.random() * 1.2,  // Kleiner (0.8-2.0 statt 1.5-4.0)
+            alpha: 0.25 + Math.random() * 0.25,  // Weniger opaque (0.25-0.5 statt 0.4-0.8)
+            twinkle: Math.random() * Math.PI * 2,
+            absorbed: false
+          });
+        }
+        
+        // Draw and update particles
+        for (let i = ambientParticles.length - 1; i >= 0; i--) {
+          const p = ambientParticles[i];
+          
+          // CURSOR Gravitation - STÄRKER
+          const dx = cursorX - p.x;
+          const dy = cursorY - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const gravityRadius = 280; // Größere Reichweite
+          
+          if (dist < gravityRadius && dist > 8) {
+            // Gravitation: quadratisch stärker je näher
+            const normalizedDist = dist / gravityRadius;
+            const pullStrength = Math.pow(1 - normalizedDist, 2) * 0.15;
+            p.vx += (dx / dist) * pullStrength;
+            p.vy += (dy / dist) * pullStrength;
+            
+            // Partikel beschleunigt sichtbar zum Cursor
+            if (dist < 100) {
+              p.vx += (dx / dist) * 0.08;
+              p.vy += (dy / dist) * 0.08;
+            }
+          }
+          
+          // Partikel wird vom Cursor absorbiert - nur wenn nicht voll UND nicht idle
+          if (dist < 20 && !p.absorbed && cursorEnergy < MAX_ENERGY && !isIdle) {
+            p.absorbed = true;
+            const prevEnergy = cursorEnergy;
+            cursorEnergy = Math.min(MAX_ENERGY, cursorEnergy + 0.008);
+            p.alpha *= 0.2;
+            
+            // Audio & Haptic: Collect Sound (throttled, every ~10%)
+            if (Math.floor(cursorEnergy * 10) > Math.floor(prevEnergy * 10)) {
+              AudioSystem.playCollect(Math.floor(cursorEnergy * 5));
+              HapticManager.collect();
+            }
+            
+
+            
+            // Wenn gerade voll geworden, Red Particle spawnen (einmalig pro Ladung)
+            if (cursorEnergy >= MAX_ENERGY && !redParticle.active && !redParticleActive) {
+              redParticleSpawnTime = Date.now() + 5000; // 5 Sekunden warten
+              redParticleActive = true;
+            }
+          }
+          
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vx *= 0.985;
+          p.vy *= 0.985;
+          p.twinkle += 0.05;
+          
+          if (p.absorbed) {
+            p.alpha *= 0.8;
+          }
+          
+          // Remove
+          if (p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50 || p.alpha < 0.01) {
+            ambientParticles.splice(i, 1);
+            continue;
+          }
+          
+          const twinkleAlpha = p.alpha * (0.7 + Math.sin(p.twinkle) * 0.3);
+          
+          // Cleaner look - nur weiß mit Intensitätsvariation
+          let alpha = twinkleAlpha;
+          if (dist < gravityRadius && !p.absorbed) {
+            // Heller wenn nah am Cursor
+            alpha = twinkleAlpha * (1 + (1 - dist / gravityRadius) * 0.5);
+          }
+          
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * (p.absorbed ? 0.3 : 1), 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, alpha)})`;
+          ctx.fill();
+        }
+      }
+      
+
+      
+      // Red Particle - spawnt NUR wenn Colored Bridge Phase abgeschlossen
+      function drawRedParticle() {
+        const time = Date.now() / 1000;
+        
+        // Red Particles nur wenn Colored Bridge Phase vorbei ist
+        if (!coloredBridgePhaseComplete) {
+          return;
+        }
+        
+        // Spawn nach Timer
+        if (redParticleActive && !redParticle.active && Date.now() > redParticleSpawnTime) {
+          const edge = Math.floor(Math.random() * 4);
+          const speed = 1.6 + Math.random() * 1.2; // 20% langsamer (1.6-2.8)
+          switch(edge) {
+            case 0: redParticle.x = Math.random() * W; redParticle.y = -10; break;
+            case 1: redParticle.x = W + 10; redParticle.y = Math.random() * H; break;
+            case 2: redParticle.x = Math.random() * W; redParticle.y = H + 10; break;
+            default: redParticle.x = -10; redParticle.y = Math.random() * H;
+          }
+          // Richtung grob zur Mitte, aber mit Offset
+          const targetX = W/2 + (Math.random() - 0.5) * W * 0.4;
+          const targetY = H/2 + (Math.random() - 0.5) * H * 0.4;
+          const dx = targetX - redParticle.x;
+          const dy = targetY - redParticle.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          redParticle.vx = (dx / dist) * speed;
+          redParticle.vy = (dy / dist) * speed;
+          redParticle.active = true;
+          redParticle.phase = Math.random() * Math.PI * 2;
+          redParticle.turnTimer = 0;
+        }
+        
+        if (!redParticle.active) return;
+        
+        // Komplexe kurvige Flugbahn mit zufälligen Richtungswechseln
+        redParticle.phase += 0.08; // Langsamere Oszillation
+        redParticle.turnTimer++;
+        
+        // Zufällige Richtungswechsel alle 60-120 Frames
+        if (redParticle.turnTimer > 60 + Math.random() * 60) {
+          redParticle.turnTimer = 0;
+          // Leichte Richtungsänderung (nicht komplett neu)
+          const turnAngle = (Math.random() - 0.5) * Math.PI * 0.8;
+          const currentSpeed = Math.sqrt(redParticle.vx*redParticle.vx + redParticle.vy*redParticle.vy);
+          const currentAngle = Math.atan2(redParticle.vy, redParticle.vx);
+          const newAngle = currentAngle + turnAngle;
+          redParticle.vx = Math.cos(newAngle) * currentSpeed;
+          redParticle.vy = Math.sin(newAngle) * currentSpeed;
+        }
+        
+        // Kurvige Bewegung mit Sinuswellen
+        const speed = Math.sqrt(redParticle.vx*redParticle.vx + redParticle.vy*redParticle.vy);
+        const curve = Math.sin(redParticle.phase) * 2.5 + Math.sin(redParticle.phase * 2.3) * 1.5;
+        const perpX = -redParticle.vy / speed;
+        const perpY = redParticle.vx / speed;
+        
+        redParticle.x += redParticle.vx + perpX * curve;
+        redParticle.y += redParticle.vy + perpY * curve;
+        
+        // Sanfte Abstoßung vom Rand - bleibt länger im sichtbaren Bereich
+        const margin = 80;
+        const pushStrength = 0.15;
+        if (redParticle.x < margin) redParticle.vx += pushStrength;
+        if (redParticle.x > W - margin) redParticle.vx -= pushStrength;
+        if (redParticle.y < margin) redParticle.vy += pushStrength;
+        if (redParticle.y > H - margin) redParticle.vy -= pushStrength;
+        
+        // Check capture
+        const dx = cursorX - redParticle.x;
+        const dy = cursorY - redParticle.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < 30 && chamberParticles.length < CHAMBER_THRESHOLD) {
+          // CAPTURED! - Jetzt geht Red Particle in die Kammer
+          redParticle.active = false;
+          redParticleCatches++;
+          
+          // Audio & Haptic: Capture
+          AudioSystem.playCapture();
+          HapticManager.capture();
+          
+          // In Kammer einsperren (mit isRed Flag für Spezialeffekte)
+          chamberParticles.push({
+            x: 0,
+            y: 0,
+            vx: (Math.random() - 0.5) * 3,
+            vy: (Math.random() - 0.5) * 3,
+            color: '#ff2222',
+            size: 3.5,
+            isRed: true
+          });
+          
+          // Erster Red Particle: Aktiviere Inversion
+          if (!isInverted) {
+            isInverted = true;
+            canvas.style.filter = 'invert(1)';
+            redStackCount = 1;
+          } else if (redStackCount < MAX_RED_STACK) {
+            redStackCount++;
+          }
+          
+          // Kleiner Partikel-Burst (weniger dramatisch, da in Kammer)
+          for (let i = 0; i < 20; i++) {
+            const angle = (i / 20) * Math.PI * 2;
+            const burstSpeed = 4 + Math.random() * 4;
+            particles.push({
+              x: cursorX,
+              y: cursorY,
+              vx: Math.cos(angle) * burstSpeed,
+              vy: Math.sin(angle) * burstSpeed,
+              life: 0.8,
+              hue: 0
+            });
+          }
+          
+          // Shockwave
+          ripples.push({
+            x: cursorX,
+            y: cursorY,
+            size: 10,
+            alpha: 0.8,
+            hue: 0
+          });
+          
+          // Nächster Red Particle spawnt nach Pause (wenn Kammer nicht voll)
+          if (cursorEnergy >= MAX_ENERGY && chamberParticles.length < CHAMBER_THRESHOLD) {
+            redParticleSpawnTime = Date.now() + 2000;
+            redParticleActive = true;
+          }
+        }
+        
+        // Off screen - neuer Versuch nach Pause (kein Limit)
+        if (redParticle.x < -100 || redParticle.x > W + 100 || redParticle.y < -100 || redParticle.y > H + 100) {
+          redParticle.active = false;
+          
+          // Neuer Versuch nach längerer Pause
+          if (cursorEnergy >= MAX_ENERGY) {
+            redParticleSpawnTime = Date.now() + 2000; // 2s Pause nach Miss
+            redParticleActive = true;
+          }
+        }
+        
+        // Draw - Flat ring, etwas kleiner als default cursor
+        const ringSize = 4;  // Kleiner als cursor base size (5)
+        
+        // Einfacher Ring (nicht gefüllt)
+        ctx.beginPath();
+        ctx.arc(redParticle.x, redParticle.y, ringSize, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ff2222';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+      
+      // ========================================
+      // COLORED PARTICLES - Sequential spawn (orange->brown->green)
+      // ========================================
+      function drawColoredParticles() {
+        const time = Date.now() / 1000;
+        
+        // Skip wenn alle 3 Phasen abgeschlossen
+        if (currentColorPhase >= 3) {
+          coloredBridgePhaseComplete = true;
+          return;
+        }
+        
+        // Chamber öffnet sich früh - sobald 1 Ring gefüllt ist (20% energy)
+        const chamberOpenThreshold = 0.2; // 1 Ring = 20%
+        
+        if (cursorEnergy < chamberOpenThreshold) {
+          coloredParticleSpawnTime = Date.now() + 2000;
+          return;
+        }
+        
+        // Aktiviere Kammer sobald 1 Ring voll
+        if (!chamberActive) {
+          chamberActive = true;
+          chamberSpawnPhase = 0;
+        }
+        
+        // Check ob 5 Partikel gesammelt - Logo ready for discharge
+        if (chamberParticles.length >= CHAMBER_THRESHOLD && !logoReadyForDischarge) {
+          logoReadyForDischarge = true;
+          logoVibrationTime = Date.now();
+          // Audio feedback: Collection complete
+          AudioSystem.playCollectionComplete();
+        }
+        
+        // Aktuelle Farbe für diese Phase
+        const currentColor = CHAMBER_COLORS_SEQUENCE[currentColorPhase];
+        
+        // Spawn farbige Partikel (alle 2 Sekunden)
+        if (Date.now() > coloredParticleSpawnTime && 
+            coloredParticles.length < 2 && 
+            chamberParticles.length < CHAMBER_THRESHOLD) {
+          
+          const color = currentColor;
+          
+          // Spawn von zufälligem Rand
+          const edge = Math.floor(Math.random() * 4);
+          let x, y;
+          switch(edge) {
+            case 0: x = Math.random() * W; y = -20; break;
+            case 1: x = W + 20; y = Math.random() * H; break;
+            case 2: x = Math.random() * W; y = H + 20; break;
+            default: x = -20; y = Math.random() * H;
+          }
+          
+          // Richtung grob zum Cursor
+          const targetX = cursorX + (Math.random() - 0.5) * 200;
+          const targetY = cursorY + (Math.random() - 0.5) * 200;
+          const dx = targetX - x;
+          const dy = targetY - y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          const speed = 1.2 + Math.random() * 0.8;  // 20% langsamer (1.2-2.0)
+          
+          coloredParticles.push({
+            x, y,
+            vx: (dx / dist) * speed,
+            vy: (dy / dist) * speed,
+            color,
+            size: 3,  // Etwas größer für Sichtbarkeit
+            phase: Math.random() * Math.PI * 2,
+            turnTimer: 0,
+            alpha: 1.0  // Volle Intensität
+          });
+          
+          // Nächster Spawn in 2 Sekunden
+          coloredParticleSpawnTime = Date.now() + 2000;
+        }
+        
+        // Update & Draw colored particles
+        for (let i = coloredParticles.length - 1; i >= 0; i--) {
+          const p = coloredParticles[i];
+          
+          // Kurvige Flugbahn (ähnlich wie Red Particle)
+          p.phase += 0.06;
+          p.turnTimer++;
+          
+          // Zufällige Richtungswechsel
+          if (p.turnTimer > 80 + Math.random() * 60) {
+            p.turnTimer = 0;
+            const turnAngle = (Math.random() - 0.5) * Math.PI * 0.6;
+            const currentSpeed = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+            const currentAngle = Math.atan2(p.vy, p.vx);
+            const newAngle = currentAngle + turnAngle;
+            p.vx = Math.cos(newAngle) * currentSpeed;
+            p.vy = Math.sin(newAngle) * currentSpeed;
+          }
+          
+          // Kurvige Bewegung
+          const speed = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+          const curve = Math.sin(p.phase) * 1.5 + Math.sin(p.phase * 1.7) * 0.8;
+          const perpX = -p.vy / speed;
+          const perpY = p.vx / speed;
+          
+          p.x += p.vx + perpX * curve;
+          p.y += p.vy + perpY * curve;
+          
+          // Sanfte Abstoßung vom Rand
+          const margin = 60;
+          const pushStrength = 0.12;
+          if (p.x < margin) p.vx += pushStrength;
+          if (p.x > W - margin) p.vx -= pushStrength;
+          if (p.y < margin) p.vy += pushStrength;
+          if (p.y > H - margin) p.vy -= pushStrength;
+          
+          // Cursor-Gravitation (stärker als bei weißen Partikeln)
+          const dxCursor = cursorX - p.x;
+          const dyCursor = cursorY - p.y;
+          const distCursor = Math.sqrt(dxCursor * dxCursor + dyCursor * dyCursor);
+          
+          if (distCursor < 200 && distCursor > 5) {
+            const pullStrength = Math.pow(1 - distCursor / 200, 2) * 0.25;
+            p.vx += (dxCursor / distCursor) * pullStrength;
+            p.vy += (dyCursor / distCursor) * pullStrength;
+          }
+          
+          // Capture check - in Kammer eingesperrt
+          if (distCursor < 30 && chamberParticles.length < CHAMBER_THRESHOLD) {
+            // In Kammer transferieren
+            chamberParticles.push({
+              x: 0, // Relativ zum Cursor-Zentrum
+              y: 0,
+              vx: (Math.random() - 0.5) * 2,
+              vy: (Math.random() - 0.5) * 2,
+              color: p.color,
+              size: 3,
+              isRed: false
+            });
+            
+            // Audio & Haptic - sparkly chamber capture
+            AudioSystem.playChamberCapture(chamberParticles.length);
+            HapticManager.collect();
+            
+            // Aus fliegenden Partikeln entfernen
+            coloredParticles.splice(i, 1);
+            continue;
+          }
+          
+          // Off screen check
+          if (p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50) {
+            coloredParticles.splice(i, 1);
+            continue;
+          }
+          
+          // Draw - Scharfer, intensiver Punkt ohne Schweif
+          
+          // Kleiner Glow für Tiefe
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = hexToRgba(p.color, 0.2);
+          ctx.fill();
+          
+          // Scharfer Core - volle Intensität
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * 0.8, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.fill();
+        }
+      }
+      
+      // Helper: Hex zu RGBA
+      function hexToRgba(hex, alpha) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+      
+      // Minimal overlay - nur subtile Vignette
+      function drawScanlines() {
+        // Elegante Vignette
+        const vignetteGradient = ctx.createRadialGradient(
+          W/2, H/2, Math.min(W, H) * 0.3,
+          W/2, H/2, Math.max(W, H) * 0.8
+        );
+        vignetteGradient.addColorStop(0, 'transparent');
+        vignetteGradient.addColorStop(0.7, 'transparent');
+        vignetteGradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+        ctx.fillStyle = vignetteGradient;
+        ctx.fillRect(0, 0, W, H);
+      }
+      
+      // Draw ripples - mit optionaler Farbe
+      function drawRipples() {
+        for (let i = ripples.length - 1; i >= 0; i--) {
+          const r = ripples[i];
+          r.size += 12;
+          r.alpha -= 0.02;
+          
+          if (r.alpha <= 0) {
+            ripples.splice(i, 1);
+            continue;
+          }
+          
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, r.size, 0, Math.PI * 2);
+          ctx.strokeStyle = r.hue !== undefined 
+            ? `hsla(${r.hue}, 100%, 70%, ${r.alpha})`
+            : `rgba(255, 255, 255, ${r.alpha})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+      
+      // 2026 Cursor - CLEAN, SHARP, SNAPPY + CHAMBER
+      function drawCursor() {
+        const time = Date.now() / 1000;
+        
+        const logoX = W / 2;
+        const logoY = H / 2;
+        const dxToLogo = mouseX - logoX;
+        const dyToLogo = mouseY - logoY;
+        const distToLogo = Math.sqrt(dxToLogo * dxToLogo + dyToLogo * dyToLogo);
+        
+        // ANZIEHUNG zum Logo wenn geladen - Cursor wird eingefangen
+        let pullX = 0, pullY = 0;
+        const captureRadius = 180;
+        if (distToLogo < captureRadius && cursorEnergy >= ENERGY_THRESHOLD) {
+          const proximity = 1 - distToLogo / captureRadius;
+          const pullStrength = cursorEnergy * proximity * 0.6;
+          if (distToLogo > 1) {
+            pullX = -(dxToLogo / distToLogo) * pullStrength * distToLogo * 0.3;
+            pullY = -(dyToLogo / distToLogo) * pullStrength * distToLogo * 0.3;
+          }
+        }
+        
+        const targetX = mouseX + pullX;
+        const targetY = mouseY + pullY;
+        // SNAPPY - schnellere Reaktion
+        cursorX += (targetX - cursorX) * 0.25;
+        cursorY += (targetY - cursorY) * 0.25;
+        
+        // Cursor-Bewegungs-Delta für Trägheit
+        const cursorDeltaX = cursorX - prevCursorX;
+        const cursorDeltaY = cursorY - prevCursorY;
+        prevCursorX = cursorX;
+        prevCursorY = cursorY;
+        
+        // Größe
+        const baseSize = 5;
+        const energySize = cursorEnergy * 18;
+        const cursorSize = baseSize + energySize;
+        
+        ctx.save();
+        ctx.translate(cursorX, cursorY);
+        
+        // === POWER METER - Rings with unlock system ===
+        const totalLayers = 5;
+        const energyPerLayer = MAX_ENERGY / totalLayers;
+        
+        // Available rings based on current phase (3 -> 4 -> 5)
+        const unlockedRings = currentColorPhase >= 3 ? 5 : RINGS_PER_PHASE[currentColorPhase];
+        
+        for (let layer = 0; layer < totalLayers; layer++) {
+          const ringRadius = cursorSize + 5 + layer * 5;
+          const ringWidth = 4;
+          
+          // Check if ring is unlocked
+          const isUnlocked = layer < unlockedRings;
+          
+          if (!isUnlocked) {
+            // Locked ring - very faint outline
+            ctx.beginPath();
+            ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.lineWidth = ringWidth;
+            ctx.lineCap = 'butt';
+            ctx.stroke();
+            continue;
+          }
+          
+          const layerStart = layer * energyPerLayer;
+          const layerProgress = Math.max(0, Math.min(1, (cursorEnergy - layerStart) / energyPerLayer));
+          if (layerProgress <= 0) continue;
+          
+          // Ringe von außen nach innen cyan färben basierend auf redStackCount
+          const isStackedRing = redStackCount >= (totalLayers - layer);
+          
+          ctx.beginPath();
+          ctx.arc(0, 0, ringRadius, -Math.PI/2, -Math.PI/2 + layerProgress * Math.PI * 2);
+          // Idle = grau, sonst normal
+          ctx.strokeStyle = isIdle ? '#555555' : (isStackedRing ? '#00ffff' : '#ffffff');
+          ctx.lineWidth = ringWidth;
+          ctx.lineCap = 'butt';
+          ctx.stroke();
+        }
+        
+        // === CHAMBER (Gravitationsgefängnis) - ab 20% charge (1 Ring) ===
+        const chamberOpenThreshold = 0.2;
+        if (cursorEnergy >= chamberOpenThreshold && chamberActive) {
+          const chamberOuterRadius = cursorSize;
+          const chamberInnerRadius = cursorSize - CHAMBER_RADIUS;
+          
+          // Donut-Shape zeichnen (Kammer-Wand)
+          ctx.beginPath();
+          ctx.arc(0, 0, chamberOuterRadius, 0, Math.PI * 2);
+          ctx.arc(0, 0, Math.max(2, chamberInnerRadius), 0, Math.PI * 2, true); // Loch
+          ctx.fillStyle = isIdle ? '#555555' : '#ffffff';
+          ctx.fill();
+          
+          // Füllstandsanzeige im Kammer-Rand (optional: subtiler Glow basierend auf Füllstand)
+          if (chamberParticles.length > 0) {
+            const fillProgress = chamberParticles.length / CHAMBER_THRESHOLD;
+            const fillAngle = fillProgress * Math.PI * 2;
+            
+            // Progress-Arc auf der Kammer
+            ctx.beginPath();
+            ctx.arc(0, 0, chamberOuterRadius + 2, -Math.PI/2, -Math.PI/2 + fillAngle);
+            ctx.strokeStyle = `rgba(255, 255, 255, 0.5)`;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+          
+          // === Gefangene Partikel in der Kammer ===
+          for (let i = 0; i < chamberParticles.length; i++) {
+            const p = chamberParticles[i];
+            
+            // Trägheit: Partikel reagieren auf Cursor-Bewegung
+            p.vx -= cursorDeltaX * 0.15;
+            p.vy -= cursorDeltaY * 0.15;
+            
+            // Sanfte Eigenbewegung
+            p.x += p.vx;
+            p.y += p.vy;
+            
+            // Dämpfung
+            p.vx *= 0.96;
+            p.vy *= 0.96;
+            
+            // Leichte zufällige Bewegung (Brownsche Bewegung)
+            p.vx += (Math.random() - 0.5) * 0.3;
+            p.vy += (Math.random() - 0.5) * 0.3;
+            
+            // Boundary-Constraint: In der Kammer bleiben
+            const distFromCenter = Math.sqrt(p.x * p.x + p.y * p.y);
+            const maxDist = chamberInnerRadius - p.size - 2;
+            
+            if (distFromCenter > maxDist && maxDist > 0) {
+              // Zurück zur Kammer-Grenze + Bounce
+              const angle = Math.atan2(p.y, p.x);
+              p.x = Math.cos(angle) * maxDist;
+              p.y = Math.sin(angle) * maxDist;
+              
+              // Velocity reflektieren (Bounce)
+              const normalX = p.x / distFromCenter;
+              const normalY = p.y / distFromCenter;
+              const dot = p.vx * normalX + p.vy * normalY;
+              p.vx -= 2 * dot * normalX * 0.6;
+              p.vy -= 2 * dot * normalY * 0.6;
+            }
+            
+            // Partikel zeichnen
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = p.color;
+            ctx.fill();
+            
+            // Subtiler Glow
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * 1.5, 0, Math.PI * 2);
+            ctx.fillStyle = hexToRgba(p.color, 0.3);
+            ctx.fill();
+          }
+        } else {
+          // Normaler Core (ohne Kammer)
+          const isCoreStacked = redStackCount >= MAX_RED_STACK;
+          ctx.beginPath();
+          ctx.arc(0, 0, cursorSize, 0, Math.PI * 2);
+          ctx.fillStyle = isCoreStacked ? '#00ffff' : '#ffffff';
+          ctx.fill();
+        }
+        
+        ctx.restore();
+      }
+      
+      // ========================================
+      // MINI-BRIDGE SPAWN - Big Bang from Logo Center
+      // ========================================
+      function spawnMiniBridge() {
+        // Aktuelle Farbe für diese Phase
+        const dominantColor = CHAMBER_COLORS_SEQUENCE[currentColorPhase];
+        
+        // Audio & Haptic: Mini-Bridge Spawn - big bang effect
+        AudioSystem.playBridgeSpawn();
+        HapticManager.levelUp();
+        
+        // URL für diese Farbe
+        const url = COLOR_URLS[dominantColor] || null;
+        
+        const logoX = W / 2;
+        const logoY = H / 2;
+        
+        // Mini-Bridge erstellen - spawnt vom Logo-Zentrum
+        const spawnAngle = Math.random() * Math.PI * 2;
+        const spawnSpeed = 4 + Math.random() * 3; // Schneller für Big Bang
+        
+        // 3D orbit angle für depth simulation
+        const orbitAngle = (floatingBridges.length * Math.PI * 2 / 3) + Math.random() * 0.5;
+        
+        floatingBridges.push({
+          x: logoX,
+          y: logoY,
+          vx: Math.cos(spawnAngle) * spawnSpeed,
+          vy: Math.sin(spawnAngle) * spawnSpeed,
+          color: dominantColor,
+          url: url,
+          size: 10,
+          rotation: 0,
+          rotationSpeed: 0,
+          phase: Math.random() * Math.PI * 2,
+          orbitAngle: orbitAngle, // For 3D orbit simulation
+          orbitSpeed: 0.008 + Math.random() * 0.004,
+          alpha: 1,
+          birthTime: Date.now(),
+          hitRadius: 25
+        });
+        
+        // BIG BANG Partikel-Burst vom Logo
+        const burstCount = 60 + currentColorPhase * 20; // Mehr Partikel pro Phase
+        for (let i = 0; i < burstCount; i++) {
+          const angle = (i / burstCount) * Math.PI * 2;
+          const burstSpeed = 8 + Math.random() * 10;
+          particles.push({
+            x: logoX,
+            y: logoY,
+            vx: Math.cos(angle) * burstSpeed,
+            vy: Math.sin(angle) * burstSpeed,
+            life: 1.2,
+            hue: colorToHue(dominantColor)
+          });
+        }
+        
+        const logoX2 = W / 2;
+        const logoY2 = H / 2;
+        
+        // Multiple Shockwaves from logo - big bang effect
+        for (let s = 0; s < 5; s++) {
+          setTimeout(() => {
+            ripples.push({
+              x: logoX2,
+              y: logoY2,
+              size: 10 + s * 15,
+              alpha: 1 - s * 0.15,
+              hue: colorToHue(dominantColor)
+            });
+          }, s * 60);
+        }
+        
+        // Logo scale punch
+        logoTargetScale = 1.3;
+        setTimeout(() => { logoTargetScale = 1; }, 200);
+        
+        // PROGRESS: Level erhöhen bei Discharge
+        if (upgradeLevel < 10) {
+          upgradeLevel++;
+          logoBaseScale += 0.18;
+          AudioSystem.playLevelUp(upgradeLevel);
+          HapticManager.levelUp();
+        }
+        
+        // Kammer leeren und Phase weiter
+        chamberParticles.length = 0;
+        cursorEnergy = 0;
+        logoReadyForDischarge = false;
+        currentColorPhase++;
+        
+        // Check if all phases complete
+        if (currentColorPhase >= 3) {
+          coloredBridgePhaseComplete = true;
+        }
+      }
+      
+      // Helper: Hex-Color zu HSL Hue
+      function colorToHue(hex) {
+        const r = parseInt(hex.slice(1, 3), 16) / 255;
+        const g = parseInt(hex.slice(3, 5), 16) / 255;
+        const b = parseInt(hex.slice(5, 7), 16) / 255;
+        
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        let h = 0;
+        
+        if (max !== min) {
+          const d = max - min;
+          switch (max) {
+            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+            case g: h = ((b - r) / d + 2) / 6; break;
+            case b: h = ((r - g) / d + 4) / 6; break;
+          }
+        }
+        return Math.round(h * 360);
+      }
+      
+      // ========================================
+      // FLOATING BRIDGES - Orbit um Main Logo
+      // ========================================
+      
+      // Track hover state for bridges
+      let hoveredBridgeIndex = -1;
+      
+      function drawFloatingBridges() {
+        const time = Date.now() / 1000;
+        const logoX = W / 2;
+        const logoY = H / 2;
+        
+        // Check which bridge is hovered
+        hoveredBridgeIndex = -1;
+        for (let i = 0; i < floatingBridges.length; i++) {
+          const bridge = floatingBridges[i];
+          const dx = mouseX - bridge.x;
+          const dy = mouseY - bridge.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 40) {
+            hoveredBridgeIndex = i;
+            break;
+          }
+        }
+        
+        // Cursor-Type basierend auf Bridge-Hover
+        if (hoveredBridgeIndex >= 0) {
+          canvas.style.cursor = 'pointer';
+        } else {
+          canvas.style.cursor = 'none';
+        }
+        
+        for (let i = floatingBridges.length - 1; i >= 0; i--) {
+          const bridge = floatingBridges[i];
+          const isHovered = (i === hoveredBridgeIndex);
+          
+          // Orbit-Logik: Weiträumig um das Logo kreisen
+          const dxLogo = logoX - bridge.x;
+          const dyLogo = logoY - bridge.y;
+          const distLogo = Math.sqrt(dxLogo * dxLogo + dyLogo * dyLogo);
+          
+          // Ziel-Orbit-Radius (weiträumig, verschiedene Distanzen)
+          const targetOrbitRadius = 200 + (i * 60);
+          
+          // Speed-Multiplikator (langsamer bei Hover)
+          const speedMult = isHovered ? 0.15 : 1.0;
+          
+          // Orbit-Kraft: Sanft zur Orbit-Linie ziehen
+          if (distLogo > 10) {
+            const orbitError = distLogo - targetOrbitRadius;
+            const pullStrength = orbitError * 0.0006 * speedMult;
+            bridge.vx += (dxLogo / distLogo) * pullStrength;
+            bridge.vy += (dyLogo / distLogo) * pullStrength;
+            
+            // Tangentiale Bewegung (langsam im Uhrzeigersinn)
+            const tangentX = -dyLogo / distLogo;
+            const tangentY = dxLogo / distLogo;
+            const tangentSpeed = 0.012 * speedMult;
+            bridge.vx += tangentX * tangentSpeed;
+            bridge.vy += tangentY * tangentSpeed;
+          }
+          
+          // Sanfte Phase für leichte Wellen
+          bridge.phase += 0.008 * speedMult;
+          const wave = Math.sin(bridge.phase) * 0.15;
+          
+          // Position Update
+          bridge.x += (bridge.vx + wave) * speedMult;
+          bridge.y += (bridge.vy + wave * 0.5) * speedMult;
+          
+          // Starke Dämpfung für sanfte Bewegung
+          bridge.vx *= 0.97;
+          bridge.vy *= 0.97;
+          
+          // Sanftes Bouncing von Rändern
+          const margin = 80;
+          if (bridge.x < margin) bridge.vx += 0.015;
+          if (bridge.x > W - margin) bridge.vx -= 0.015;
+          if (bridge.y < margin) bridge.vy += 0.015;
+          if (bridge.y > H - margin) bridge.vy -= 0.015;
+          
+          // Atmung/Pulsieren (subtiler)
+          const breath = 1 + Math.sin(time * 1.5 + bridge.phase) * 0.08;
+          const size = bridge.size * breath;
+          
+          // Hover-Effekt: leicht größer
+          const hoverScale = isHovered ? 1.15 : 1.0;
+          
+          ctx.save();
+          ctx.translate(bridge.x, bridge.y);
+          
+          // ∩ Symbol zeichnen - GROSS (4x size)
+          ctx.font = `bold ${size * 4 * hoverScale}px "SF Pro Display", system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = bridge.color;
+          ctx.globalAlpha = isHovered ? 1 : 0.85;
+          ctx.fillText('∩', 0, 0);
+          
+          // "i" superscript als Hinweis auf Interaktivität - größer, fetter, näher
+          ctx.font = `bold ${size * 2.5 * hoverScale}px "SF Pro Display", system-ui, sans-serif`;
+          ctx.fillStyle = bridge.color;
+          ctx.globalAlpha = isHovered ? 1 : 0.6;
+          ctx.fillText('ⁱ', size * 1.6, -size * 0.8);
+          ctx.globalAlpha = 1;
+          
+          ctx.restore();
+          
+          // Store hitbox for click detection
+          bridge.hitRadius = size * 2.5;
+          
+          // Sanfte Gravitation (zieht weiße Partikel an)
+          for (const ap of ambientParticles) {
+            const dx = bridge.x - ap.x;
+            const dy = bridge.y - ap.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 60 && dist > 5) {
+              const pull = 0.01 * (1 - dist / 60);
+              ap.vx += (dx / dist) * pull;
+              ap.vy += (dy / dist) * pull;
+            }
+          }
+        }
+      }
+      
+      // Main render
+      function render() {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, W, H);
+        
+        // drawGrid(); // Entfernt - zu dezent
+        // Check idle state
+        if (Date.now() - lastMouseMoveTime > IDLE_TIMEOUT) {
+          isIdle = true;
+          // Langsamer Discharge im Idle
+          if (cursorEnergy > 0) {
+            cursorEnergy = Math.max(0, cursorEnergy - 0.002);
+          }
+        }
+        
+        drawFloatingBridges();
+        drawAmbientParticles();
+        drawColoredParticles();
+        drawRedParticle();
+        drawParticles();
+        drawLogo();
+        drawRipples();
+        drawCursor();
+        drawScanlines();
+        
+        requestAnimationFrame(render);
+      }
+      
+      // Events
+      window.addEventListener('resize', resize);
+      
+      document.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        lastMouseMoveTime = Date.now();
+        isIdle = false;
+      });
+      
+      // Click auf Logo = ENERGIE EXPLOSION (nur wenn Threshold erreicht)
+      document.addEventListener('click', (e) => {
+        const clickX = e.clientX;
+        const clickY = e.clientY;
+        
+        // ZUERST: Check ob ein Floating Bridge angeklickt wurde
+        for (const bridge of floatingBridges) {
+          const dx = clickX - bridge.x;
+          const dy = clickY - bridge.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          
+          if (dist < (bridge.hitRadius || 30) && bridge.url) {
+            // Bridge angeklickt! Öffne URL
+            window.open(bridge.url, '_blank');
+            
+            // Visuelles Feedback
+            ripples.push({
+              x: bridge.x,
+              y: bridge.y,
+              size: 10,
+              alpha: 1,
+              hue: colorToHue(bridge.color)
+            });
+            
+            // Audio
+            AudioSystem.playCollect(4);
+            
+            return; // Keine weitere Verarbeitung
+          }
+        }
+        
+        const dist = distFromLogo(clickX, clickY);
+        const logoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
+        const exactCenterX = W / 2;
+        const exactCenterY = H / 2;
+        
+        // Ripple immer
+        ripples.push({
+          x: clickX,
+          y: clickY,
+          size: 5,
+          alpha: 0.5,
+          hue: 0
+        });
+        
+        // CHAMBER DISCHARGE: Wenn Logo ready und auf Logo geklickt
+        if (dist < logoRadius && logoReadyForDischarge && chamberParticles.length >= CHAMBER_THRESHOLD) {
+          spawnMiniBridge();
+          return;
+        }
+        
+        // Nur wenn auf Logo geklickt UND Threshold erreicht UND nicht in Chamber-Phase
+        if (dist < logoRadius && cursorEnergy >= ENERGY_THRESHOLD && upgradeLevel < 10 && coloredBridgePhaseComplete) {
+          let levelsToAdd = 1;
+          let isMaxStack = false;
+          const prevLevel = upgradeLevel;
+          
+          // Bei max red stack (6): Sofort Level 10!
+          if (redStackCount >= MAX_RED_STACK) {
+            isMaxStack = true;
+            upgradeLevel = 10;
+            logoBaseScale = 1 + 0.18 * 10; // Volles Upgrade
+          } else if (isInverted) {
+            // Bei Inversion: +3 Levels pro gestacktem red particle
+            levelsToAdd = 3 * redStackCount;
+            upgradeLevel = Math.min(10, upgradeLevel + levelsToAdd);
+            logoBaseScale += 0.18 * levelsToAdd;
+          } else {
+            // Normal: +1 Level
+            upgradeLevel = Math.min(10, upgradeLevel + 1);
+            logoBaseScale += 0.18;
+          }
+          
+          // Audio & Haptic: Discharge
+          AudioSystem.playDischarge(upgradeLevel);
+          HapticManager.discharge();
+          
+          // Audio & Haptic: Level Up (wenn Level gestiegen)
+          if (upgradeLevel > prevLevel) {
+            setTimeout(() => {
+              AudioSystem.playLevelUp(upgradeLevel);
+              HapticManager.levelUp();
+            }, 150);
+          }
+          
+          // Inversion und Stack zurücksetzen nach Discharge
+          if (isInverted) {
+            isInverted = false;
+            canvas.style.filter = '';
+          }
+          redStackCount = 0;
+          
+          // Start background music on first discharge (with at least 20% charge)
+          if (!AudioSystem.bgMusicStarted && cursorEnergy >= ENERGY_THRESHOLD) {
+            AudioSystem.startBgMusic();
+          }
+          
+          const intensity = cursorEnergy;
+          const releaseHue = isMaxStack ? 45 : (upgradeLevel * 40) % 360; // Gold bei max stack
+          
+          // Mehr Ringe bei höheren Levels / max stack
+          const ringCount = isMaxStack ? 30 : (5 + upgradeLevel * 2);
+          for (let o = 0; o < ringCount; o++) {
+            setTimeout(() => {
+              logoOutlines.push({
+                alpha: 1,
+                radius: 10 + o * 6,
+                hue: isMaxStack ? (45 + o * 5) % 60 : (releaseHue + o * 15) % 360
+              });
+            }, o * (isMaxStack ? 10 : 20));
+          }
+          
+          // Scale punch - stärker bei höheren Levels / max stack
+          logoTargetScale = isMaxStack ? 1.5 : (1.2 + upgradeLevel * 0.05);
+          setTimeout(() => { logoTargetScale = 1; }, isMaxStack ? 300 : 150);
+          
+          // Level 10 erreicht - Modal zeigen (4s delay)
+          if (upgradeLevel >= 10) {
+            gameCompleted = true;
+            setTimeout(() => {
+              showModal();
+            }, 4000); // 4 Sekunden warten
+          }
+          
+          // DRUCKWELLE - alle ambient particles wegstoßen
+          for (let ap of ambientParticles) {
+            const apDx = ap.x - exactCenterX;
+            const apDy = ap.y - exactCenterY;
+            const apDist = Math.sqrt(apDx * apDx + apDy * apDy);
+            if (apDist > 0 && apDist < 400) {
+              const pushStrength = (1 - apDist / 400) * 15 * intensity;
+              ap.vx += (apDx / apDist) * pushStrength;
+              ap.vy += (apDy / apDist) * pushStrength;
+            }
+          }
+          
+          // Mehr farbige Partikel
+          const particleCount = Math.floor(50 + intensity * 80 + upgradeLevel * 12);
+          for (let i = 0; i < particleCount; i++) {
+            const angle = (i / particleCount) * Math.PI * 2;
+            const speed = 6 + Math.random() * 12 * intensity;
+            particles.push({
+              x: exactCenterX,
+              y: exactCenterY,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              life: 1,
+              hue: (releaseHue + Math.random() * 60) % 360
+            });
+          }
+          
+          // Mehrere Shockwaves
+          for (let s = 0; s < 3; s++) {
+            setTimeout(() => {
+              ripples.push({
+                x: exactCenterX,
+                y: exactCenterY,
+                size: 10 + s * 20,
+                alpha: 1,
+                hue: (releaseHue + s * 30) % 360
+              });
+            }, s * 40);
+          }
+          
+          cursorEnergy = 0;
+          redParticleActive = false;
+          redParticleCatches = 0; // Reset für nächste Ladung
+          redParticle.active = false;
+          
+          // Chamber reset
+          chamberParticles.length = 0;
+          chamberActive = false;
+          coloredParticles.length = 0;
+        }
+      });
+      
+      // Touch support
+      document.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        mouseX = touch.clientX;
+        mouseY = touch.clientY;
+      });
+      
+      document.addEventListener('touchmove', (e) => {
+        const touch = e.touches[0];
+        mouseX = touch.clientX;
+        mouseY = touch.clientY;
+        e.preventDefault();
+      }, { passive: false });
+      
+      // Touch tap = ENERGIE EXPLOSION (nur wenn Threshold erreicht)
+      document.addEventListener('touchend', (e) => {
+        if (e.changedTouches.length > 0) {
+          const touch = e.changedTouches[0];
+          const dist = distFromLogo(touch.clientX, touch.clientY);
+          const logoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
+          const exactCenterX = W / 2;
+          const exactCenterY = H / 2;
+          
+          ripples.push({
+            x: touch.clientX,
+            y: touch.clientY,
+            size: 5,
+            alpha: 0.5,
+            hue: 0
+          });
+          
+          if (dist < logoRadius && cursorEnergy >= ENERGY_THRESHOLD && upgradeLevel < 10) {
+            let levelsToAdd = 1;
+            let isMaxStack = false;
+            const prevLevel = upgradeLevel;
+            
+            // Bei max red stack (6): Sofort Level 10!
+            if (redStackCount >= MAX_RED_STACK) {
+              isMaxStack = true;
+              upgradeLevel = 10;
+              logoBaseScale = 1 + 0.18 * 10;
+            } else if (isInverted) {
+              // Bei Inversion: +3 Levels pro gestacktem red particle
+              levelsToAdd = 3 * redStackCount;
+              upgradeLevel = Math.min(10, upgradeLevel + levelsToAdd);
+              logoBaseScale += 0.18 * levelsToAdd;
+            } else {
+              // Normal: +1 Level
+              upgradeLevel = Math.min(10, upgradeLevel + 1);
+              logoBaseScale += 0.18;
+            }
+            
+            // Audio & Haptic: Discharge
+            AudioSystem.playDischarge(upgradeLevel);
+            HapticManager.discharge();
+            
+            // Audio & Haptic: Level Up
+            if (upgradeLevel > prevLevel) {
+              setTimeout(() => {
+                AudioSystem.playLevelUp(upgradeLevel);
+                HapticManager.levelUp();
+              }, 150);
+            }
+            
+            // Inversion und Stack zurücksetzen nach Discharge
+            if (isInverted) {
+              isInverted = false;
+              canvas.style.filter = '';
+            }
+            redStackCount = 0;
+            
+            // Start background music on first discharge (touch)
+            if (!AudioSystem.bgMusicStarted && cursorEnergy >= ENERGY_THRESHOLD) {
+              AudioSystem.startBgMusic();
+            }
+            
+            const intensity = cursorEnergy;
+            const releaseHue = isMaxStack ? 45 : (upgradeLevel * 50) % 360;
+            
+            const ringCount = isMaxStack ? 30 : (5 + upgradeLevel * 2);
+            for (let o = 0; o < ringCount; o++) {
+              setTimeout(() => {
+                logoOutlines.push({
+                  alpha: 1,
+                  radius: 15 + o * 8,
+                  hue: isMaxStack ? (45 + o * 5) % 60 : (releaseHue + o * 20) % 360
+                });
+              }, o * (isMaxStack ? 10 : 25));
+            }
+            
+            logoTargetScale = isMaxStack ? 1.5 : 1.25;
+            setTimeout(() => { logoTargetScale = 1; }, isMaxStack ? 300 : 120);
+            
+            // Level 10 Modal (4s delay)
+            if (upgradeLevel >= 10) {
+              gameCompleted = true;
+              setTimeout(() => {
+                showModal();
+              }, 4000);
+            }
+            
+            // Druckwelle
+            for (let ap of ambientParticles) {
+              const apDx = ap.x - exactCenterX;
+              const apDy = ap.y - exactCenterY;
+              const apDist = Math.sqrt(apDx * apDx + apDy * apDy);
+              if (apDist > 0 && apDist < 400) {
+                const pushStrength = (1 - apDist / 400) * 15 * intensity;
+                ap.vx += (apDx / apDist) * pushStrength;
+                ap.vy += (apDy / apDist) * pushStrength;
+              }
+            }
+            
+            const particleCount = Math.floor(50 + intensity * 80 + upgradeLevel * 12);
+            for (let i = 0; i < particleCount; i++) {
+              const angle = (i / particleCount) * Math.PI * 2;
+              const speed = 6 + Math.random() * 12 * intensity;
+              particles.push({
+                x: exactCenterX,
+                y: exactCenterY,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 1,
+                hue: (releaseHue + Math.random() * 60) % 360
+              });
+            }
+            
+            for (let s = 0; s < 3; s++) {
+              setTimeout(() => {
+                ripples.push({
+                  x: exactCenterX,
+                  y: exactCenterY,
+                  size: 10 + s * 20,
+                  alpha: 1,
+                  hue: (releaseHue + s * 30) % 360
+                });
+              }, s * 40);
+            }
+            
+            cursorEnergy = 0;
+            redParticleActive = false;
+            redParticleCatches = 0;
+            redParticle.active = false;
+            
+            // Chamber reset
+            chamberParticles.length = 0;
+            chamberActive = false;
+            coloredParticles.length = 0;
+          }
+        }
+      });
+      
+      // Sound Hint - staggered animation per letter
+      const soundHint = document.getElementById('sound-hint');
+      const hintSpans = soundHint?.querySelectorAll('span:not(.speaker)');
+      hintSpans?.forEach((span, i) => {
+        // Random delay offset for each letter (playful, independent)
+        const delay = Math.random() * 1.5;
+        span.style.animationDelay = `${delay}s`;
+      });
+      
+      function hideSoundHint() {
+        soundHint?.classList.add('hidden');
+      }
+      
+      // Sound Toggle Button
+      const soundToggleBtn = document.getElementById('sound-toggle');
+      const soundOnIcon = soundToggleBtn?.querySelector('.sound-on');
+      const soundOffIcon = soundToggleBtn?.querySelector('.sound-off');
+      
+      function updateSoundIcons(muted) {
+        if (soundOnIcon && soundOffIcon) {
+          soundOnIcon.style.display = muted ? 'none' : 'block';
+          soundOffIcon.style.display = muted ? 'block' : 'none';
+        }
+        soundToggleBtn?.classList.toggle('muted', muted);
+      }
+      
+      function enableSound() {
+        initAudioOnInteraction();
+        if (AudioSystem.muted) {
+          AudioSystem.toggleMute();
+        }
+        hideSoundHint();
+        updateSoundIcons(false);
+      }
+      
+      // Sound Hint click handler - enables sound
+      soundHint?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        enableSound();
+      });
+      
+      soundToggleBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        initAudioOnInteraction();
+        const muted = AudioSystem.toggleMute();
+        updateSoundIcons(muted);
+        
+        // Hide hint when sound is enabled
+        if (!muted) {
+          hideSoundHint();
+        }
+        
+        // Stop/start background music
+        if (muted) {
+          AudioSystem.stopBgMusic();
+        } else if (AudioSystem.bgMusic && !AudioSystem.bgMusicStarted) {
+          AudioSystem.startBgMusic();
+        }
+      });
+      
+      // Init
+      resize();
+      render();
+    </script>
+  </body>
+</html>
