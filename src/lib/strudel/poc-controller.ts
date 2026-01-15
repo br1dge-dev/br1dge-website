@@ -11,14 +11,21 @@ import { initStrudel } from '@strudel/web';
 let initialized = false;
 let repl: any = null;
 
-// Track code adapted for @strudel/web (no .o() method, use note names with octave)
+// Track code - full version with all effects
+// Note: .o() doesn't exist, octave is set via note names or scale degree + octave param
 export const TRACK_CODE = `
-$: note("<g2 c3 g2 f3 d3>*16").s("sawtooth")
+$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2"))
+  .scale("g:minor")
+  .s("sawtooth")
   .lpf(sine.range(200, 2000).slow(8))
-  .delay(.6).pan(rand)
+  .delay(.6)
+  .pan(rand)
+  .fm(.8)
   .gain(0.4)
 
-$: note("<d1 c1 bb0 g0>*2").s("sawtooth")
+$: n("<7 _ _ 6 5 _ <5 3> <6 4>>*2")
+  .scale("g:minor")
+  .s("supersaw")
   .lpf(sine.range(400, 2000).slow(8))
   .gain(0.3)
 
