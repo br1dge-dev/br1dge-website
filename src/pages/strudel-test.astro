@@ -1,0 +1,92 @@
+---
+// Strudel with local bundling
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strudel Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { 
+      background: #000; 
+      color: #fff; 
+      height: 100%; 
+      font-family: monospace;
+    }
+    #output { padding: 2rem; }
+    button {
+      background: #222;
+      color: #fff;
+      border: 1px solid #444;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      margin: 0.5rem;
+    }
+    button:hover { background: #333; }
+  </style>
+</head>
+<body>
+  <div id="output">
+    <h2>Strudel Integration Test</h2>
+    <button id="init">Initialize</button>
+    <button id="play">Play (simplified)</button>
+    <button id="stop">Stop</button>
+    <div id="log" style="margin-top:1rem;color:#0f0;"></div>
+  </div>
+
+  <script type="module">
+    import { initStrudel } from '@strudel/web';
+    
+    const logEl = document.getElementById('log');
+    function log(msg) {
+      logEl.textContent = msg;
+    }
+    
+    let repl = null;
+    
+    document.getElementById('init').onclick = async () => {
+      log('Initializing...');
+      try {
+        repl = await initStrudel();
+        log('Ready!');
+      } catch (e) {
+        log('Error: ' + e);
+      }
+    };
+    
+    document.getElementById('play').onclick = async () => {
+      if (!repl) { log('Initialize first!'); return; }
+      
+      const code = `
+$: note("g3 d4 g3 f4 d4 c4 bb3 g3 g3 d4 g3 f4 d4 c4 bb3 g3").s("sawtooth")
+  .lpf(sine.range(200, 2000).slow(8))
+  .delay(.6).gain(0.5)
+
+$: note("g2 d2 bb2 g2 d2 c2 bb1 g1 g2 d2 bb2 g2 d2 c2 bb1 g1").s("sawtooth")
+  .lpf(sine.range(400, 2000).slow(8))
+  .gain(0.4)
+
+$: s("hh*8").gain(0.3)
+
+$: s("bd*4").gain(0.6)
+      `;
+      
+      try {
+        await repl.evaluate(code);
+        log('Playing!');
+      } catch (e) {
+        log('Play error: ' + e);
+      }
+    };
+    
+    document.getElementById('stop').onclick = async () => {
+      if (repl) {
+        await repl.evaluate('hush()');
+        log('Stopped');
+      }
+    };
+  </script>
+</body>
+</html>
