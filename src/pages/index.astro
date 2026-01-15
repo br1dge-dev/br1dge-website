@@ -1868,8 +1868,12 @@
             const p = chamberParticles[i];
             
             // Trägheit: Partikel reagieren auf Cursor-Bewegung
-            p.vx -= cursorDeltaX * 0.15;
-            p.vy -= cursorDeltaY * 0.15;
+            // BEGRENZT um zu verhindern dass Partikel "entkommen"
+            const maxInertia = 3;
+            const inertiaX = Math.max(-maxInertia, Math.min(maxInertia, -cursorDeltaX * 0.15));
+            const inertiaY = Math.max(-maxInertia, Math.min(maxInertia, -cursorDeltaY * 0.15));
+            p.vx += inertiaX;
+            p.vy += inertiaY;
             
             // Sanfte Eigenbewegung
             p.x += p.vx;
@@ -1883,22 +1887,24 @@
             p.vx += (Math.random() - 0.5) * 0.3;
             p.vy += (Math.random() - 0.5) * 0.3;
             
-            // Boundary-Constraint: In der Kammer bleiben
+            // Boundary-Constraint: In der Kammer bleiben (IMMER anwenden)
             const distFromCenter = Math.sqrt(p.x * p.x + p.y * p.y);
-            const maxDist = chamberInnerRadius - p.size - 2;
+            const maxDist = Math.max(1, chamberInnerRadius - p.size - 2); // Mindestens 1
             
-            if (distFromCenter > maxDist && maxDist > 0) {
+            if (distFromCenter > maxDist) {
               // Zurück zur Kammer-Grenze + Bounce
               const angle = Math.atan2(p.y, p.x);
               p.x = Math.cos(angle) * maxDist;
               p.y = Math.sin(angle) * maxDist;
               
-              // Velocity reflektieren (Bounce)
-              const normalX = p.x / distFromCenter;
-              const normalY = p.y / distFromCenter;
-              const dot = p.vx * normalX + p.vy * normalY;
-              p.vx -= 2 * dot * normalX * 0.6;
-              p.vy -= 2 * dot * normalY * 0.6;
+              // Velocity reflektieren (Bounce) - nur wenn distFromCenter > 0
+              if (distFromCenter > 0) {
+                const normalX = p.x / distFromCenter;
+                const normalY = p.y / distFromCenter;
+                const dot = p.vx * normalX + p.vy * normalY;
+                p.vx -= 2 * dot * normalX * 0.6;
+                p.vy -= 2 * dot * normalY * 0.6;
+              }
             }
             
             // Partikel zeichnen
@@ -2123,17 +2129,16 @@
           if (bridge.x > W - margin) bridge.vx -= 0.015;
           if (bridge.y < margin) bridge.vy += 0.015;
           if (bridge.y > H - margin) bridge.vy -= 0.015;
-          
-          // Atmung/Pulsieren (subtiler)
-          const breath = 1 + Math.sin(time * 1.5 + bridge.phase) * 0.08;
-          const size = bridge.size * breath;
-          
+
+          // Feste Größe (kein Atmen mehr)
+          const size = bridge.size;
+
           // Hover-Effekt: leicht größer
           const hoverScale = isHovered ? 1.15 : 1.0;
-          
+
           ctx.save();
           ctx.translate(bridge.x, bridge.y);
-          
+
           // ∩ Symbol zeichnen - GROSS (4x size)
           ctx.font = `bold ${size * 4 * hoverScale}px "SF Pro Display", system-ui, sans-serif`;
           ctx.textAlign = 'center';
@@ -2141,14 +2146,10 @@
           ctx.fillStyle = bridge.color;
           ctx.globalAlpha = isHovered ? 1 : 0.85;
           ctx.fillText('∩', 0, 0);
-          
-          // "i" superscript als Hinweis auf Interaktivität - größer, fetter, näher
-          ctx.font = `bold ${size * 2.5 * hoverScale}px "SF Pro Display", system-ui, sans-serif`;
-          ctx.fillStyle = bridge.color;
-          ctx.globalAlpha = isHovered ? 1 : 0.6;
-          ctx.fillText('ⁱ', size * 1.6, -size * 0.8);
+
+          // Kein "ⁱ" superscript mehr
           ctx.globalAlpha = 1;
-          
+
           ctx.restore();
           
           // Store hitbox for click detection
