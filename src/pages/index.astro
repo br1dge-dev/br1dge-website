@@ -1376,7 +1376,7 @@
         // Spawn nach Timer
         if (redParticleActive && !redParticle.active && Date.now() > redParticleSpawnTime) {
           const edge = Math.floor(Math.random() * 4);
-          const speed = 1.6 + Math.random() * 1.2; // 20% langsamer (1.6-2.8)
+          const speed = 1.36 + Math.random() * 1.02; // 15% langsamer als vorher (1.36-2.38)
           switch(edge) {
             case 0: redParticle.x = Math.random() * W; redParticle.y = -10; break;
             case 1: redParticle.x = W + 10; redParticle.y = Math.random() * H; break;
@@ -1509,15 +1509,26 @@
           }
         }
         
-        // Draw - Flat ring, etwas kleiner als default cursor
-        const ringSize = 4;  // Kleiner als cursor base size (5)
-        
-        // Einfacher Ring (nicht gefüllt)
+        // Draw - Gefülltes rotes Herz
+        const heartSize = 4;
+        ctx.save();
+        ctx.translate(redParticle.x, redParticle.y);
         ctx.beginPath();
-        ctx.arc(redParticle.x, redParticle.y, ringSize, 0, Math.PI * 2);
-        ctx.strokeStyle = '#ff2222';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
+        // Herz-Form mit Bezier-Kurven
+        ctx.moveTo(0, heartSize * 0.3);
+        ctx.bezierCurveTo(
+          -heartSize * 0.5, -heartSize * 0.3,
+          -heartSize, heartSize * 0.3,
+          0, heartSize
+        );
+        ctx.bezierCurveTo(
+          heartSize, heartSize * 0.3,
+          heartSize * 0.5, -heartSize * 0.3,
+          0, heartSize * 0.3
+        );
+        ctx.fillStyle = '#ff2222';
+        ctx.fill();
+        ctx.restore();
       }
       
       // ========================================
@@ -1640,20 +1651,24 @@
           if (p.y > H - margin) p.vy -= pushStrength;
           
           // Cursor-Gravitation (stärker als bei weißen Partikeln)
+          // ABER: Nicht wenn Kammer voll ist (verhindert "Geisterfolger")
           const dxCursor = cursorX - p.x;
           const dyCursor = cursorY - p.y;
           const distCursor = Math.sqrt(dxCursor * dxCursor + dyCursor * dyCursor);
-          
-          if (distCursor < 200 && distCursor > 5) {
+
+          // Capture check - in Kammer eingesperrt
+          // WICHTIG: Capture nur wenn Kammer sichtbar ist (cursorEnergy >= threshold OR hasParticles)
+          const chamberVisible = cursorEnergy >= 0.2 || chamberParticles.length > 0;
+          const canCapture = chamberParticles.length < CHAMBER_THRESHOLD && chamberVisible;
+
+          // Gravitation NUR wenn noch Platz in der Kammer ist
+          if (distCursor < 200 && distCursor > 5 && canCapture) {
             const pullStrength = Math.pow(1 - distCursor / 200, 2) * 0.25;
             p.vx += (dxCursor / distCursor) * pullStrength;
             p.vy += (dyCursor / distCursor) * pullStrength;
           }
-          
-          // Capture check - in Kammer eingesperrt
-          // WICHTIG: Capture nur wenn Kammer sichtbar ist (cursorEnergy >= threshold OR hasParticles)
-          const chamberVisible = cursorEnergy >= 0.2 || chamberParticles.length > 0;
-          if (distCursor < 30 && chamberParticles.length < CHAMBER_THRESHOLD && chamberVisible) {
+
+          if (distCursor < 30 && canCapture) {
             // In Kammer transferieren
             chamberParticles.push({
               x: 0, // Relativ zum Cursor-Zentrum
