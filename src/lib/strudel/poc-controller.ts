@@ -11,8 +11,8 @@ import { initStrudel } from '@strudel/web';
 let initialized = false;
 let repl: any = null;
 
-// Track code - full version with all effects
-// Note: .o() doesn't exist, octave is set via note names or scale degree + octave param
+// Track code - adapted for @strudel/web
+// Using note names with octaves for lead, scale + note names for bass
 export const TRACK_CODE = `
 $: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2"))
   .scale("g:minor")
@@ -25,7 +25,7 @@ $: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2"))
 
 $: n("<7 _ _ 6 5 _ <5 3> <6 4>>*2")
   .scale("g:minor")
-  .s("supersaw")
+  .s("sawtooth")
   .lpf(sine.range(400, 2000).slow(8))
   .gain(0.3)
 
