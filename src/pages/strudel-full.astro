@@ -1,5 +1,5 @@
 ---
-// Full Strudel REPL Integration
+// Full Strudel REPL - loaded via Vite alias
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -22,39 +22,17 @@
       left: 0;
       right: 0;
       bottom: 0;
-      width: 100%;
-      height: 100%;
-    }
-    
-    strudel-editor {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      --theme: dark;
     }
   </style>
 </head>
 <body>
-  <div id="repl-container">
-    <strudel-editor id="repl"></strudel-editor>
-  </div>
+  <div id="repl-container"></div>
 
   <script type="module">
-    // Import the full REPL component from local node_modules
-    import { StrudelRepl } from '@strudel/repl';
-    
-    // Register the custom element if not already done
-    if (!customElements.get('strudel-editor')) {
-      customElements.define('strudel-editor', StrudelRepl);
-    }
-    
-    // Get the element
-    const repl = document.getElementById('repl');
-    
-    // The original track code
-    const code = `$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(-12)
+    // Import via global Strudel object from CDN
+    // This is how strudel.cc loads it
+    window.Strudel = {
+      REPL_CODE: `$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(-12)
   .o(3).s("sawtooth").lpf(sine.range(200, 2000).slow(8))
   .delay(.6).pan(rand)
   .fm(.8).fmwave('white')
@@ -68,22 +46,12 @@ $: s("hh*8").gain(0.5)
 $: s("bd:2!4")
   .duck("3:4:5:6")
   .duckdepth(.8)
-  .duckattack(.16)`;
-    
-    // Set the code after component is ready
-    function setCodeWhenReady() {
-      const editor = document.getElementById('repl');
-      if (editor && editor.setCode) {
-        console.log('Setting code...');
-        editor.setCode(code);
-      } else {
-        console.log('Waiting for editor...', editor);
-        setTimeout(setCodeWhenReady, 500);
-      }
-    }
-    
-    // Start trying after a delay to let component initialize
-    setTimeout(setCodeWhenReady, 2000);
+  .duckattack(.16)`
+    };
   </script>
+  
+  <!-- Load Strudel REPL from unpkg with modulepreload -->
+  <link rel="modulepreload" href="https://unpkg.com/@strudel/repl@1.2.6/dist/index.mjs">
+  <script type="module" src="https://unpkg.com/@strudel/repl@1.2.6/dist/index.mjs"></script>
 </body>
 </html>

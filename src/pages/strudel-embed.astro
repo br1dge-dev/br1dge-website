@@ -1,0 +1,125 @@
+---
+// Simple iframe approach - embed strudel.cc directly
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>br1dge x Strudel</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { 
+      background: #000; 
+      color: #fff; 
+      height: 100%; 
+      overflow: hidden;
+    }
+    
+    #container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+    }
+    
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #000;
+    }
+    
+    #overlay {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.7);
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-family: monospace;
+    }
+    
+    #overlay button {
+      background: #222;
+      color: #fff;
+      border: 1px solid #444;
+      padding: 8px 16px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    
+    #overlay button:hover { background: #333; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <iframe id="strudel-frame" src="https://strudel.cc/"></iframe>
+  </div>
+  
+  <div id="overlay">
+    <button id="play-btn">▶ Play Original Track</button>
+    <button id="mute-btn">🔊 Mute</button>
+    <span id="status" style="color:#888;margin-left:10px;">Loading Strudel...</span>
+  </div>
+
+  <script>
+    const iframe = document.getElementById('strudel-frame');
+    const status = document.getElementById('status');
+    
+    // The original track code
+    const TRACK_CODE = `$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(-12)
+  .o(3).s("sawtooth").lpf(sine.range(200, 2000).slow(8))
+  .delay(.6).pan(rand)
+  .fm(.8).fmwave('white')
+
+$: n("<7 _ _ 6 5 _  <5 3> <6 4>>*2").scale("g:minor").trans(-24)
+  .detune(rand)
+  .o(4).s("supersaw").lpf(sine.range(400, 2000).slow(8))
+
+$: s("hh*8").gain(0.5)
+
+$: s("bd:2!4")
+  .duck("3:4:5:6")
+  .duckdepth(.8)
+  .duckattack(.16)`;
+    
+    // Wait for iframe to load
+    iframe.onload = () => {
+      status.textContent = 'Strudel loaded! Click Play.';
+      console.log('Iframe loaded');
+      
+      // Try to communicate with strudel
+      try {
+        // We can try to inject code via the URL hash method
+        // strudel.cc uses hash for sharing patterns
+        console.log('Iframe URL:', iframe.src);
+      } catch (e) {
+        console.log('Note: Direct communication blocked by CORS');
+      }
+    };
+    
+    // Play button - opens strudel with code
+    document.getElementById('play-btn').onclick = () => {
+      // Encode the code for strudel URL
+      const encoded = btoa(TRACK_CODE);
+      const url = `https://strudel.cc/#${encoded}`;
+      window.open(url, '_blank');
+      status.textContent = 'Opening in new tab...';
+    };
+    
+    // Mute button
+    let muted = false;
+    document.getElementById('mute-btn').onclick = () => {
+      muted = !muted;
+      document.getElementById('mute-btn').textContent = muted ? '🔇 Mute' : '🔊 Mute';
+      // Note: Can't control iframe audio due to CORS
+      status.textContent = muted ? 'Muted (browser restricts iframe audio control)' : 'Unmuted';
+    };
+  </script>
+</body>
+</html>
