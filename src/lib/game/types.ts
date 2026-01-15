@@ -28,8 +28,8 @@ export const TUTORIAL_VIBRATE_INTENSITY = 1.5;
 // Rings per colored phase
 export const RINGS_PER_PHASE = [3, 4, 5] as const;
 
-// Idle timeout
-export const IDLE_TIMEOUT = 3000;
+// Idle timeout (1.5s ohne Bewegung = idle)
+export const IDLE_TIMEOUT = 1500;
 
 // Chamber colors sequence: Orange -> Sand -> Neongreen
 export const CHAMBER_COLORS_SEQUENCE = [
