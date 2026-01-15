@@ -11,23 +11,20 @@ import { initStrudel } from '@strudel/web';
 let initialized = false;
 let repl: any = null;
 
-// Original track code - exactly as in Strudel REPL
+// Track code adapted for @strudel/web (no .o() method, use note names with octave)
 export const TRACK_CODE = `
-$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(-12)
-  .o(3).s("sawtooth").lpf(sine.range(200, 2000).slow(8))
+$: note("<g2 c3 g2 f3 d3>*16").s("sawtooth")
+  .lpf(sine.range(200, 2000).slow(8))
   .delay(.6).pan(rand)
-  .fm(.8).fmwave('white')
+  .gain(0.4)
 
-$: n("<7 _ _ 6 5 _  <5 3> <6 4>>*2").scale("g:minor").trans(-24)
-  .detune(rand)
-  .o(4).s("supersaw").lpf(sine.range(400, 2000).slow(8))
+$: note("<d1 c1 bb0 g0>*2").s("sawtooth")
+  .lpf(sine.range(400, 2000).slow(8))
+  .gain(0.3)
 
-$: s("hh*8").gain(0.5)
+$: s("hh*8").gain(0.4)
 
-$: s("bd:2!4")
-  .duck("3:4:5:6")
-  .duckdepth(.8)
-  .duckattack(.16)
+$: s("bd:2!4").gain(0.5)
 `;
 
 // State for future dynamic control
@@ -45,13 +42,17 @@ export async function init(): Promise<boolean> {
   try {
     // initStrudel returns the repl context with evaluate function
     repl = await initStrudel();
+    console.log('Strudel initialized, REPL methods:', Object.keys(repl));
     
-    // Load default samples
-    await repl.evaluate(`samples('github:tidalcycles/dirt-samples')`);
+    // Load default samples - wrap in try/catch as it may return undefined
+    try {
+      await repl.evaluate(`await samples('github:tidalcycles/dirt-samples')`);
+      console.log('Samples loaded');
+    } catch (e) {
+      console.log('Sample load note:', e);
+    }
     
     initialized = true;
-    console.log('Strudel initialized with samples');
-    console.log('REPL methods:', Object.keys(repl));
     return true;
   } catch (err) {
     console.error('Strudel init error:', err);
