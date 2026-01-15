@@ -11,33 +11,33 @@ import { initStrudel } from '@strudel/web';
 let initialized = false;
 let repl: any = null;
 
-// Track code - CORRECTED with original pattern
-// Note: .o() and .supersaw not available in @strudel/web
-// Using workarounds: multiple detuned sawtooths for supersaw effect
+// Track code - optimized for @strudel/web
+// Using available methods: cut, spread, room for effects
 export const TRACK_CODE = `
-// Lead: n pattern mit Skala (n interpretiert Zahlen relativ zur Skala)
-// trans(-12) = eine Oktave tiefer als normal
+// Lead: n pattern mit Skala, cut für mehr Punch
 $: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2"))
   .scale("g:minor")
   .s("sawtooth")
+  .cut(1)
   .lpf(sine.range(200, 2000).slow(8))
   .delay(.6).delayfeedback(.3)
   .pan(rand)
   .fm(.8)
   .gain(0.5)
 
-// Bass: eine Oktave tiefer, mit Detune für fetteren Sound
-// Da supersaw nicht verfügbar: normale Sawtooth mit tieferer Oktave
+// Bass: spread für breiteren Sound, room für Space
 $: n("<7 _ _ 6 5 _ <5 3> <6 4>>*2")
   .scale("g:minor")
   .s("sawtooth")
-  .lpf(sine.range(400, 2000).slow(8))
+  .spread(.5)
+  .room(.2)
+  .lpf(sine.range(300, 2000).slow(8))
   .gain(0.5)
 
 // Hi-hats
 $: s("hh*8").gain(0.4)
 
-// Kick mit leichtem Ducking-Effekt über Gain
+// Kick
 $: s("bd:2!4").gain(0.6)
 `;
 
