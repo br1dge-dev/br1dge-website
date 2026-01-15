@@ -1836,12 +1836,14 @@
            const chamberOuterRadius = cursorSize;
            const chamberInnerRadius = cursorSize - CHAMBER_RADIUS;
           
-          // Donut-Shape zeichnen (Kammer-Wand)
-          ctx.beginPath();
-          ctx.arc(0, 0, chamberOuterRadius, 0, Math.PI * 2);
-          ctx.arc(0, 0, Math.max(2, chamberInnerRadius), 0, Math.PI * 2, true); // Loch
-          ctx.fillStyle = isIdle ? '#555555' : '#ffffff';
-          ctx.fill();
+           // Donut-Shape zeichnen (Kammer-Wand)
+           // Färbe cyan wenn 6 red particles gesammelt (MAX_RED_STACK)
+           const isChamberStacked = redStackCount >= MAX_RED_STACK;
+           ctx.beginPath();
+           ctx.arc(0, 0, chamberOuterRadius, 0, Math.PI * 2);
+           ctx.arc(0, 0, Math.max(2, chamberInnerRadius), 0, Math.PI * 2, true); // Loch
+           ctx.fillStyle = isIdle ? '#555555' : (isChamberStacked ? '#00ffff' : '#ffffff');
+           ctx.fill();
           
           // Füllstandsanzeige im Kammer-Rand (optional: subtiler Glow basierend auf Füllstand)
           if (chamberParticles.length > 0) {
