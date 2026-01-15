@@ -1,0 +1,77 @@
+---
+// Strudel REPL Integration Test
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strudel REPL Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { 
+      background: #000; 
+      color: #fff; 
+      height: 100%; 
+      overflow: hidden;
+    }
+    
+    #repl-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+    
+    strudel-repl {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="repl-container">
+    <strudel-repl></strudel-repl>
+  </div>
+
+  <script type="module">
+    // Load the full Strudel REPL from CDN
+    import 'https://unpkg.com/@strudel/repl@1.2.6/dist/strudel-repl.js';
+    
+    const code = `$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(-12)
+  .o(3).s("sawtooth").lpf(sine.range(200, 2000).slow(8))
+  .delay(.6).pan(rand)
+  .fm(.8).fmwave('white')
+
+$: n("<7 _ _ 6 5 _  <5 3> <6 4>>*2").scale("g:minor").trans(-24)
+  .detune(rand)
+  .o(4).s("supersaw").lpf(sine.range(400, 2000).slow(8))
+
+$: s("hh*8").gain(0.5)
+
+$: s("bd:2!4")
+  .duck("3:4:5:6")
+  .duckdepth(.8)
+  .duckattack(.16)`;
+    
+    // Wait for component to load
+    customElements.whenDefined('strudel-repl').then(() => {
+      console.log('Strudel REPL component ready!');
+      
+      const repl = document.querySelector('strudel-repl');
+      
+      // Try to set the code
+      setTimeout(() => {
+        if (repl.setCode) {
+          repl.setCode(code);
+          console.log('Code set!');
+        } else {
+          console.log('setCode not available');
+        }
+      }, 1500);
+    });
+  </script>
+</body>
+</html>
