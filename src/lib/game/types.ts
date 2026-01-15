@@ -2,36 +2,47 @@
  * Game state types and interfaces
  */
 
+// Game phases
 export const GAME_PHASE_TUTORIAL = 0;
 export const GAME_PHASE_COLORED = 1;
-export const GAME_PHASE_COMPLETE = 2;
+export const GAME_PHASE_COMPLETE = 4;
 
-export type GamePhase = 0 | 1 | 2;
+export type GamePhase = 0 | 1 | 4;
 
-export interface GameConstants {
-  MAX_ENERGY: number;
-  ENERGY_THRESHOLD: number;
-  CHAMBER_THRESHOLD: number;
-  CHAMBER_RADIUS: number;
-  MAX_RED_STACK: number;
-  IDLE_TIMEOUT: number;
-}
+// Energy constants
+export const MAX_ENERGY = 1.0;
+export const ENERGY_THRESHOLD = 0.2;
 
-export const GAME_CONSTANTS: GameConstants = {
-  MAX_ENERGY: 1.0,
-  ENERGY_THRESHOLD: 1.0,
-  CHAMBER_THRESHOLD: 5,
-  CHAMBER_RADIUS: 12,
-  MAX_RED_STACK: 6,
-  IDLE_TIMEOUT: 3000,
-};
+// Chamber system
+export const CHAMBER_THRESHOLD = 5;
+export const CHAMBER_RADIUS = 12;
+export const MAX_RED_STACK = 6;
 
-// Chamber colors sequence
-export const CHAMBER_COLORS = ['#ff8800', '#8B4513', '#228B22'] as const;
+// Tutorial phases
+export const TUTORIAL_RINGS_PHASE0 = 2;
+export const TUTORIAL_RINGS_PHASE1 = 3;
+export const TUTORIAL_RINGS_PHASE2 = 4;
+export const TUTORIAL_TWITCH_INTENSITY = 0.5;
+export const TUTORIAL_VIBRATE_INTENSITY = 1.5;
+
+// Rings per colored phase
+export const RINGS_PER_PHASE = [3, 4, 5] as const;
+
+// Idle timeout
+export const IDLE_TIMEOUT = 3000;
+
+// Chamber colors sequence: Orange -> Sand -> Neongreen
+export const CHAMBER_COLORS_SEQUENCE = [
+  '#ff6b35',  // 1. Orange (Coral Flame)
+  '#d4a574',  // 2. Hellbraun/Sand (Desert Gold)
+  '#39ff14'   // 3. Neongrün (Electric Lime)
+] as const;
+
+export const CHAMBER_COLORS = [...CHAMBER_COLORS_SEQUENCE, '#ff2222'] as const;
 
 // URLs for colored bridges
 export const COLOR_URLS: Record<string, string> = {
-  '#ff8800': 'https://sword.br1dge.xyz',
-  '#8B4513': 'https://wordofchoice.br1dge.xyz',
-  '#228B22': 'https://br1dge.xyz/projects',
+  '#39ff14': 'https://sword-gamma.vercel.app/',
+  '#ff6b35': 'https://birth.br1dge.xyz/',
+  '#d4a574': 'https://wocl.br1dge.xyz/'
 };
