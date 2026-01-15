@@ -1,5 +1,5 @@
 ---
-// Strudel Core Integration Test - using bundled module
+// Strudel Core Integration Test - direct inline script
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -28,7 +28,7 @@
   </style>
 </head>
 <body>
-  <h1>Strudel Core Bundle Test</h1>
+  <h1>Strudel Core Direct Test</h1>
   <div>
     <button id="init">1. Initialize</button>
     <button id="play">2. Play Full Track</button>
@@ -37,8 +37,13 @@
   <div id="log"></div>
 
   <script type="module">
-    // Import from our bundled module (Vite resolves @strudel/* aliases)
-    import * as Strudel from '../lib/strudel/core-bundle.ts';
+    // These imports work because they're in a .astro file bundled by Vite
+    // Vite's resolve.alias will handle the @strudel/* paths
+    import { init, note, n, s } from '@strudel/core';
+    import { getAudioContext, webaudioOutput } from '@strudel/webaudio';
+    import { transpile } from '@strudel/transpiler';
+    
+    let audioCtx = null;
     
     const logEl = document.getElementById('log');
     function log(msg) {
@@ -46,27 +51,55 @@
     }
     
     document.getElementById('init').onclick = async () => {
-      log('Initializing...');
+      log('Initializing Strudel...');
       try {
-        const result = await Strudel.init();
-        log('✓ Core initialized! ' + (result.ready ? 'Ready' : 'Failed'));
+        audioCtx = getAudioContext();
+        await audioCtx.resume();
+        log('✓ AudioContext ready');
+        console.log('Strudel imports:', { init, note, n, s, getAudioContext, transpile });
       } catch (e) {
         log('Error: ' + e);
       }
     };
     
     document.getElementById('play').onclick = async () => {
-      const result = await Strudel.playTrack();
-      if (result.success) {
+      if (!audioCtx) { log('Initialize first!'); return; }
+      
+      log('Playing...');
+      
+      const code = `$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(-12)
+  .o(3).s("sawtooth").lpf(sine.range(200, 2000).slow(8))
+  .delay(.6).pan(rand)
+  .fm(.8).fmwave('white')
+
+$: n("<7 _ _ 6 5 _  <5 3> <6 4>>*2").scale("g:minor").trans(-24)
+  .detune(rand)
+  .o(4).s("supersaw").lpf(sine.range(400, 2000).slow(8))
+
+$: s("hh*8").gain(0.5)
+
+$: s("bd:2!4")
+  .duck("3:4:5:6")
+  .duckdepth(.8)
+  .duckattack(.16)`;
+      
+      try {
+        const patterns = transpile(code);
+        console.log('Patterns:', patterns);
+        await webaudioOutput(patterns, audioCtx.currentTime);
         log('✓ Playing! Check console.');
-      } else {
-        log('Error: ' + result.error);
+      } catch (e) {
+        log('Error: ' + e);
+        console.error(e);
       }
     };
     
     document.getElementById('stop').onclick = async () => {
-      await Strudel.stop();
-      log('✓ Stopped');
+      if (audioCtx) {
+        audioCtx.suspend();
+        audioCtx.resume();
+        log('✓ Stopped');
+      }
     };
   </script>
 </body>
