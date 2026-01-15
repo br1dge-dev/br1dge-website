@@ -2360,17 +2360,18 @@
             }, 150);
           }
           
-           // Reset redStackCount only if max stack bonus was used (to prevent infinite bonus)
-           if (isMaxStack) {
+           // Reset nach Discharge - IMMER redStackCount zurücksetzen da der Bonus jetzt verwendet wurde
+           if (isMaxStack || isInverted || redStackCount > 0) {
              redStackCount = 0;
              isInverted = false;
              canvas.style.filter = '';
-           } else if (isInverted) {
-             // Bei Inversion: nur Inversion zurücksetzen, Stack behalten
-             isInverted = false;
-             canvas.style.filter = '';
            }
-           // Bei normalem Discharge: redStackCount behalten für stacking!
+
+           // Nach Discharge: Red Particles wieder aktivieren wenn Level < 10
+           if (upgradeLevel < 10) {
+             redParticleActive = true;
+             redParticleSpawnTime = Date.now() + 3000; // 3s warten vor nächstem Red Particle
+           }
           
           // Start background music on first discharge (earlier than before)
           if (!AudioSystem.bgMusicStarted) {
