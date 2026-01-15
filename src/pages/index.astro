@@ -1062,11 +1062,12 @@
             hue: 0
           });
           
-          // Nächster Red Particle spawnt nach Pause (wenn Kammer nicht voll)
-          if (cursorEnergy >= MAX_ENERGY && chamberParticles.length < CHAMBER_THRESHOLD) {
-            redParticleSpawnTime = Date.now() + 2000;
-            redParticleActive = true;
-          }
+           // Nächster Red Particle spawnt nach Pause (bis MAX_RED_STACK erreicht)
+           // Rote Partikel können bis 6 gehen, nicht nur 5 wie colored particles
+           if (cursorEnergy >= MAX_ENERGY && redStackCount < MAX_RED_STACK) {
+             redParticleSpawnTime = Date.now() + 2000;
+             redParticleActive = true;
+           }
         }
         
         // Off screen - neuer Versuch nach Pause (kein Limit)
@@ -1599,8 +1600,13 @@
         // Progress phase tracking
         coloredBridgePhaseComplete = true;
 
-        // Reset chamber for next phase
+        // Reset ALL chamber state including red particles/inverted mode
         chamberParticles.length = 0;
+        redStackCount = 0;
+        isInverted = false;
+        canvas.style.filter = '';
+        AudioSystem.setInvertedMode(false);
+
         logoReadyForDischarge = false;
 
         // Advance to next color phase (unless already at green)
