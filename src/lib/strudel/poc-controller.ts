@@ -3,18 +3,40 @@
  * Tests basic Strudel functionality for br1dge integration
  */
 
-// Import at module level - Vite will bundle this
-import { initStrudel, note, s, hush } from '@strudel/web';
+import { initStrudel, note, n, s, hush } from '@strudel/web';
 
 let initialized = false;
 
-// State that patterns will read
+// Track code for visualization
+export const TRACK_CODE = {
+  lead: `n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2"))
+  .scale("g:minor").trans(-12)
+  .o(3).s("sawtooth")
+  .lpf(sine.range(200, 2000).slow(8))
+  .delay(.6).pan(rand)
+  .fm(.8).fmwave('white')`,
+  
+  bass: `n("<7 _ _ 6 5 _ <5 3> <6 4>>*2")
+  .scale("g:minor").trans(-24)
+  .detune(rand)
+  .o(4).s("supersaw")
+  .lpf(sine.range(400, 2000).slow(8))`,
+  
+  hihat: `s("hh*8").gain(0.5)`,
+  
+  kick: `s("bd:2!4")
+  .duck("3:4:5:6")
+  .duckdepth(.8)
+  .duckattack(.16)`
+};
+
+// State
 export const state = {
   intensity: 0.5,
   leadEnabled: true,
-  bassEnabled: false,
-  hihatEnabled: false,
-  kickEnabled: false
+  bassEnabled: true,
+  hihatEnabled: true,
+  kickEnabled: true
 };
 
 export async function init(): Promise<boolean> {
@@ -34,16 +56,41 @@ export function isReady(): boolean {
   return initialized;
 }
 
-export function playPattern(): void {
+export function playFullTrack(): void {
   if (!initialized) throw new Error('Not initialized');
   
-  // Simple test pattern - your track melody
-  note("<0 4 0 9 7>*16")
+  // Layer 1: Lead melody (sawtooth with FM)
+  n("<0 4 0 9 7>*16")
+    .add(n("<7 _ _ 6 5 _ _ 6>*2"))
     .scale("g:minor")
+    .trans(-12)
+    .o(3)
     .s("sawtooth")
-    .lpf(200 + state.intensity * 1800)
-    .gain(state.intensity * 0.5)
+    .lpf(1200)
     .delay(0.6)
+    .pan(0.5)
+    .fm(0.8)
+    .gain(0.4)
+    .play();
+  
+  // Layer 2: Bass (supersaw)
+  n("<7 _ _ 6 5 _ 5 6>*2")
+    .scale("g:minor")
+    .trans(-24)
+    .o(4)
+    .s("supersaw")
+    .lpf(800)
+    .gain(0.3)
+    .play();
+  
+  // Layer 3: Hi-hats
+  s("hh*8")
+    .gain(0.3)
+    .play();
+  
+  // Layer 4: Kick with ducking
+  s("bd:2!4")
+    .gain(0.5)
     .play();
 }
 
@@ -59,11 +106,18 @@ export function setIntensity(value: number): void {
 export function triggerSfx(): void {
   if (!initialized) throw new Error('Not initialized');
   
-  // One-shot test
+  // One-shot in G minor
   note("g4")
     .s("triangle")
     .decay(0.3)
     .sustain(0)
     .gain(0.5)
     .play();
+}
+
+// Get all track code as string for visualization
+export function getTrackCodeString(): string {
+  return Object.entries(TRACK_CODE)
+    .map(([name, code]) => `// ${name}\n${code}`)
+    .join('\n\n');
 }

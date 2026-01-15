@@ -11,138 +11,260 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: system-ui, sans-serif;
-      background: #111;
+      background: #000;
       color: #fff;
-      padding: 2rem;
       min-height: 100vh;
     }
-    h1 { margin-bottom: 1rem; color: #888; }
-    h2 { margin: 1.5rem 0 0.5rem; color: #666; font-size: 0.9rem; text-transform: uppercase; }
-    .controls { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
-    button {
-      background: #333;
-      color: #fff;
-      border: 1px solid #555;
-      padding: 0.75rem 1.5rem;
+    
+    /* Code overlay - top left, dezent */
+    #code-overlay {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11px;
+      line-height: 1.4;
+      color: rgba(255, 255, 255, 0.4);
+      background: rgba(0, 0, 0, 0.3);
+      padding: 0.75rem;
+      border-radius: 4px;
+      max-width: 380px;
+      z-index: 100;
+      transition: opacity 0.3s;
+    }
+    #code-overlay.hidden { opacity: 0; pointer-events: none; }
+    #code-overlay .layer {
+      margin-bottom: 0.5rem;
+      padding-left: 1rem;
+      position: relative;
+    }
+    #code-overlay .layer::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: rgba(255, 255, 255, 0.3);
+    }
+    #code-overlay .layer.active {
+      color: rgba(255, 255, 255, 0.7);
+    }
+    #code-overlay .layer.active::before {
+      color: #39ff14;
+    }
+    #code-overlay .layer-name {
+      color: #888;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    /* Controls - top right */
+    #controls {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      z-index: 100;
+    }
+    #controls button {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.6);
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
       cursor: pointer;
-      font-size: 1rem;
-      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: all 0.2s;
     }
-    button:hover { background: #444; }
-    .slider-group { display: flex; flex-direction: column; gap: 0.5rem; }
-    .slider-group label { font-size: 0.8rem; color: #888; }
-    input[type="range"] { width: 200px; }
-    #log {
-      background: #000;
-      border: 1px solid #333;
-      padding: 1rem;
-      font-family: monospace;
+    #controls button:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.9);
+    }
+    #controls button.active {
+      background: rgba(34, 139, 34, 0.3);
+      border-color: #39ff14;
+      color: #39ff14;
+    }
+    
+    /* Test panel - bottom */
+    #test-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(20, 20, 20, 0.95);
+      border-top: 1px solid #333;
+      padding: 1rem 2rem;
+    }
+    #test-panel h2 {
+      font-size: 0.7rem;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 0.5rem;
+    }
+    .test-buttons {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .test-buttons button {
+      background: #222;
+      color: #aaa;
+      border: 1px solid #444;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
       font-size: 0.85rem;
-      height: 200px;
-      overflow-y: auto;
-      color: #0f0;
-    }
-    .status {
-      display: inline-block;
-      padding: 0.25rem 0.5rem;
       border-radius: 4px;
-      font-size: 0.8rem;
-      margin-left: 1rem;
     }
-    .status.ok { background: #228B22; }
-    .status.error { background: #8B0000; }
-    .status.pending { background: #444; }
+    .test-buttons button:hover { background: #333; color: #fff; }
+    .test-buttons button.playing { background: #1a3d1a; border-color: #39ff14; color: #39ff14; }
+    
+    #log {
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #0f0;
+      margin-top: 0.5rem;
+      max-height: 60px;
+      overflow-y: auto;
+    }
+    
+    /* Main canvas area placeholder */
+    #canvas-area {
+      height: calc(100vh - 140px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+      font-size: 1.5rem;
+    }
   </style>
 </head>
 <body>
-  <h1>Strudel PoC <span id="status" class="status pending">Not Started</span></h1>
-  
-  <h2>Test 1: Basic Playback</h2>
-  <div class="controls">
-    <button id="init">Initialize Strudel</button>
-    <button id="play">Play Pattern</button>
-    <button id="stop">Stop (hush)</button>
-  </div>
-  
-  <h2>Test 2: Dynamic Parameters</h2>
-  <div class="controls">
-    <div class="slider-group">
-      <label>Intensity: <span id="intensityValue">0.5</span></label>
-      <input type="range" id="intensity" min="0" max="100" value="50" />
+  <!-- Code Overlay (top left) -->
+  <div id="code-overlay">
+    <div class="layer active" data-layer="lead">
+      <span class="layer-name">lead</span><br>
+      n("&lt;0 4 0 9 7&gt;*16")<br>
+      .scale("g:minor").s("sawtooth")
+    </div>
+    <div class="layer active" data-layer="bass">
+      <span class="layer-name">bass</span><br>
+      n("&lt;7 _ _ 6 5 _ 5 6&gt;*2")<br>
+      .scale("g:minor").s("supersaw")
+    </div>
+    <div class="layer active" data-layer="hihat">
+      <span class="layer-name">hihat</span><br>
+      s("hh*8").gain(0.3)
+    </div>
+    <div class="layer active" data-layer="kick">
+      <span class="layer-name">kick</span><br>
+      s("bd:2!4").duck("3:4:5:6")
     </div>
   </div>
   
-  <h2>Test 3: One-Shot Trigger</h2>
-  <div class="controls">
-    <button id="triggerSfx">Trigger SFX Note</button>
+  <!-- Controls (top right) -->
+  <div id="controls">
+    <button id="toggleCode" title="Toggle Code">👁</button>
+    <button id="toggleSound" title="Toggle Sound">🔊</button>
   </div>
   
-  <h2>Log</h2>
-  <div id="log">Waiting for initialization...</div>
+  <!-- Canvas placeholder -->
+  <div id="canvas-area">
+    [ br1dge canvas würde hier sein ]
+  </div>
+  
+  <!-- Test Panel (bottom) -->
+  <div id="test-panel">
+    <h2>Strudel PoC Tests</h2>
+    <div class="test-buttons">
+      <button id="init">1. Initialize</button>
+      <button id="play">2. Play Full Track</button>
+      <button id="stop">3. Stop</button>
+      <button id="sfx">4. Trigger SFX</button>
+    </div>
+    <div id="log"></div>
+  </div>
 
   <script>
     import * as Strudel from '../lib/strudel/poc-controller';
     
     const logEl = document.getElementById('log') as HTMLDivElement;
-    const statusEl = document.getElementById('status') as HTMLSpanElement;
-    const intensitySlider = document.getElementById('intensity') as HTMLInputElement;
-    const intensityValue = document.getElementById('intensityValue') as HTMLSpanElement;
+    const codeOverlay = document.getElementById('code-overlay') as HTMLDivElement;
+    let isPlaying = false;
     
     function log(msg: string) {
       const time = new Date().toLocaleTimeString();
-      logEl.textContent += `[${time}] ${msg}\n`;
-      logEl.scrollTop = logEl.scrollHeight;
+      logEl.textContent = `[${time}] ${msg}`;
     }
     
-    function setStatus(status: string, text: string) {
-      statusEl.textContent = text;
-      statusEl.className = `status ${status}`;
-    }
-    
-    // Test 1: Initialize & Playback
+    // Initialize
     document.getElementById('init')!.onclick = async () => {
       log('Initializing Strudel...');
       try {
         await Strudel.init();
-        setStatus('ok', 'Ready');
-        log('✓ Strudel initialized!');
+        log('✓ Strudel ready!');
       } catch (e) {
-        setStatus('error', 'Error');
         log(`✗ Error: ${e}`);
       }
     };
     
-    document.getElementById('play')!.onclick = () => {
+    // Play full track
+    const playBtn = document.getElementById('play') as HTMLButtonElement;
+    playBtn.onclick = () => {
       if (!Strudel.isReady()) { log('✗ Initialize first!'); return; }
       try {
-        Strudel.playPattern();
-        log('✓ Pattern started!');
+        Strudel.playFullTrack();
+        isPlaying = true;
+        playBtn.classList.add('playing');
+        log('✓ Playing full track');
       } catch (e) { log(`✗ Error: ${e}`); }
     };
     
+    // Stop
     document.getElementById('stop')!.onclick = () => {
       Strudel.stop();
+      isPlaying = false;
+      playBtn.classList.remove('playing');
       log('✓ Stopped');
     };
     
-    // Test 2: Dynamic Parameters
-    intensitySlider.oninput = () => {
-      const value = parseInt(intensitySlider.value) / 100;
-      Strudel.setIntensity(value);
-      intensityValue.textContent = value.toFixed(2);
-      log(`Intensity: ${value.toFixed(2)}`);
-    };
-    
-    // Test 3: One-Shot
-    document.getElementById('triggerSfx')!.onclick = () => {
+    // SFX
+    document.getElementById('sfx')!.onclick = () => {
       if (!Strudel.isReady()) { log('✗ Initialize first!'); return; }
-      try {
-        Strudel.triggerSfx();
-        log('✓ SFX triggered');
-      } catch (e) { log(`✗ Error: ${e}`); }
+      Strudel.triggerSfx();
+      log('✓ SFX triggered');
     };
     
-    log('Click "Initialize Strudel" to begin.');
+    // Toggle code visibility
+    const toggleCodeBtn = document.getElementById('toggleCode') as HTMLButtonElement;
+    toggleCodeBtn.onclick = () => {
+      codeOverlay.classList.toggle('hidden');
+      toggleCodeBtn.classList.toggle('active', !codeOverlay.classList.contains('hidden'));
+    };
+    toggleCodeBtn.classList.add('active'); // Start visible
+    
+    // Toggle sound (mute)
+    const toggleSoundBtn = document.getElementById('toggleSound') as HTMLButtonElement;
+    let muted = false;
+    toggleSoundBtn.onclick = () => {
+      muted = !muted;
+      if (muted) {
+        Strudel.stop();
+        isPlaying = false;
+        playBtn.classList.remove('playing');
+      }
+      toggleSoundBtn.textContent = muted ? '🔇' : '🔊';
+      toggleSoundBtn.classList.toggle('active', !muted);
+      log(muted ? 'Sound muted' : 'Sound unmuted');
+    };
+    toggleSoundBtn.classList.add('active');
+    
+    log('Click "Initialize" to begin');
   </script>
 </body>
 </html>
