@@ -11,29 +11,30 @@ import { initStrudel } from '@strudel/web';
 let initialized = false;
 let repl: any = null;
 
-// Track code - adapted for @strudel/web
-// Using note names with explicit octaves (G3 = octave 3)
+// Track code - CORRECTED with original pattern
+// In G minor: 0=G, 1=A, 2=Bb, 3=C, 4=D, 5=Eb, 6=F, 7=G, 8=A, 9=Bb
+// trans(-12) = eine Oktave tiefer
 export const TRACK_CODE = `
-// Lead - full melody in G minor
-$: note("g3 d4 g3 f4 d4 c4 bb3 g3 g3 d4 g3 f4 d4 c4 bb3 g3")
+// Lead: n pattern mit Skala (n interpretiert Zahlen relativ zur Skala)
+$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2"))
+  .scale("g:minor")
   .s("sawtooth")
   .lpf(sine.range(200, 2000).slow(8))
   .delay(.6)
   .pan(rand)
   .fm(.8)
-  .gain(0.5)
-
-// Bass - deeper layer  
-$: note("g2 d2 bb2 g2 d2 c2 bb1 g1 g2 d2 bb2 g2 d2 c2 bb1 g1")
-  .s("sawtooth")
-  .lpf(sine.range(400, 2000).slow(8))
   .gain(0.4)
 
-// Hi-hats
-$: s("hh*8").gain(0.3)
+// Bass: eine Oktave tiefer
+$: n("<7 _ _ 6 5 _ <5 3> <6 4>>*2")
+  .scale("g:minor")
+  .s("sawtooth")
+  .lpf(sine.range(400, 2000).slow(8))
+  .gain(0.35)
 
-// Kick
-$: s("bd*4").gain(0.6)
+$: s("hh*8").gain(0.25)
+
+$: s("bd:2!4").gain(0.5)
 `;
 
 // State for future dynamic control

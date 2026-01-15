@@ -176,13 +176,15 @@
     let tickInterval: any = null;
     
     const TRACK_LINES = [
-      { id: 'lead1', text: `$: note("g3 d4 g3 f4 d4 c4 bb3 g3 g3 d4 g3 f4 d4 c4 bb3 g3")`, class: 'lead' },
-      { id: 'lead2', text: `.s("sawtooth").lpf(sine.range(200,2000).slow(8))`, class: 'lead' },
-      { id: 'lead3', text: `.delay(.6).pan(rand).fm(.8).gain(0.5)`, class: 'lead' },
-      { id: 'bass1', text: `$: note("g2 d2 bb2 g2 d2 c2 bb1 g1 g2 d2 bb2 g2 d2 c2 bb1 g1")`, class: 'bass' },
-      { id: 'bass2', text: `.s("sawtooth").lpf(sine.range(400,2000).slow(8)).gain(0.4)`, class: 'bass' },
-      { id: 'hihat', text: `$: s("hh*8").gain(0.3)`, class: 'hihat' },
-      { id: 'kick', text: `$: s("bd*4").gain(0.6)`, class: 'kick' },
+      { id: 'lead1', text: `$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")`, class: 'lead' },
+      { id: 'lead2', text: `.scale("g:minor").s("sawtooth")`, class: 'lead' },
+      { id: 'lead3', text: `.lpf(sine.range(200,2000).slow(8)).delay(.6).pan(rand).fm(.8)`, class: 'lead' },
+      { id: 'lead4', text: `.gain(0.4)`, class: 'lead' },
+      { id: 'bass1', text: `$: n("<7 _ _ 6 5 _ <5 3> <6 4>>*2")`, class: 'bass' },
+      { id: 'bass2', text: `.scale("g:minor").s("sawtooth").lpf(sine.range(400,2000).slow(8))`, class: 'bass' },
+      { id: 'bass3', text: `.gain(0.35)`, class: 'bass' },
+      { id: 'hihat', text: `$: s("hh*8").gain(0.25)`, class: 'hihat' },
+      { id: 'kick', text: `$: s("bd:2!4").gain(0.5)`, class: 'kick' },
     ];
     
     // Render code panel
