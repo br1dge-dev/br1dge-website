@@ -59,25 +59,16 @@ export function isReady(): boolean {
 export function playFullTrack(): void {
   if (!initialized) throw new Error('Not initialized');
   
-  // Layer 1: Lead melody (sawtooth with FM)
-  n("<0 4 0 9 7>*16")
-    .add(n("<7 _ _ 6 5 _ _ 6>*2"))
-    .scale("g:minor")
-    .trans(-12)
-    .o(3)
+  // Layer 1: Lead melody (sawtooth) - using note() directly with octave in note name
+  note("<g3 c4 g3 f4 d4>*16")
     .s("sawtooth")
     .lpf(1200)
     .delay(0.6)
-    .pan(0.5)
-    .fm(0.8)
     .gain(0.4)
     .play();
   
-  // Layer 2: Bass (supersaw)
-  n("<7 _ _ 6 5 _ 5 6>*2")
-    .scale("g:minor")
-    .trans(-24)
-    .o(4)
+  // Layer 2: Bass (supersaw) - lower octave
+  note("<d2 c2 bb1 g1>*2")
     .s("supersaw")
     .lpf(800)
     .gain(0.3)
@@ -88,7 +79,7 @@ export function playFullTrack(): void {
     .gain(0.3)
     .play();
   
-  // Layer 4: Kick with ducking
+  // Layer 4: Kick
   s("bd:2!4")
     .gain(0.5)
     .play();
