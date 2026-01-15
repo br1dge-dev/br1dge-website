@@ -1,0 +1,97 @@
+---
+// Strudel Core Direct Import
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strudel Core Direct</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { 
+      background: #000; 
+      color: #fff; 
+      font-family: monospace;
+      padding: 2rem;
+    }
+    button {
+      background: #222;
+      color: #fff;
+      border: 1px solid #444;
+      padding: 0.75rem 1.5rem;
+      cursor: pointer;
+      margin: 0.5rem;
+    }
+    button:hover { background: #333; }
+    #log { margin-top: 1rem; color: #0f0; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Strudel Core Direct Test</h1>
+  <div>
+    <button id="init">1. Initialize</button>
+    <button id="play">2. Play</button>
+    <button id="stop">3. Stop</button>
+  </div>
+  <div id="log"></div>
+
+  <script type="module">
+    // Load bundled strudel from unpkg
+    import 'https://unpkg.com/@strudel/core@1.2.5/dist/index.mjs';
+    import 'https://unpkg.com/@strudel/webaudio@1.2.5/dist/index.mjs';
+    import 'https://unpkg.com/@strudel/transpiler@1.2.4/dist/index.mjs';
+    
+    const logEl = document.getElementById('log');
+    function log(msg) {
+      logEl.textContent = msg;
+    }
+    
+    let audioCtx = null;
+    
+    document.getElementById('init').onclick = async () => {
+      log('Initializing...');
+      try {
+        // Strudel should be loaded globally
+        if (typeof window.Strudel !== 'undefined') {
+          log('✓ Strudel core loaded globally');
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          await audioCtx.resume();
+          log('✓ AudioContext ready');
+        } else {
+          log('Strudel not loaded');
+        }
+      } catch (e) {
+        log('Error: ' + e);
+      }
+    };
+    
+    document.getElementById('play').onclick = async () => {
+      log('Note: Full Strudel REPL requires complex setup. Playing simplified test...');
+      
+      // Simple oscillator test
+      if (audioCtx) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(392, audioCtx.currentTime); // G4
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.5);
+        log('✓ Test tone played (G4 sawtooth)');
+      }
+    };
+    
+    document.getElementById('stop').onclick = async () => {
+      if (audioCtx) {
+        audioCtx.suspend();
+        audioCtx.resume();
+        log('✓ Stopped');
+      }
+    };
+  </script>
+</body>
+</html>
