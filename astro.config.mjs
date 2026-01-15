@@ -9,10 +9,13 @@ export default defineConfig({
   output: 'static',
   integrations: [react()],
   vite: {
-    plugins: [tailwindcss()]
+    plugins: [tailwindcss()],
+    server: {
+      fs: {
+        // Allow serving files from parent node_modules
+        allow: ['..']
+      }
+    }
   },
-  adapter: vercel({
-    imageService: 'sharp',
-    preferOutdatedLayout: false
-  })
+  adapter: vercel()
 });
