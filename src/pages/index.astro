@@ -1651,7 +1651,9 @@
           }
           
           // Capture check - in Kammer eingesperrt
-          if (distCursor < 30 && chamberParticles.length < CHAMBER_THRESHOLD) {
+          // WICHTIG: Capture nur wenn Kammer sichtbar ist (cursorEnergy >= threshold OR hasParticles)
+          const chamberVisible = cursorEnergy >= 0.2 || chamberParticles.length > 0;
+          if (distCursor < 30 && chamberParticles.length < CHAMBER_THRESHOLD && chamberVisible) {
             // In Kammer transferieren
             chamberParticles.push({
               x: 0, // Relativ zum Cursor-Zentrum
@@ -1741,30 +1743,9 @@
       // 2026 Cursor - CLEAN, SHARP, SNAPPY + CHAMBER
       function drawCursor() {
         const time = Date.now() / 1000;
-        
-        const logoX = W / 2;
-        const logoY = H / 2;
-        const dxToLogo = mouseX - logoX;
-        const dyToLogo = mouseY - logoY;
-        const distToLogo = Math.sqrt(dxToLogo * dxToLogo + dyToLogo * dyToLogo);
-        
-        // ANZIEHUNG zum Logo wenn geladen - Cursor wird eingefangen
-        let pullX = 0, pullY = 0;
-        const captureRadius = 180;
-        if (distToLogo < captureRadius && cursorEnergy >= ENERGY_THRESHOLD) {
-          const proximity = 1 - distToLogo / captureRadius;
-          const pullStrength = cursorEnergy * proximity * 0.6;
-          if (distToLogo > 1) {
-            pullX = -(dxToLogo / distToLogo) * pullStrength * distToLogo * 0.3;
-            pullY = -(dyToLogo / distToLogo) * pullStrength * distToLogo * 0.3;
-          }
-        }
-        
-        const targetX = mouseX + pullX;
-        const targetY = mouseY + pullY;
-        // SNAPPY - schnellere Reaktion
-        cursorX += (targetX - cursorX) * 0.25;
-        cursorY += (targetY - cursorY) * 0.25;
+
+        // cursorX/cursorY werden jetzt im render() Loop VOR den Partikel-Loops aktualisiert
+        // Das verhindert Race-Conditions bei schnellen Bewegungen
         
         // Cursor-Bewegungs-Delta für Trägheit
         const cursorDeltaX = cursorX - prevCursorX;
@@ -2177,6 +2158,30 @@
             cursorEnergy = Math.max(0, cursorEnergy - 0.002);
           }
         }
+
+        // UPDATE CURSOR POSITION FIRST - vor allen Partikel-Checks!
+        // Das verhindert Race-Conditions bei schnellen Bewegungen
+        const logoX = W / 2;
+        const logoY = H / 2;
+        const dxToLogo = mouseX - logoX;
+        const dyToLogo = mouseY - logoY;
+        const distToLogo = Math.sqrt(dxToLogo * dxToLogo + dyToLogo * dyToLogo);
+        
+        let pullX = 0, pullY = 0;
+        const captureRadius = 180;
+        if (distToLogo < captureRadius && cursorEnergy >= ENERGY_THRESHOLD) {
+          const proximity = 1 - distToLogo / captureRadius;
+          const pullStrength = cursorEnergy * proximity * 0.6;
+          if (distToLogo > 1) {
+            pullX = -(dxToLogo / distToLogo) * pullStrength * distToLogo * 0.3;
+            pullY = -(dyToLogo / distToLogo) * pullStrength * distToLogo * 0.3;
+          }
+        }
+        
+        const targetX = mouseX + pullX;
+        const targetY = mouseY + pullY;
+        cursorX += (targetX - cursorX) * 0.25;
+        cursorY += (targetY - cursorY) * 0.25;
         
         drawFloatingBridges();
         drawAmbientParticles();
