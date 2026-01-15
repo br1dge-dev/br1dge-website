@@ -10,52 +10,43 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: system-ui, sans-serif;
+      font-family: 'SF Mono', 'Fira Code', monospace;
       background: #000;
       color: #fff;
       min-height: 100vh;
+      overflow: hidden;
     }
     
-    /* Code overlay - top left, dezent */
-    #code-overlay {
+    /* Code panel - left side */
+    #code-panel {
       position: fixed;
       top: 1rem;
       left: 1rem;
-      font-family: 'SF Mono', 'Fira Code', monospace;
+      bottom: 6rem;
       font-size: 11px;
-      line-height: 1.4;
-      color: rgba(255, 255, 255, 0.4);
-      background: rgba(0, 0, 0, 0.3);
-      padding: 0.75rem;
-      border-radius: 4px;
-      max-width: 380px;
-      z-index: 100;
-      transition: opacity 0.3s;
-    }
-    #code-overlay.hidden { opacity: 0; pointer-events: none; }
-    #code-overlay .layer {
-      margin-bottom: 0.5rem;
-      padding-left: 1rem;
-      position: relative;
-    }
-    #code-overlay .layer::before {
-      content: '▸';
-      position: absolute;
-      left: 0;
+      line-height: 1.6;
       color: rgba(255, 255, 255, 0.3);
+      background: rgba(0, 0, 0, 0.5);
+      padding: 1rem;
+      border-radius: 4px;
+      width: 400px;
+      z-index: 100;
+      overflow-y: auto;
     }
-    #code-overlay .layer.active {
-      color: rgba(255, 255, 255, 0.7);
+    #code-panel .line {
+      padding: 2px 4px;
+      border-radius: 2px;
+      transition: all 0.05s;
     }
-    #code-overlay .layer.active::before {
+    #code-panel .line.active {
       color: #39ff14;
+      background: rgba(57, 255, 20, 0.1);
+      text-shadow: 0 0 10px rgba(57, 255, 20, 0.3);
     }
-    #code-overlay .layer-name {
-      color: #888;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
+    #code-panel .line-lead.active { color: #ff6b35; text-shadow: 0 0 10px rgba(255, 107, 53, 0.3); }
+    #code-panel .line-bass.active { color: #d4a574; text-shadow: 0 0 10px rgba(212, 165, 116, 0.3); }
+    #code-panel .line-hihat.active { color: #aaa; text-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }
+    #code-panel .line-kick.active { color: #ddd; text-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }
     
     /* Controls - top right */
     #controls {
@@ -78,19 +69,39 @@
       align-items: center;
       justify-content: center;
       font-size: 16px;
-      transition: all 0.2s;
     }
-    #controls button:hover {
-      background: rgba(255, 255, 255, 0.2);
-      color: rgba(255, 255, 255, 0.9);
+    #controls button:hover { background: rgba(255, 255, 255, 0.2); }
+    #controls button.active { background: rgba(34, 139, 34, 0.3); border-color: #39ff14; color: #39ff14; }
+    
+    /* Status indicator */
+    #status {
+      position: fixed;
+      top: 1rem;
+      right: 120px;
+      font-size: 11px;
+      color: #888;
+      padding: 0.5rem 1rem;
+      background: rgba(0,0,0,0.3);
+      border-radius: 4px;
     }
-    #controls button.active {
-      background: rgba(34, 139, 34, 0.3);
-      border-color: #39ff14;
-      color: #39ff14;
+    #status.playing { color: #39ff14; }
+    
+    /* Canvas area placeholder */
+    #canvas-area {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 6rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #222;
+      font-size: 2rem;
+      z-index: 0;
     }
     
-    /* Test panel - bottom */
+    /* Bottom panel */
     #test-panel {
       position: fixed;
       bottom: 0;
@@ -104,14 +115,9 @@
       font-size: 0.7rem;
       color: #666;
       text-transform: uppercase;
-      letter-spacing: 1px;
       margin-bottom: 0.5rem;
     }
-    .test-buttons {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
+    .test-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .test-buttons button {
       background: #222;
       color: #aaa;
@@ -129,77 +135,120 @@
       font-size: 0.75rem;
       color: #0f0;
       margin-top: 0.5rem;
-      max-height: 60px;
-      overflow-y: auto;
-    }
-    
-    /* Main canvas area placeholder */
-    #canvas-area {
-      height: calc(100vh - 140px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #333;
-      font-size: 1.5rem;
     }
   </style>
 </head>
 <body>
-  <!-- Code Overlay (top left) -->
-  <div id="code-overlay">
-    <div class="layer active" data-layer="lead">
-      <span class="layer-name">lead</span><br>
-      n("&lt;0 4 0 9 7&gt;*16")<br>
-      .scale("g:minor").s("sawtooth")
-    </div>
-    <div class="layer active" data-layer="bass">
-      <span class="layer-name">bass</span><br>
-      n("&lt;7 _ _ 6 5 _ 5 6&gt;*2")<br>
-      .scale("g:minor").s("supersaw")
-    </div>
-    <div class="layer active" data-layer="hihat">
-      <span class="layer-name">hihat</span><br>
-      s("hh*8").gain(0.3)
-    </div>
-    <div class="layer active" data-layer="kick">
-      <span class="layer-name">kick</span><br>
-      s("bd:2!4").duck("3:4:5:6")
-    </div>
-  </div>
+  <!-- Code panel with live ticking -->
+  <div id="code-panel"></div>
   
-  <!-- Controls (top right) -->
+  <!-- Status -->
+  <div id="status">Stopped</div>
+  
+  <!-- Controls -->
   <div id="controls">
     <button id="toggleCode" title="Toggle Code">👁</button>
     <button id="toggleSound" title="Toggle Sound">🔊</button>
   </div>
   
-  <!-- Canvas placeholder -->
-  <div id="canvas-area">
-    [ br1dge canvas würde hier sein ]
-  </div>
+  <!-- Canvas -->
+  <div id="canvas-area">[ br1dge canvas ]</div>
   
-  <!-- Test Panel (bottom) -->
+  <!-- Test panel -->
   <div id="test-panel">
-    <h2>Strudel PoC Tests</h2>
+    <h2>Strudel PoC - Live Code Tracker</h2>
     <div class="test-buttons">
       <button id="init">1. Initialize</button>
-      <button id="play">2. Play Full Track</button>
+      <button id="play">2. Play</button>
       <button id="stop">3. Stop</button>
-      <button id="sfx">4. Trigger SFX</button>
+      <button id="sfx">4. SFX</button>
     </div>
-    <div id="log"></div>
+    <div id="log">Click "Initialize" to begin</div>
   </div>
 
   <script>
     import * as Strudel from '../lib/strudel/poc-controller';
     
     const logEl = document.getElementById('log') as HTMLDivElement;
-    const codeOverlay = document.getElementById('code-overlay') as HTMLDivElement;
+    const codePanel = document.getElementById('code-panel') as HTMLDivElement;
+    const statusEl = document.getElementById('status') as HTMLDivElement;
     let isPlaying = false;
+    let tickInterval: any = null;
+    
+    const TRACK_LINES = [
+      { id: 'lead1', text: `$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2"))`, class: 'lead' },
+      { id: 'lead2', text: `.scale("g:minor").s("sawtooth")`, class: 'lead' },
+      { id: 'lead3', text: `.lpf(sine.range(200, 2000).slow(8)).delay(.6)`, class: 'lead' },
+      { id: 'lead4', text: `.pan(rand).fm(.8).gain(0.4)`, class: 'lead' },
+      { id: 'bass1', text: `$: n("<7 _ _ 6 5 _ <5 3> <6 4>>*2")`, class: 'bass' },
+      { id: 'bass2', text: `.scale("g:minor").s("sawtooth")`, class: 'bass' },
+      { id: 'bass3', text: `.lpf(sine.range(400, 2000).slow(8)).gain(0.3)`, class: 'bass' },
+      { id: 'hihat', text: `$: s("hh*8").gain(0.4)`, class: 'hihat' },
+      { id: 'kick', text: `$: s("bd:2!4").gain(0.5)`, class: 'kick' },
+    ];
+    
+    // Render code panel
+    function renderCode() {
+      codePanel.innerHTML = TRACK_LINES.map(line => 
+        `<div class="line ${line.class}" data-id="${line.id}">${escapeHtml(line.text)}</div>`
+      ).join('');
+    }
+    
+    function escapeHtml(s: string) {
+      return s.replace(/</g, '<').replace(/>/g, '>');
+    }
     
     function log(msg: string) {
       const time = new Date().toLocaleTimeString();
       logEl.textContent = `[${time}] ${msg}`;
+    }
+    
+    // Simple tick visualizer - highlights lines based on beat
+    function startTicking() {
+      let beat = 0;
+      const beatLines: Record<string, string[]> = {
+        lead: ['lead1', 'lead2', 'lead3', 'lead4'],
+        bass: ['bass1', 'bass2', 'bass3'],
+        hihat: ['hihat'],
+        kick: ['kick']
+      };
+      
+      tickInterval = setInterval(() => {
+        // Clear all
+        document.querySelectorAll('#code-panel .line').forEach(el => el.classList.remove('active'));
+        
+        // Highlight based on beat pattern (16-step cycle)
+        const step = beat % 16;
+        
+        // Lead on most steps
+        if (step < 16) {
+          const leadLine = beatLines.lead[step % 4];
+          document.querySelector(`[data-id="${leadLine}"]`)?.classList.add('active');
+        }
+        // Bass every 4 steps
+        if (step % 4 === 0) {
+          const bassLine = beatLines.bass[(step / 4) % 3];
+          document.querySelector(`[data-id="${bassLine}"]`)?.classList.add('active');
+        }
+        // Hi-hat every 2 steps
+        if (step % 2 === 0) {
+          document.querySelector('[data-id="hihat"]')?.classList.add('active');
+        }
+        // Kick pattern
+        if (step === 0 || step === 4 || step === 8 || step === 12) {
+          document.querySelector('[data-id="kick"]')?.classList.add('active');
+        }
+        
+        beat++;
+      }, 125); // ~120 BPM = 125ms per 16th note
+    }
+    
+    function stopTicking() {
+      if (tickInterval) {
+        clearInterval(tickInterval);
+        tickInterval = null;
+      }
+      document.querySelectorAll('#code-panel .line').forEach(el => el.classList.remove('active'));
     }
     
     // Initialize
@@ -207,22 +256,25 @@
       log('Initializing Strudel...');
       try {
         await Strudel.init();
-        log('✓ Strudel ready!');
+        renderCode();
+        log('✓ Strudel ready! Code loaded.');
       } catch (e) {
         log(`✗ Error: ${e}`);
       }
     };
     
-    // Play full track
+    // Play
     const playBtn = document.getElementById('play') as HTMLButtonElement;
     playBtn.onclick = async () => {
       if (!Strudel.isReady()) { log('✗ Initialize first!'); return; }
       try {
-        log('Starting track...');
         await Strudel.playFullTrack();
         isPlaying = true;
         playBtn.classList.add('playing');
-        log('✓ Playing full track');
+        statusEl.textContent = 'Playing';
+        statusEl.classList.add('playing');
+        startTicking();
+        log('✓ Playing');
       } catch (e) { log(`✗ Error: ${e}`); }
     };
     
@@ -231,6 +283,9 @@
       await Strudel.stop();
       isPlaying = false;
       playBtn.classList.remove('playing');
+      statusEl.textContent = 'Stopped';
+      statusEl.classList.remove('playing');
+      stopTicking();
       log('✓ Stopped');
     };
     
@@ -238,18 +293,17 @@
     document.getElementById('sfx')!.onclick = async () => {
       if (!Strudel.isReady()) { log('✗ Initialize first!'); return; }
       await Strudel.triggerSfx();
-      log('✓ SFX triggered');
+      log('✓ SFX');
     };
     
-    // Toggle code visibility
+    // Toggle code
     const toggleCodeBtn = document.getElementById('toggleCode') as HTMLButtonElement;
     toggleCodeBtn.onclick = () => {
-      codeOverlay.classList.toggle('hidden');
-      toggleCodeBtn.classList.toggle('active', !codeOverlay.classList.contains('hidden'));
+      codePanel.style.display = codePanel.style.display === 'none' ? 'block' : 'none';
+      toggleCodeBtn.classList.toggle('active', codePanel.style.display !== 'none');
     };
-    toggleCodeBtn.classList.add('active'); // Start visible
     
-    // Toggle sound (mute)
+    // Toggle sound
     const toggleSoundBtn = document.getElementById('toggleSound') as HTMLButtonElement;
     let muted = false;
     toggleSoundBtn.onclick = () => {
@@ -258,14 +312,15 @@
         Strudel.stop();
         isPlaying = false;
         playBtn.classList.remove('playing');
+        statusEl.textContent = 'Muted';
+        statusEl.classList.remove('playing');
+        stopTicking();
       }
       toggleSoundBtn.textContent = muted ? '🔇' : '🔊';
-      toggleSoundBtn.classList.toggle('active', !muted);
-      log(muted ? 'Sound muted' : 'Sound unmuted');
     };
-    toggleSoundBtn.classList.add('active');
     
-    log('Click "Initialize" to begin');
+    // Initial render
+    renderCode();
   </script>
 </body>
 </html>
