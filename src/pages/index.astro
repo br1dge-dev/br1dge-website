@@ -1376,7 +1376,7 @@
         // Spawn nach Timer
         if (redParticleActive && !redParticle.active && Date.now() > redParticleSpawnTime) {
           const edge = Math.floor(Math.random() * 4);
-          const speed = 1.36 + Math.random() * 1.02; // 15% langsamer als vorher (1.36-2.38)
+          const speed = 1.2 + Math.random() * 0.8; // Noch langsamer, smoothere Bewegung (1.2-2.0)
           switch(edge) {
             case 0: redParticle.x = Math.random() * W; redParticle.y = -10; break;
             case 1: redParticle.x = W + 10; redParticle.y = Math.random() * H; break;
@@ -1399,14 +1399,14 @@
         if (!redParticle.active) return;
         
         // Komplexe kurvige Flugbahn mit zufälligen Richtungswechseln
-        redParticle.phase += 0.08; // Langsamere Oszillation
+        redParticle.phase += 0.05; // Noch langsamere Oszillation für smoothere Bewegung
         redParticle.turnTimer++;
         
-        // Zufällige Richtungswechsel alle 60-120 Frames
-        if (redParticle.turnTimer > 60 + Math.random() * 60) {
+        // Zufällige Richtungswechsel alle 80-160 Frames (seltener)
+        if (redParticle.turnTimer > 80 + Math.random() * 80) {
           redParticle.turnTimer = 0;
           // Leichte Richtungsänderung (nicht komplett neu)
-          const turnAngle = (Math.random() - 0.5) * Math.PI * 0.8;
+          const turnAngle = (Math.random() - 0.5) * Math.PI * 0.6; // Sanftere Kurven
           const currentSpeed = Math.sqrt(redParticle.vx*redParticle.vx + redParticle.vy*redParticle.vy);
           const currentAngle = Math.atan2(redParticle.vy, redParticle.vx);
           const newAngle = currentAngle + turnAngle;
@@ -1414,9 +1414,9 @@
           redParticle.vy = Math.sin(newAngle) * currentSpeed;
         }
         
-        // Kurvige Bewegung mit Sinuswellen
+        // Kurvige Bewegung mit Sinuswellen (reduziert für smoothere Bewegung)
         const speed = Math.sqrt(redParticle.vx*redParticle.vx + redParticle.vy*redParticle.vy);
-        const curve = Math.sin(redParticle.phase) * 2.5 + Math.sin(redParticle.phase * 2.3) * 1.5;
+        const curve = Math.sin(redParticle.phase) * 1.5 + Math.sin(redParticle.phase * 2.3) * 0.8; // Reduziert
         const perpX = -redParticle.vy / speed;
         const perpY = redParticle.vx / speed;
         
@@ -1509,8 +1509,8 @@
           }
         }
         
-        // Draw - Gefülltes rotes Herz (75% größer)
-        const heartSize = 7;  // 4 * 1.75 = 7
+        // Draw - Gefülltes rotes Herz (deutlich größer)
+        const heartSize = 12;  // Größeres Herz
         ctx.save();
         ctx.translate(redParticle.x, redParticle.y);
         ctx.beginPath();
@@ -1604,10 +1604,10 @@
             vx: (dx / dist) * speed,
             vy: (dy / dist) * speed,
             color,
-            size: 3,  // Etwas größer für Sichtbarkeit
+            size: 3.3,  // 10% größer (3 * 1.1)
             phase: Math.random() * Math.PI * 2,
             turnTimer: 0,
-            alpha: 1.0  // Volle Intensität
+            alpha: 0.9  // 10% weniger intensiv
           });
           
           // Nächster Spawn in 2 Sekunden
@@ -1709,13 +1709,13 @@
           // Kleiner Glow für Tiefe
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size * 1.5, 0, Math.PI * 2);
-          ctx.fillStyle = hexToRgba(p.color, 0.2);
+          ctx.fillStyle = hexToRgba(p.color, 0.2 * p.alpha);
           ctx.fill();
           
-          // Scharfer Core - volle Intensität
+          // Scharfer Core - mit alpha (10% weniger intensiv)
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size * 0.8, 0, Math.PI * 2);
-          ctx.fillStyle = p.color;
+          ctx.fillStyle = hexToRgba(p.color, p.alpha);
           ctx.fill();
         }
       }
