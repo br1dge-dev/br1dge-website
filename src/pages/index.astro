@@ -1442,6 +1442,11 @@
           // CAPTURED! - Jetzt geht Red Particle in die Kammer
           redParticle.active = false;
           redParticleCatches++;
+
+          // Aktiviere Kammer wenn nicht aktiv
+          if (!chamberActive) {
+            chamberActive = true;
+          }
           
           // Audio & Haptic: Capture
           AudioSystem.playCapture();
