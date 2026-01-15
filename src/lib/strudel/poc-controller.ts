@@ -38,8 +38,12 @@ export async function init(): Promise<boolean> {
   try {
     // initStrudel returns the repl/context we need
     repl = await initStrudel();
+    
+    // Load default samples (hh, bd, etc.)
+    await eval(`samples('github:tidalcycles/dirt-samples')`);
+    
     initialized = true;
-    console.log('Strudel initialized, repl:', repl);
+    console.log('Strudel initialized with samples, repl:', repl);
     return true;
   } catch (err) {
     console.error('Strudel init error:', err);
