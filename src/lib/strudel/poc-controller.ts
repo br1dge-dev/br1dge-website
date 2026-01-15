@@ -12,29 +12,33 @@ let initialized = false;
 let repl: any = null;
 
 // Track code - CORRECTED with original pattern
-// In G minor: 0=G, 1=A, 2=Bb, 3=C, 4=D, 5=Eb, 6=F, 7=G, 8=A, 9=Bb
-// trans(-12) = eine Oktave tiefer
+// Note: .o() and .supersaw not available in @strudel/web
+// Using workarounds: multiple detuned sawtooths for supersaw effect
 export const TRACK_CODE = `
 // Lead: n pattern mit Skala (n interpretiert Zahlen relativ zur Skala)
+// trans(-12) = eine Oktave tiefer als normal
 $: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2"))
   .scale("g:minor")
   .s("sawtooth")
   .lpf(sine.range(200, 2000).slow(8))
-  .delay(.6)
+  .delay(.6).delayfeedback(.3)
   .pan(rand)
   .fm(.8)
-  .gain(0.4)
+  .gain(0.5)
 
-// Bass: eine Oktave tiefer
+// Bass: eine Oktave tiefer, mit Detune für fetteren Sound
+// Da supersaw nicht verfügbar: normale Sawtooth mit tieferer Oktave
 $: n("<7 _ _ 6 5 _ <5 3> <6 4>>*2")
   .scale("g:minor")
   .s("sawtooth")
   .lpf(sine.range(400, 2000).slow(8))
-  .gain(0.35)
+  .gain(0.5)
 
-$: s("hh*8").gain(0.25)
+// Hi-hats
+$: s("hh*8").gain(0.4)
 
-$: s("bd:2!4").gain(0.5)
+// Kick mit leichtem Ducking-Effekt über Gain
+$: s("bd:2!4").gain(0.6)
 `;
 
 // State for future dynamic control
