@@ -215,10 +215,11 @@
     
     // Play full track
     const playBtn = document.getElementById('play') as HTMLButtonElement;
-    playBtn.onclick = () => {
+    playBtn.onclick = async () => {
       if (!Strudel.isReady()) { log('✗ Initialize first!'); return; }
       try {
-        Strudel.playFullTrack();
+        log('Starting track...');
+        await Strudel.playFullTrack();
         isPlaying = true;
         playBtn.classList.add('playing');
         log('✓ Playing full track');
@@ -226,17 +227,17 @@
     };
     
     // Stop
-    document.getElementById('stop')!.onclick = () => {
-      Strudel.stop();
+    document.getElementById('stop')!.onclick = async () => {
+      await Strudel.stop();
       isPlaying = false;
       playBtn.classList.remove('playing');
       log('✓ Stopped');
     };
     
     // SFX
-    document.getElementById('sfx')!.onclick = () => {
+    document.getElementById('sfx')!.onclick = async () => {
       if (!Strudel.isReady()) { log('✗ Initialize first!'); return; }
-      Strudel.triggerSfx();
+      await Strudel.triggerSfx();
       log('✓ SFX triggered');
     };
     

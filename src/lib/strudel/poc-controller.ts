@@ -1,6 +1,8 @@
 /**
  * Strudel PoC Controller
  * Tests basic Strudel functionality for br1dge integration
+ * 
+ * GOAL: App controls Strudel music dynamically based on game events
  */
 
 // @ts-nocheck - Strudel types are incomplete
@@ -9,21 +11,26 @@ import { initStrudel } from '@strudel/web';
 let initialized = false;
 let repl: any = null;
 
-// Track code for visualization
-export const TRACK_CODE = {
-  lead: `note("<g3 c4 g3 f4 d4>*16")
-  .s("sawtooth").lpf(1200)
-  .delay(0.6).gain(0.4)`,
-  
-  bass: `note("<d2 c2 bb1 g1>*2")
-  .s("supersaw").lpf(800).gain(0.3)`,
-  
-  hihat: `s("hh*8").gain(0.3)`,
-  
-  kick: `s("bd:2!4").gain(0.5)`
-};
+// Original track code - exactly as in Strudel REPL
+export const TRACK_CODE = `
+$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(-12)
+  .o(3).s("sawtooth").lpf(sine.range(200, 2000).slow(8))
+  .delay(.6).pan(rand)
+  .fm(.8).fmwave('white')
 
-// State
+$: n("<7 _ _ 6 5 _  <5 3> <6 4>>*2").scale("g:minor").trans(-24)
+  .detune(rand)
+  .o(4).s("supersaw").lpf(sine.range(400, 2000).slow(8))
+
+$: s("hh*8").gain(0.5)
+
+$: s("bd:2!4")
+  .duck("3:4:5:6")
+  .duckdepth(.8)
+  .duckattack(.16)
+`;
+
+// State for future dynamic control
 export const state = {
   intensity: 0.5,
   leadEnabled: true,
@@ -36,14 +43,15 @@ export async function init(): Promise<boolean> {
   if (initialized) return true;
   
   try {
-    // initStrudel returns the repl/context we need
+    // initStrudel returns the repl context with evaluate function
     repl = await initStrudel();
     
-    // Load default samples (hh, bd, etc.)
-    await eval(`samples('github:tidalcycles/dirt-samples')`);
+    // Load default samples
+    await repl.evaluate(`samples('github:tidalcycles/dirt-samples')`);
     
     initialized = true;
-    console.log('Strudel initialized with samples, repl:', repl);
+    console.log('Strudel initialized with samples');
+    console.log('REPL methods:', Object.keys(repl));
     return true;
   } catch (err) {
     console.error('Strudel init error:', err);
@@ -55,48 +63,25 @@ export function isReady(): boolean {
   return initialized;
 }
 
-export function playFullTrack(): void {
-  if (!initialized) throw new Error('Not initialized');
-  
-  // Try using the evaluate function from the repl
-  const code = `
-    stack(
-      note("<g3 c4 g3 f4 d4>*8").s("sawtooth").lpf(1200).gain(0.3),
-      note("<d2 c2 bb1 g1>*2").s("square").lpf(600).gain(0.2),
-      s("hh*8").gain(0.2),
-      s("bd*4").gain(0.4)
-    )
-  `;
+export async function playFullTrack(): Promise<void> {
+  if (!initialized || !repl) throw new Error('Not initialized');
   
   try {
-    // The initStrudel makes functions globally available
-    // We can use eval to run Strudel code
-    const result = eval(code);
-    console.log('Eval result:', result);
-    
-    // If result is a pattern, try to play it
-    if (result && typeof result.play === 'function') {
-      result.play();
-      console.log('Called play()');
-    }
+    // Use the repl.evaluate() function - this is how the REPL runs code!
+    console.log('Evaluating track code via repl.evaluate()...');
+    await repl.evaluate(TRACK_CODE);
+    console.log('Track started!');
   } catch (err) {
     console.error('Play error:', err);
     throw err;
   }
 }
 
-export function stop(): void {
-  if (!initialized) return;
+export async function stop(): Promise<void> {
+  if (!initialized || !repl) return;
   try {
-    // hush should be globally available after initStrudel
-    if (typeof (window as any).hush === 'function') {
-      (window as any).hush();
-    } else if (typeof (globalThis as any).hush === 'function') {
-      (globalThis as any).hush();
-    } else {
-      // Try eval
-      eval('hush()');
-    }
+    await repl.evaluate('hush()');
+    console.log('Stopped');
   } catch (err) {
     console.error('Stop error:', err);
   }
@@ -104,20 +89,21 @@ export function stop(): void {
 
 export function setIntensity(value: number): void {
   state.intensity = Math.max(0, Math.min(1, value));
+  // TODO: Update running pattern parameters
 }
 
-export function triggerSfx(): void {
-  if (!initialized) throw new Error('Not initialized');
+export async function triggerSfx(): Promise<void> {
+  if (!initialized || !repl) throw new Error('Not initialized');
   
   try {
-    eval(`note("g4").s("triangle").decay(0.3).sustain(0).gain(0.5).play()`);
+    // One-shot sound in G minor (matching the track)
+    await repl.evaluate(`note("g4").s("sine").decay(0.2).sustain(0).gain(0.4).play()`);
   } catch (err) {
     console.error('SFX error:', err);
   }
 }
 
-export function getTrackCodeString(): string {
-  return Object.entries(TRACK_CODE)
-    .map(([name, code]) => `// ${name}\n${code}`)
-    .join('\n\n');
+// Get the track code for display
+export function getTrackCode(): string {
+  return TRACK_CODE.trim();
 }
