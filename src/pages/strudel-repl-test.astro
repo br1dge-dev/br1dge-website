@@ -1,5 +1,5 @@
 ---
-// Strudel REPL Integration Test
+// Strudel REPL Integration Test - using jsDelivr CDN
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -23,22 +23,13 @@
       right: 0;
       bottom: 0;
     }
-    
-    strudel-repl {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
   </style>
 </head>
 <body>
-  <div id="repl-container">
-    <strudel-repl></strudel-repl>
-  </div>
+  <div id="repl-container"></div>
 
   <script type="module">
-    // Load the full Strudel REPL from CDN
-    import 'https://unpkg.com/@strudel/repl@1.2.6/dist/strudel-repl.js';
+    import { initStrudel } from 'https://cdn.jsdelivr.net/npm/@strudel/web@1.2.6/+esm';
     
     const code = `$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(-12)
   .o(3).s("sawtooth").lpf(sine.range(200, 2000).slow(8))
@@ -56,22 +47,20 @@ $: s("bd:2!4")
   .duckdepth(.8)
   .duckattack(.16)`;
     
-    // Wait for component to load
-    customElements.whenDefined('strudel-repl').then(() => {
-      console.log('Strudel REPL component ready!');
-      
-      const repl = document.querySelector('strudel-repl');
-      
-      // Try to set the code
-      setTimeout(() => {
-        if (repl.setCode) {
-          repl.setCode(code);
-          console.log('Code set!');
-        } else {
-          console.log('setCode not available');
-        }
-      }, 1500);
-    });
+    async function start() {
+      try {
+        console.log('Initializing Strudel...');
+        const repl = await initStrudel();
+        console.log('Strudel ready:', Object.keys(repl));
+        
+        await repl.evaluate(code);
+        console.log('Code started!');
+      } catch (e) {
+        console.error('Error:', e);
+      }
+    }
+    
+    start();
   </script>
 </body>
 </html>
