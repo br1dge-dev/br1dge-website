@@ -1,0 +1,118 @@
+---
+// Strudel Core Integration Test
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strudel Core Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { 
+      background: #000; 
+      color: #fff; 
+      height: 100%;
+      font-family: monospace;
+      padding: 2rem;
+    }
+    button {
+      background: #222;
+      color: #fff;
+      border: 1px solid #444;
+      padding: 0.75rem 1.5rem;
+      cursor: pointer;
+      margin: 0.5rem;
+    }
+    button:hover { background: #333; }
+    #log {
+      margin-top: 1rem;
+      color: #0f0;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Strudel Core Integration Test</h1>
+  <div>
+    <button id="init">1. Initialize</button>
+    <button id="play">2. Play Full Track</button>
+    <button id="stop">3. Stop</button>
+  </div>
+  <div id="log"></div>
+
+  <script type="module">
+    // Direct imports from core packages
+    import { init, note, n, s, silence } from '@strudel/core';
+    import { getAudioContext, webaudioOutput } from '@strudel/webaudio';
+    import { transpile } from '@strudel/transpiler';
+    import { playPattern } from '@strudel/core';
+    
+    const logEl = document.getElementById('log');
+    function log(msg) {
+      logEl.textContent = msg;
+    }
+    
+    let ctx = null;
+    let started = false;
+    
+    document.getElementById('init').onclick = async () => {
+      log('Initializing Strudel core...');
+      try {
+        ctx = getAudioContext();
+        await ctx.resume();
+        log('✓ Core initialized! Audio context ready.');
+        console.log('AudioContext:', ctx);
+      } catch (e) {
+        log('Error: ' + e);
+      }
+    };
+    
+    document.getElementById('play').onclick = async () => {
+      if (!ctx) { log('Initialize first!'); return; }
+      
+      log('Playing full track...');
+      
+      // The original track with all features
+      const code = `$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(-12)
+  .o(3).s("sawtooth").lpf(sine.range(200, 2000).slow(8))
+  .delay(.6).pan(rand)
+  .fm(.8).fmwave('white')
+
+$: n("<7 _ _ 6 5 _  <5 3> <6 4>>*2").scale("g:minor").trans(-24)
+  .detune(rand)
+  .o(4).s("supersaw").lpf(sine.range(400, 2000).slow(8))
+
+$: s("hh*8").gain(0.5)
+
+$: s("bd:2!4")
+  .duck("3:4:5:6")
+  .duckdepth(.8)
+  .duckattack(.16)`;
+      
+      try {
+        // Transpile the code
+        const patterns = transpile(code);
+        console.log('Transpiled patterns:', patterns);
+        
+        // Play using webaudio output
+        await webaudioOutput(patterns, ctx.currentTime);
+        started = true;
+        log('✓ Playing! (Check console for details)');
+      } catch (e) {
+        log('Play error: ' + e);
+        console.error(e);
+      }
+    };
+    
+    document.getElementById('stop').onclick = async () => {
+      if (ctx) {
+        await ctx.suspend();
+        await ctx.resume();
+        started = false;
+        log('✓ Stopped');
+      }
+    };
+  </script>
+</body>
+</html>
