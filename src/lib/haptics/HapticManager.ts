@@ -1,19 +1,16 @@
 /**
  * Haptic feedback manager using Vibration API
+ * Syncs with AudioSystem muted state
  */
+import { AudioSystem } from '../audio/AudioSystem';
 
 export const HapticManager = {
   supported: typeof navigator !== 'undefined' && 'vibrate' in navigator,
-  enabled: true,
 
   vibrate(pattern: number | number[]): void {
-    if (this.supported && this.enabled) {
+    if (this.supported && !AudioSystem.muted) {
       navigator.vibrate(pattern);
     }
-  },
-
-  setEnabled(enabled: boolean): void {
-    this.enabled = enabled;
   },
 
   // Predefined patterns
