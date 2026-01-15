@@ -315,8 +315,11 @@
       let logoReadyForDischarge = false;
       let logoVibrationTime = 0;
       
-      // Phase tracking: colored bridges first, then red particles
-      let coloredBridgePhaseComplete = false;
+       // Phase tracking: colored bridges first, then red particles
+       let coloredBridgePhaseComplete = false;
+
+       // Track spawned bridges per phase to prevent duplicates (0=orange, 1=brown, 2=green)
+       const spawnedBridgesPerPhase = [false, false, false];
       
       // Game complete state (für Restart-Button nach Modal)
       let gameCompleted = false;
@@ -1495,16 +1498,27 @@
         ctx.restore();
       }
       
-      // ========================================
-      // MINI-BRIDGE SPAWN - Big Bang from Logo Center
-      // ========================================
-      function spawnMiniBridge() {
-        // Aktuelle Farbe für diese Phase
-        const dominantColor = CHAMBER_COLORS_SEQUENCE[currentColorPhase];
-        
-        // Audio & Haptic: Mini-Bridge Spawn - big bang effect
-        AudioSystem.playBridgeSpawn();
-        HapticManager.levelUp();
+       // ========================================
+       // MINI-BRIDGE SPAWN - Big Bang from Logo Center
+       // ========================================
+       function spawnMiniBridge() {
+         // Check ob für diese Phase bereits eine Bridge existiert (verhindert Duplicates)
+         if (currentColorPhase < spawnedBridgesPerPhase.length && spawnedBridgesPerPhase[currentColorPhase]) {
+           console.log(`Bridge für Phase ${currentColorPhase} bereits vorhanden, überspringe`);
+           return;
+         }
+
+         // Aktuelle Farbe für diese Phase
+         const dominantColor = CHAMBER_COLORS_SEQUENCE[currentColorPhase];
+
+         // Markiere diese Phase als abgeschlossen
+         if (currentColorPhase < spawnedBridgesPerPhase.length) {
+           spawnedBridgesPerPhase[currentColorPhase] = true;
+         }
+
+         // Audio & Haptic: Mini-Bridge Spawn - big bang effect
+         AudioSystem.playBridgeSpawn();
+         HapticManager.levelUp();
         
         // URL für diese Farbe
         const url = COLOR_URLS[dominantColor] || null;
@@ -1581,13 +1595,19 @@
           AudioSystem.triggerSwell(2); // Epischer Swell bei Level-Up
           HapticManager.levelUp();
         }
-        
-        // Kammer leeren und Phase weiter
+
+        // Progress phase tracking
+        coloredBridgePhaseComplete = true;
+
+        // Reset chamber for next phase
         chamberParticles.length = 0;
-        cursorEnergy = 0;
         logoReadyForDischarge = false;
-        currentColorPhase++;
-        
+
+        // Advance to next color phase (unless already at green)
+        if (currentColorPhase < CHAMBER_COLORS_SEQUENCE.length - 1) {
+          currentColorPhase++;
+        }
+
         // Check if all phases complete
         if (currentColorPhase >= 3) {
           coloredBridgePhaseComplete = true;
