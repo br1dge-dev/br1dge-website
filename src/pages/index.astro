@@ -667,28 +667,27 @@
         
         // Chromatic Aberration - sichtbar, ab Level 5 nur noch geringe Verstärkung
         if (upgradeLevel > 0) {
-          // Offset: Level 1-4 linear wachsend, ab Level 5 stark abflachend
+          // Offset: Level 1-4 gentle growth, level 5+ almost flat
           let offset;
           if (upgradeLevel <= 4) {
-            offset = 2 + upgradeLevel * 1.0; // Sichtbarer Start (2-6px)
+            offset = 1.5 + upgradeLevel * 0.6; // 1.5-3.9px
           } else {
-            // Ab Level 5: logarithmische Dämpfung
-            const base = 2 + 4 * 1.0; // Wert bei Level 4 = 6
-            offset = base + Math.log(upgradeLevel - 3) * 1.5; // Flacht ab (6-8px max)
+            // Level 5+: barely increases (max ~4.2px)
+            offset = 3.9 + (upgradeLevel - 4) * 0.05;
           }
           
           const effectiveOffset = offset;
           
-          // Alpha: sichtbar, ab Level 5 nur noch minimal steigend
+          // Alpha: very subtle, level 5+ barely visible
           let alphaBase;
           if (upgradeLevel <= 4) {
-            alphaBase = 0.15 + upgradeLevel * 0.04; // 0.19 - 0.31
+            alphaBase = 0.08 + upgradeLevel * 0.025; // 0.08-0.18
           } else {
-            // Ab Level 5: sehr langsam steigend
-            alphaBase = 0.31 + Math.log(upgradeLevel - 3) * 0.025; // Max ~0.37
+            // Level 5+: max ~0.2
+            alphaBase = 0.18 + (upgradeLevel - 4) * 0.004;
           }
           
-          // Ein Layer - cleaner Look
+          // Single layer - cleaner look
           ctx.globalAlpha = alphaBase;
           ctx.fillStyle = '#ff0066';
           ctx.fillText('∩', -effectiveOffset, 0);
@@ -860,7 +859,7 @@
             
             // Wenn gerade voll geworden UND alle Farbphasen abgeschlossen, Red Particle spawnen
             if (cursorEnergy >= MAX_ENERGY && !redParticle.active && !redParticleActive && coloredBridgePhaseComplete) {
-              redParticleSpawnTime = Date.now() + 5000; // 5 Sekunden warten
+              redParticleSpawnTime = Date.now() + 2000; // 2 Sekunden warten
               redParticleActive = true;
             }
           }
