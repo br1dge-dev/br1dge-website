@@ -258,17 +258,22 @@ class SFXEngineClass {
     const now = Tone.now();
     const velocity = params.velocity ?? 0.8;
     
-    // Deep sub impact
-    this.subSynth?.triggerAttackRelease('G2', '4n', now, velocity);
+    // Deep sub impact - safely retrigger MonoSynth
+    if (this.subSynth) {
+      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+      this.subSynth.triggerAttackRelease('G2', '4n', now + 0.01, velocity);
+    }
     
     // Harmonic layer
-    this.melodicSynth?.triggerAttackRelease(['G3', 'D4'], '4n', now + 0.02, velocity * 0.5);
+    this.melodicSynth?.triggerAttackRelease(['G3', 'D4'], '4n', now + 0.03, velocity * 0.5);
     
     // Noise texture
     if (this.noiseFilter && this.noiseSynth) {
-      this.noiseFilter.frequency.setValueAtTime(800, now);
-      this.noiseFilter.frequency.rampTo(200, 0.3);
-      this.noiseSynth.triggerAttackRelease('8n', now);
+      try {
+        this.noiseFilter.frequency.setValueAtTime(800, now + 0.01);
+        this.noiseFilter.frequency.rampTo(200, 0.3);
+        this.noiseSynth.triggerAttackRelease('8n', now + 0.02);
+      } catch (e) { /* ignore */ }
     }
     
     // Trigger ambient swell
@@ -285,8 +290,11 @@ class SFXEngineClass {
     const level = params.level ?? 1;
     const velocity = 0.6 + (level / 10) * 0.4;
     
-    // Deep foundation
-    this.subSynth?.triggerAttackRelease('G1', '2n', now, velocity);
+    // Deep foundation - safely retrigger MonoSynth
+    if (this.subSynth) {
+      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+      this.subSynth.triggerAttackRelease('G1', '2n', now + 0.01, velocity);
+    }
     
     // Rising power chord
     const notes = NOTES.droneFifths.slice(0, 2 + Math.floor(level / 3));
@@ -345,32 +353,43 @@ class SFXEngineClass {
     
     const now = Tone.now();
     
+    // Use strictly increasing time offsets to avoid MonoSynth timing conflicts
+    let timeOffset = 0.01;  // Start slightly in the future
+    
     // Massive chord - sicher mit if checks
-    NOTES.maxStackChord.forEach((note, i) => {
+    NOTES.maxStackChord.forEach((note) => {
       if (this.melodicSynth) {
-        this.melodicSynth.triggerAttackRelease(note, '1m', now + i * 0.06, 0.7);
+        this.melodicSynth.triggerAttackRelease(note, '1m', now + timeOffset, 0.7);
+        timeOffset += 0.06;
       }
     });
     
-    // Deep sub
+    // Deep sub - needs unique time, stop any previous note first
     if (this.subSynth) {
-      this.subSynth.triggerAttackRelease('G1', '1m', now, 0.9);
+      try {
+        this.subSynth.triggerRelease(now);  // Release any playing note
+      } catch (e) {
+        // Ignore if nothing playing
+      }
+      this.subSynth.triggerAttackRelease('G1', '1m', now + timeOffset, 0.9);
+      timeOffset += 0.1;
     }
     
     // High shimmer cascade
-    NOTES.celestial.forEach((note, i) => {
+    NOTES.celestial.forEach((note) => {
       if (this.harmonicSynth) {
-        this.harmonicSynth.triggerAttackRelease(note, '2n', now + 0.5 + i * 0.15, 0.4);
+        this.harmonicSynth.triggerAttackRelease(note, '2n', now + timeOffset, 0.4);
+        timeOffset += 0.15;
       }
     });
     
     // Noise impact - sicher
     if (this.noiseFilter && this.noiseSynth) {
       try {
-        this.noiseFilter.frequency.setValueAtTime(200, now);
+        this.noiseFilter.frequency.setValueAtTime(200, now + 0.01);
         this.noiseFilter.frequency.exponentialRampTo(4000, 0.5);
         this.noiseFilter.frequency.rampTo(500, 2);
-        this.noiseSynth.triggerAttackRelease('2n', now);
+        this.noiseSynth.triggerAttackRelease('2n', now + 0.02);
       } catch (e) {
         // Ignore filter errors
       }
@@ -438,8 +457,11 @@ class SFXEngineClass {
     
     const now = Tone.now();
     
-    // Sub impact
-    this.subSynth?.triggerAttackRelease('G2', '4n', now, 0.8);
+    // Sub impact - safely retrigger MonoSynth
+    if (this.subSynth) {
+      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+      this.subSynth.triggerAttackRelease('G2', '4n', now + 0.01, 0.8);
+    }
     
     // Heroic chord
     NOTES.bridgeChord.forEach((note, i) => {
