@@ -347,12 +347,13 @@
         dying: false,
         deathTime: 0,
         deathProgress: 0,
-        flutterPhase: 0  // For fluttering flight path
+        consumedEnergy: 0  // Tracks how much energy/particles consumed -> increases speed
       };
       let lastSpiralSpawnTime = 0;
       const SPIRAL_SPAWN_INTERVAL = 15000;  // 15 seconds
-      const SPIRAL_SPEED = 0.5;  // +25% speed (was 0.4)
-      const SPIRAL_FLEE_SPEED = 3.0;  // +25% flee speed (was 2.5)
+      const SPIRAL_BASE_SPEED = 0.4;  // Base movement speed
+      const SPIRAL_MAX_SPEED = 1.5;  // Max speed when fully fed
+      const SPIRAL_FLEE_SPEED = 3.0;
       const SPIRAL_DEATH_DURATION = 3500;
       
       function resize() {
@@ -974,9 +975,10 @@
           spiralEnemy.active = true;
           spiralEnemy.dying = false;
           spiralEnemy.deathProgress = 0;
+          spiralEnemy.consumedEnergy = 0;  // Reset consumed energy
           spiralEnemy.arms = 3 + Math.floor(Math.random() * 3);  // 3-5 arms
           spiralEnemy.rotation = Math.random() * Math.PI * 2;
-          spiralEnemy.radius = 70 + Math.random() * 30;  // 70-100 radius
+          spiralEnemy.radius = 100 + Math.random() * 40;  // Larger radius for more visible gravity (100-140)
           lastSpiralSpawnTime = now;
           
           // Play ominous spawn sound
@@ -1016,20 +1018,13 @@
         }
         
         // === MOVEMENT LOGIC ===
-        // Update flutter phase for organic movement
-        spiralEnemy.flutterPhase += 0.08;
+        // Speed increases with consumed energy (faster the more it eats)
+        const energySpeedBonus = spiralEnemy.consumedEnergy * 2;  // Each consumed star adds speed
+        const currentSpeed = Math.min(SPIRAL_MAX_SPEED, SPIRAL_BASE_SPEED + energySpeedBonus);
         
-        // Base: move toward logo with fluttering motion
-        let moveX = (dxLogo / distToLogo) * SPIRAL_SPEED;
-        let moveY = (dyLogo / distToLogo) * SPIRAL_SPEED;
-        
-        // Add flutter/wobble perpendicular to movement direction
-        const perpX = -dyLogo / distToLogo;  // Perpendicular vector
-        const perpY = dxLogo / distToLogo;
-        const flutterAmount = Math.sin(spiralEnemy.flutterPhase) * 0.8 + 
-                              Math.sin(spiralEnemy.flutterPhase * 2.3) * 0.4;
-        moveX += perpX * flutterAmount;
-        moveY += perpY * flutterAmount;
+        // Move directly toward logo (no flutter)
+        let moveX = (dxLogo / distToLogo) * currentSpeed;
+        let moveY = (dyLogo / distToLogo) * currentSpeed;
         
         // Flee from cursor if close (within 150px)
         const fleeRadius = 150;
@@ -1094,73 +1089,44 @@
         AudioSystem.setSpiralSuction(Math.min(1, spiralEnemy.radius / 100));
       }
       
-      // Draw skull - the spiral's body (light gray, no glow, same size as heart)
+      // Draw inverted cursor copy - 2 outer rings + small nucleus with hole
       function drawSpiralCore(x, y, rotation, intensity) {
         if (intensity <= 0) return;
         
         ctx.save();
         ctx.translate(x, y);
+        ctx.rotate(rotation * 0.3);  // Slow rotation
         
-        // Skull size similar to red heart (~15-18px)
-        const size = 16 * intensity;
-        const gray = Math.floor(180 + Math.random() * 20);  // Light gray with slight flicker
+        // Base size similar to cursor
+        const baseSize = 6 * intensity;
+        const ringWidth = 2;
+        const gray = 180;  // Light gray, no flicker
         
-        ctx.fillStyle = `rgba(${gray}, ${gray}, ${gray}, ${intensity * 0.9})`;
-        ctx.strokeStyle = `rgba(${gray - 40}, ${gray - 40}, ${gray - 40}, ${intensity * 0.7})`;
-        ctx.lineWidth = 1;
-        
-        // Skull shape - simplified iconic skull
+        // Outer ring 1 (largest)
         ctx.beginPath();
-        
-        // Cranium (top rounded part)
-        ctx.arc(0, -size * 0.15, size * 0.7, Math.PI, 0, false);
-        
-        // Sides of skull down to jaw
-        ctx.lineTo(size * 0.7, size * 0.3);
-        ctx.quadraticCurveTo(size * 0.5, size * 0.6, size * 0.3, size * 0.7);
-        
-        // Jaw bottom (teeth area)
-        ctx.lineTo(size * 0.25, size * 0.75);
-        ctx.lineTo(-size * 0.25, size * 0.75);
-        ctx.lineTo(-size * 0.3, size * 0.7);
-        
-        // Left side back up
-        ctx.quadraticCurveTo(-size * 0.5, size * 0.6, -size * 0.7, size * 0.3);
-        ctx.closePath();
-        
-        ctx.fill();
+        ctx.arc(0, 0, baseSize + 10, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${gray}, ${gray}, ${gray}, ${intensity * 0.7})`;
+        ctx.lineWidth = ringWidth;
         ctx.stroke();
         
-        // Eye sockets (dark)
-        ctx.fillStyle = `rgba(40, 40, 40, ${intensity * 0.9})`;
-        
-        // Left eye
+        // Outer ring 2
         ctx.beginPath();
-        ctx.ellipse(-size * 0.28, size * 0.05, size * 0.18, size * 0.22, 0, 0, Math.PI * 2);
+        ctx.arc(0, 0, baseSize + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${gray}, ${gray}, ${gray}, ${intensity * 0.85})`;
+        ctx.lineWidth = ringWidth;
+        ctx.stroke();
+        
+        // Nucleus (small filled circle)
+        ctx.beginPath();
+        ctx.arc(0, 0, baseSize, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${gray}, ${gray}, ${gray}, ${intensity * 0.9})`;
         ctx.fill();
         
-        // Right eye  
+        // Mini hole in center (inverted = dark center)
         ctx.beginPath();
-        ctx.ellipse(size * 0.28, size * 0.05, size * 0.18, size * 0.22, 0, 0, Math.PI * 2);
+        ctx.arc(0, 0, baseSize * 0.4, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(20, 20, 20, ${intensity})`;
         ctx.fill();
-        
-        // Nose hole (triangle)
-        ctx.beginPath();
-        ctx.moveTo(0, size * 0.2);
-        ctx.lineTo(-size * 0.1, size * 0.4);
-        ctx.lineTo(size * 0.1, size * 0.4);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Teeth (simple lines)
-        ctx.strokeStyle = `rgba(40, 40, 40, ${intensity * 0.6})`;
-        ctx.lineWidth = 1;
-        for (let i = -2; i <= 2; i++) {
-          ctx.beginPath();
-          ctx.moveTo(i * size * 0.12, size * 0.55);
-          ctx.lineTo(i * size * 0.12, size * 0.72);
-          ctx.stroke();
-        }
         
         ctx.restore();
       }
@@ -1291,6 +1257,7 @@
       }
       
       // Apply spiral gravity to ambient stars - this is how we "see" the spiral
+      // Doubled strength for more visible effect
       function applySpiralgravityToStars(sx, sy, radius, rotation, arms) {
         for (const p of ambientParticles) {
           if (p.absorbed) continue;
@@ -1305,22 +1272,26 @@
             const armAngle = (angle - rotation) * arms;
             const armStrength = 0.5 + Math.sin(armAngle) * 0.5;
             
-            // Gravitational pull toward spiral center
-            const pullStrength = (1 - dist / radius) * 0.25 * armStrength;
+            // Gravitational pull toward spiral center - 2X STRONGER
+            const pullStrength = (1 - dist / radius) * 0.5 * armStrength;
             p.vx += (dx / dist) * pullStrength;
             p.vy += (dy / dist) * pullStrength;
             
-            // Rotational component (swirl)
+            // Rotational component (swirl) - 2X STRONGER
             const tangentX = -dy / dist;
             const tangentY = dx / dist;
-            const swirlStrength = (1 - dist / radius) * 0.15;
+            const swirlStrength = (1 - dist / radius) * 0.3;
             p.vx += tangentX * swirlStrength;
             p.vy += tangentY * swirlStrength;
             
-            // Stars near center get absorbed (destroyed)
-            if (dist < 15) {
+            // Stars near center get absorbed (destroyed) - track consumed energy
+            if (dist < 20) {
               p.absorbed = true;
               p.alpha *= 0.1;
+              // Track consumed energy for speed boost
+              if (spiralEnemy.active) {
+                spiralEnemy.consumedEnergy += 0.02;
+              }
             }
           }
         }
