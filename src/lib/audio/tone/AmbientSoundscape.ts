@@ -115,42 +115,42 @@ class AmbientSoundscapeClass {
     this.harmonicSynth.connect(this.harmonicGain);
     this.harmonicGain.connect(this.padFilter);
     
-    // === INVERTED MODE: Aggressive pulsing drone ===
-    // Filter for inverted sounds
+    // === INVERTED MODE: Dreamy, ethereal, underwater ===
+    // Warm filter for inverted sounds
     this.invertedFilter = new Tone.Filter({
-      frequency: 600,
+      frequency: 800,
       type: 'lowpass',
-      rolloff: -24,
-      Q: 4,  // Resonant, aggressive
+      rolloff: -12,
+      Q: 1,  // Gentle, warm
     });
     this.invertedFilter.connect(mainInput);
     this.invertedFilter.connect(reverbSend);
     
-    // Deep pulsing sub - heartbeat of the inverted world
+    // Gentle pulsing pad - like underwater breathing
     this.invertedPulse = new Tone.Oscillator({
-      frequency: 36.7,  // D1 - very deep
-      type: 'sawtooth',  // Aggressive
+      frequency: 73.4,  // D2 - warm, not too deep
+      type: 'sine',  // Soft, round
     });
     this.invertedPulseGain = new Tone.Gain(0);
     this.invertedPulse.connect(this.invertedPulseGain);
     this.invertedPulseGain.connect(this.invertedFilter);
     
-    // LFO for pulsing - creates the heartbeat rhythm
+    // LFO for gentle pulsing - slow breathing rhythm
     this.invertedLFO = new Tone.LFO({
-      frequency: 1.2,  // ~72 BPM heartbeat
+      frequency: 0.5,  // Slow, calm breathing
       min: 0,
-      max: 0.25,
+      max: 0.12,
       type: 'sine',
     });
     
-    // Dissonant drone - tritone (devil's interval) + minor 2nd
+    // Ethereal drone - major 7th chord for dreamy, hopeful feel
     this.invertedDrone = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'triangle' },
+      oscillator: { type: 'sine' },  // Pure, soft
       envelope: {
-        attack: 0.5,
-        decay: 0.3,
-        sustain: 0.8,
-        release: 2,
+        attack: 1.5,
+        decay: 0.5,
+        sustain: 0.6,
+        release: 3,
       },
     });
     this.invertedDroneGain = new Tone.Gain(0);
@@ -244,28 +244,30 @@ class AmbientSoundscapeClass {
     const now = Tone.now();
     
     if (active) {
-      // === KILL NORMAL AMBIENT ===
-      this.subGain?.gain.linearRampTo(0, 0.5);
-      this.padGain?.gain.linearRampTo(0, 0.5);
-      this.harmonicGain?.gain.linearRampTo(0, 0.5);
-      this.padFilter?.frequency.linearRampTo(200, 0.3);
+      // === DIM NORMAL AMBIENT (don't kill completely) ===
+      this.subGain?.gain.linearRampTo(0.02, 0.8);
+      this.padGain?.gain.linearRampTo(0.03, 0.8);
+      this.harmonicGain?.gain.linearRampTo(0.02, 0.8);
+      this.padFilter?.frequency.linearRampTo(600, 0.5);
       
-      // === UNLEASH THE BEAST ===
-      // Start pulsing sub
-      this.invertedPulse?.start(now);
-      this.invertedLFO?.start(now);
-      this.invertedLFO?.connect(this.invertedPulseGain!.gain);
+      // === DREAMY INVERTED WORLD ===
+      // Gentle pulsing - like being underwater, not threatening
+      if (this.invertedPulse && this.invertedLFO && this.invertedPulseGain) {
+        this.invertedPulse.start(now);
+        this.invertedLFO.start(now);
+        this.invertedLFO.connect(this.invertedPulseGain.gain);
+      }
       
-      // Dissonant tritone drone (D2 + Ab2 = tritone, + Eb2 = minor 2nd cluster)
-      this.invertedDrone?.triggerAttack(['D2', 'Ab2', 'Eb3'], now + 0.1);
-      this.invertedDroneGain?.gain.linearRampTo(0.12, 0.8);
+      // Ethereal drone - major 7th chord, dreamy not scary (Dmaj7 = D, F#, A, C#)
+      this.invertedDrone?.triggerAttack(['D3', 'F#3', 'A3', 'C#4'], now + 0.1);
+      this.invertedDroneGain?.gain.linearRampTo(0.08, 1.2);
       
-      // Open filter with resonance sweep
-      this.invertedFilter?.frequency.linearRampTo(300, 0.2);
-      this.invertedFilter?.frequency.linearRampTo(800, 2);
+      // Warm filter opening
+      this.invertedFilter?.frequency.linearRampTo(400, 0.3);
+      this.invertedFilter?.frequency.linearRampTo(1000, 3);
       
-      // Increase LFO speed over time (heartbeat getting faster)
-      this.invertedLFO?.frequency.linearRampTo(1.8, 5);
+      // Gentle LFO pulse (slower, calmer)
+      this.invertedLFO?.frequency.linearRampTo(0.8, 3);
       
     } else {
       // === RETURN TO NORMAL ===

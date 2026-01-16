@@ -324,34 +324,35 @@ class SFXEngineClass {
   }
   
   /**
-   * Red Heart Capture - PUNCHY, visceral, like catching lightning
-   * This is the moment of transformation - make it FEEL powerful
+   * Red Heart Capture - Magical, powerful but warm
+   * Like catching a falling star - special, not scary
    */
   playRedHeartCapture(): void {
     if (!this.initialized) return;
     
     const now = Tone.now();
     
-    // MASSIVE sub hit - like a giant heartbeat
+    // Warm sub impact - like a deep bell
     if (this.subSynth) {
       try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
-      this.subSynth.triggerAttackRelease('D1', '2n', now, 0.95);
+      this.subSynth.triggerAttackRelease('D2', '4n', now, 0.7);
     }
     
-    // Dissonant power chord - tritone for tension (D + Ab)
-    this.melodicSynth?.triggerAttackRelease(['D3', 'Ab3'], '4n', now + 0.02, 0.7);
+    // Magical chord - major with added 9th (D, F#, A, E) = dreamy, hopeful
+    this.melodicSynth?.triggerAttackRelease(['D3', 'F#3', 'A3'], '4n', now + 0.02, 0.5);
     
-    // Screaming high note - like a siren wail
+    // Shimmering high harmonics - like stardust
     if (this.harmonicSynth) {
-      this.harmonicSynth.triggerAttackRelease('D5', '8n', now + 0.05, 0.5);
-      this.harmonicSynth.triggerAttackRelease('Ab5', '4n', now + 0.1, 0.4);
+      this.harmonicSynth.triggerAttackRelease('D5', '4n', now + 0.05, 0.35);
+      this.harmonicSynth.triggerAttackRelease('A5', '2n', now + 0.12, 0.25);
+      this.harmonicSynth.triggerAttackRelease('E6', '2n', now + 0.2, 0.15);
     }
     
-    // Aggressive noise burst - impact texture
+    // Soft whoosh - like wind, not harsh
     if (this.noiseFilter && this.noiseSynth) {
-      this.noiseFilter.frequency.setValueAtTime(2000, now);
-      this.noiseFilter.frequency.exponentialRampTo(100, 0.4);
-      this.noiseSynth.triggerAttackRelease('8n', now);
+      this.noiseFilter.frequency.setValueAtTime(1200, now);
+      this.noiseFilter.frequency.exponentialRampTo(300, 0.5);
+      this.noiseSynth.triggerAttackRelease('16n', now + 0.03);
     }
   }
   
