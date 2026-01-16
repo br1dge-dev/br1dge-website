@@ -200,6 +200,46 @@ class ToneAudioSystemClass {
   }
   
   // ============================================
+  // Spiral Enemy Sounds
+  // ============================================
+  
+  /**
+   * Spiral spawn sound - ominous arrival
+   */
+  playSpiralSpawn(): void {
+    if (!this.initialized || this.muted) return;
+    SFXEngine.playSpiralSpawn();
+  }
+  
+  /**
+   * Spiral defeat sound - when cursor destroys it
+   */
+  playSpiralDefeat(): void {
+    if (!this.initialized || this.muted) return;
+    SFXEngine.playSpiralDefeat();
+  }
+  
+  /**
+   * Spiral damage sound - when it hits the logo
+   */
+  playSpiralDamage(): void {
+    if (!this.initialized || this.muted) return;
+    SFXEngine.playSpiralDamage();
+  }
+  
+  /**
+   * Spiral suction - continuous dark sucking sound
+   * @param intensity 0-1 (0 to stop)
+   */
+  setSpiralSuction(intensity: number): void {
+    if (!this.initialized || this.muted) {
+      SFXEngine.setSpiralSuction(0);
+      return;
+    }
+    SFXEngine.setSpiralSuction(intensity);
+  }
+  
+  // ============================================
   // Continuous Effects
   // ============================================
   

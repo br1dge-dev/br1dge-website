@@ -576,6 +576,114 @@ class SFXEngineClass {
   }
   
   // ============================================
+  // SPIRAL ENEMY SOUNDS
+  // ============================================
+  
+  /**
+   * Spiral Spawn - Ominous, dark arrival
+   */
+  playSpiralSpawn(): void {
+    if (!this.initialized) return;
+    
+    const now = Tone.now();
+    
+    // Deep ominous rumble
+    if (this.subSynth) {
+      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+      this.subSynth.triggerAttackRelease('D1', '2n', now + 0.05, 0.5);
+    }
+    
+    // Dissonant minor 2nd - unsettling
+    this.melodicSynth?.triggerAttackRelease(['D2', 'Eb2'], '4n', now + 0.1, 0.3);
+    
+    // Dark descending tone
+    if (this.harmonicSynth) {
+      this.harmonicSynth.triggerAttackRelease('D4', '8n', now + 0.15, 0.25);
+      this.harmonicSynth.triggerAttackRelease('C4', '8n', now + 0.3, 0.2);
+    }
+  }
+  
+  /**
+   * Spiral Defeat - Satisfying destruction when cursor hits it
+   */
+  playSpiralDefeat(): void {
+    if (!this.initialized) return;
+    
+    const now = Tone.now();
+    
+    // Release burst
+    if (this.noiseFilter && this.noiseSynth) {
+      this.noiseFilter.frequency.setValueAtTime(400, now + 0.05);
+      this.noiseFilter.frequency.exponentialRampTo(2000, 0.3);
+      this.noiseFilter.frequency.exponentialRampTo(100, 0.5);
+      this.noiseSynth.triggerAttackRelease('4n', now + 0.05);
+    }
+    
+    // Rising resolution chord
+    this.melodicSynth?.triggerAttackRelease(['G3', 'D4'], '4n', now + 0.1, 0.4);
+    this.harmonicSynth?.triggerAttackRelease('G5', '2n', now + 0.2, 0.25);
+  }
+  
+  /**
+   * Spiral Damage - When spiral hits logo, destructive impact
+   */
+  playSpiralDamage(): void {
+    if (!this.initialized) return;
+    
+    const now = Tone.now();
+    
+    // Heavy impact
+    if (this.subSynth) {
+      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+      this.subSynth.triggerAttackRelease('A1', '4n', now + 0.05, 0.8);
+    }
+    
+    // Harsh dissonant crash
+    this.melodicSynth?.triggerAttackRelease(['A2', 'Bb2', 'E3'], '8n', now + 0.08, 0.6);
+    
+    // Noise impact
+    if (this.noiseFilter && this.noiseSynth) {
+      this.noiseFilter.frequency.setValueAtTime(1500, now + 0.05);
+      this.noiseFilter.frequency.exponentialRampTo(80, 0.4);
+      this.noiseSynth.triggerAttackRelease('8n', now + 0.05);
+    }
+  }
+  
+  // Spiral suction state
+  private spiralSuctionActive = false;
+  
+  /**
+   * Spiral Suction - Continuous dark sucking sound
+   * @param intensity 0-1 (0 to stop)
+   */
+  setSpiralSuction(intensity: number): void {
+    if (!this.initialized) return;
+    
+    if (intensity <= 0) {
+      if (this.spiralSuctionActive) {
+        this.crackleGain?.gain.linearRampTo(0.0001, 0.3);
+        this.spiralSuctionActive = false;
+      }
+      return;
+    }
+    
+    // Use crackle system for suction (repurpose when not chamber crackling)
+    const volume = 0.02 + intensity * 0.04;
+    
+    if (!this.spiralSuctionActive && !this.crackleActive) {
+      this.spiralSuctionActive = true;
+      this.crackleLFO?.frequency.setValueAtTime(3, Tone.now());
+      this.crackleLFO?.start();
+      this.crackleNoise?.triggerAttack();
+    }
+    
+    if (this.spiralSuctionActive) {
+      this.crackleGain?.gain.linearRampTo(volume, 0.2);
+      this.crackleLFO?.frequency.linearRampTo(3 + intensity * 5, 0.2);
+    }
+  }
+  
+  // ============================================
   // CONTINUOUS EFFECTS
   // ============================================
   
