@@ -141,7 +141,7 @@
       // ========================================
       // IMPORTS FROM MODULAR LIBRARY
       // ========================================
-      import { hexToRgba, colorToHue } from '../lib/utils/color';
+      import { hexToRgba, colorToHue, desaturate } from '../lib/utils/color';
       // New Tone.js audio system - immersive space ambient with SFX
       import { ToneAudioSystem as AudioSystem } from '../lib/audio/tone';
       import { HapticManager } from '../lib/haptics/HapticManager';
@@ -703,12 +703,6 @@
         
         ctx.restore();
         
-        // Level Anzeige rechts unten
-        ctx.font = '12px monospace';
-        ctx.textAlign = 'right';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.fillText(`lvl:${upgradeLevel}`, W - 20, H - 20);
-        
         // Expanding Rings bei Entladung - mit Farbe (immer zentriert)
         for (let i = logoOutlines.length - 1; i >= 0; i--) {
           const outline = logoOutlines[i];
@@ -1019,21 +1013,23 @@
             isRed: true
           });
           
-           // Erster Red Particle: Aktiviere Inversion
-           // Wenn wir schon redStackCount haben (von vorherigem Zyklus), increment statt reset
-           if (!isInverted && redStackCount === 0) {
-             isInverted = true;
-             canvas.style.filter = 'invert(1)';
-             redStackCount = 1;
-             // Audio: Underwater mode mit treibendem Puls
-             AudioSystem.setInvertedMode(true);
-           } else if (redStackCount < MAX_RED_STACK) {
-             redStackCount++;
-             // Max Stack erreicht = epischer Moment!
-             if (redStackCount >= MAX_RED_STACK) {
-               AudioSystem.playMaxStack();
-             }
-           }
+            // Erster Red Particle: Aktiviere Inversion
+            if (!isInverted && redStackCount === 0) {
+              isInverted = true;
+              canvas.style.filter = 'invert(1)';
+              redStackCount = 1;
+              // Audio: Underwater mode
+              AudioSystem.setInvertedMode(true);
+            } else if (redStackCount < MAX_RED_STACK) {
+              redStackCount++;
+              // Max Stack erreicht = epischer Moment!
+              if (redStackCount >= MAX_RED_STACK) {
+                AudioSystem.playMaxStack();
+              }
+            }
+           
+            // Besonderer Ton für JEDES Herz (nicht nur erster)
+            AudioSystem.playRedHeartCapture();
           
           // Kleiner Partikel-Burst (weniger dramatisch, da in Kammer)
           for (let i = 0; i < 20; i++) {
@@ -1698,7 +1694,8 @@
           ctx.font = `bold ${size * 4 * hoverScale}px "SF Pro Display", system-ui, sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillStyle = bridge.color;
+          // 90% desaturated for soft appearance
+          ctx.fillStyle = desaturate(bridge.color, 0.9);
           ctx.globalAlpha = isHovered ? 1 : 0.85;
           ctx.fillText('∩', 0, 0);
 

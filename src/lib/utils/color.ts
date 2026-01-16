@@ -53,3 +53,21 @@ export const hsla = (h: number, s: number, l: number, a: number): string =>
  */
 export const rgba = (r: number, g: number, b: number, a: number): string =>
   `rgba(${r}, ${g}, ${b}, ${a})`;
+
+/**
+ * Desaturate a hex color by a percentage (0-1)
+ * 0 = original color, 1 = fully grayscale
+ */
+export const desaturate = (hex: string, amount: number): string => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  
+  const gray = Math.round(r * 0.299 + g * 0.587 + b * 0.114);
+  const newR = Math.round(r + (gray - r) * amount);
+  const newG = Math.round(g + (gray - g) * amount);
+  const newB = Math.round(b + (gray - b) * amount);
+  
+  const toHex = (n: number) => n.toString(16).padStart(2, '0');
+  return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
+};

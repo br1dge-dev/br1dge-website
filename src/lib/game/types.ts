@@ -14,9 +14,9 @@ export const MAX_ENERGY = 1.0;
 export const ENERGY_THRESHOLD = 0.2;
 
 // Chamber system
-export const CHAMBER_THRESHOLD = 5;
+export const CHAMBER_THRESHOLD = 8;  // Braucht mehr Partikel zum Füllen
 export const CHAMBER_RADIUS = 12;
-export const MAX_RED_STACK = 6;
+export const MAX_RED_STACK = 10;  // Mehr Herzen für Max-Stack
 
 // Tutorial phases
 export const TUTORIAL_RINGS_PHASE0 = 2;
