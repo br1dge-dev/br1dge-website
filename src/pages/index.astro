@@ -317,6 +317,10 @@
       let logoReadyForDischarge = false;
       let logoVibrationTime = 0;
       
+      // Hit flash effects
+      let logoHitFlashTime = 0;  // When logo gets hit, flash red
+      let cursorHitFlashTime = 0;  // When cursor kills enemy, flash blue
+      
       // Phase tracking: colored bridges first, then red particles
       let coloredBridgePhaseComplete = false;
       
@@ -725,8 +729,16 @@
           ctx.globalAlpha = 1;
         }
         
-        // Haupt-Symbol - weiß
-        ctx.fillStyle = '#ffffff';
+        // Haupt-Symbol - weiß (or red flash if hit)
+        const hitFlashDuration = 200;  // 200ms flash
+        const timeSinceHit = Date.now() - logoHitFlashTime;
+        if (timeSinceHit < hitFlashDuration) {
+          // Red flash when hit by enemy
+          const flashIntensity = 1 - (timeSinceHit / hitFlashDuration);
+          ctx.fillStyle = `rgb(255, ${Math.floor(255 * (1 - flashIntensity))}, ${Math.floor(255 * (1 - flashIntensity))})`;
+        } else {
+          ctx.fillStyle = '#ffffff';
+        }
         ctx.fillText('∩', 0, 0);
         
         ctx.restore();
@@ -1039,11 +1051,14 @@
         spiralEnemy.x += moveX;
         spiralEnemy.y += moveY;
         
-        // === CURSOR COLLISION - gray/green hex explosion ===
+        // === CURSOR COLLISION - cursor flashes blue ===
         const cursorCollisionRadius = 35;
         if (distToCursor < cursorCollisionRadius && !spiralEnemy.dying) {
-          // Gray hex-tech explosion for cursor kill
-          spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y, 'gray');
+          // Anime-style implosion
+          spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y);
+          
+          // Cursor flashes blue
+          cursorHitFlashTime = now;
           
           spiralEnemy.active = false;
           spiralEnemy.dying = false;
@@ -1053,18 +1068,19 @@
           return;
         }
         
-        // === LOGO COLLISION - must touch actual visible logo ===
-        // Logo visual size is much smaller than the max hitbox
-        // Use a tighter collision based on current energy level
-        const baseLogoSize = Math.min(W, H) * 0.08;  // Base logo is ~8% of screen
-        const energyBonus = cursorEnergy * Math.min(W, H) * 0.04;  // Grows with energy
-        const actualLogoRadius = baseLogoSize + energyBonus;  // Actual visible size
-        const skullSize = 16;  // Skull body size
-        const logoCollisionRadius = actualLogoRadius + skullSize * 0.5;  // Touch when skull meets logo edge
+        // === LOGO COLLISION - logo flashes red ===
+        const baseLogoSize = Math.min(W, H) * 0.08;
+        const energyBonus = cursorEnergy * Math.min(W, H) * 0.04;
+        const actualLogoRadius = baseLogoSize + energyBonus;
+        const blobSize = 18;  // Blob body size
+        const logoCollisionRadius = actualLogoRadius + blobSize * 0.5;
         
         if (distToLogo < logoCollisionRadius) {
-          // Green hex-tech explosion for logo damage
-          spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y, 'green');
+          // Anime-style implosion
+          spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y);
+          
+          // Logo flashes red - "hit registered"
+          logoHitFlashTime = now;
           
           logoVibrationTime = now;
           logoReadyForDischarge = false;
@@ -1089,166 +1105,149 @@
         AudioSystem.setSpiralSuction(Math.min(1, spiralEnemy.radius / 100));
       }
       
-      // Draw inverted cursor copy - 2 outer rings + small nucleus with hole
+      // Draw green pulsating bubble blob - 2-4 connected bubbles
       function drawSpiralCore(x, y, rotation, intensity) {
         if (intensity <= 0) return;
         
+        const time = Date.now() / 1000;
+        const pulse = 1 + Math.sin(time * 5) * 0.15;  // Pulsating
+        
         ctx.save();
         ctx.translate(x, y);
-        ctx.rotate(rotation * 0.3);  // Slow rotation
         
-        // Base size similar to cursor
-        const baseSize = 6 * intensity;
-        const ringWidth = 2;
-        const gray = 180;  // Light gray, no flicker
+        // Green color
+        const green = [80, 220, 100];
         
-        // Outer ring 1 (largest)
+        // Generate 2-4 connected bubbles based on rotation (deterministic)
+        const bubbleCount = 2 + Math.floor((rotation % 3));
+        const baseSize = 8 * intensity * pulse;
+        
+        // Draw bubbles as connected blobs
+        for (let i = 0; i < bubbleCount; i++) {
+          const angle = (i / bubbleCount) * Math.PI * 2 + rotation * 0.2;
+          const dist = baseSize * 0.6;
+          const bx = Math.cos(angle) * dist;
+          const by = Math.sin(angle) * dist;
+          const bubbleSize = baseSize * (0.6 + Math.sin(time * 4 + i) * 0.2);
+          
+          // Bubble glow
+          const glow = ctx.createRadialGradient(bx, by, 0, bx, by, bubbleSize * 1.5);
+          glow.addColorStop(0, `rgba(${green[0]}, ${green[1]}, ${green[2]}, ${0.3 * intensity})`);
+          glow.addColorStop(1, `rgba(${green[0]}, ${green[1]}, ${green[2]}, 0)`);
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(bx, by, bubbleSize * 1.5, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Bubble body
+          ctx.beginPath();
+          ctx.arc(bx, by, bubbleSize, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${green[0]}, ${green[1]}, ${green[2]}, ${0.7 * intensity})`;
+          ctx.fill();
+          
+          // Bubble highlight
+          ctx.beginPath();
+          ctx.arc(bx - bubbleSize * 0.3, by - bubbleSize * 0.3, bubbleSize * 0.25, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(200, 255, 200, ${0.5 * intensity})`;
+          ctx.fill();
+        }
+        
+        // Central connection blob
         ctx.beginPath();
-        ctx.arc(0, 0, baseSize + 10, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(${gray}, ${gray}, ${gray}, ${intensity * 0.7})`;
-        ctx.lineWidth = ringWidth;
-        ctx.stroke();
-        
-        // Outer ring 2
-        ctx.beginPath();
-        ctx.arc(0, 0, baseSize + 5, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(${gray}, ${gray}, ${gray}, ${intensity * 0.85})`;
-        ctx.lineWidth = ringWidth;
-        ctx.stroke();
-        
-        // Nucleus (small filled circle)
-        ctx.beginPath();
-        ctx.arc(0, 0, baseSize, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${gray}, ${gray}, ${gray}, ${intensity * 0.9})`;
-        ctx.fill();
-        
-        // Mini hole in center (inverted = dark center)
-        ctx.beginPath();
-        ctx.arc(0, 0, baseSize * 0.4, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(20, 20, 20, ${intensity})`;
+        ctx.arc(0, 0, baseSize * 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${green[0]}, ${green[1]}, ${green[2]}, ${0.8 * intensity})`;
         ctx.fill();
         
         ctx.restore();
       }
       
-      // Hex-tech explosion state
-      let hexExplosion = {
+      // Anime-style explosion state
+      let animeExplosion = {
         active: false,
         x: 0,
         y: 0,
-        phase: 0,  // 0-1: expand, 1-2: distort, 2-3: implode
-        startTime: 0,
-        color: 'gray'  // 'gray' for cursor, 'green' for logo
+        phase: 0,  // 0-1: expand, 1-2: hold/collapse, 2-3: implode
+        startTime: 0
       };
       
-      function spawnSpiralExplosion(x, y, color = 'gray') {
-        hexExplosion.active = true;
-        hexExplosion.x = x;
-        hexExplosion.y = y;
-        hexExplosion.phase = 0;
-        hexExplosion.startTime = Date.now();
-        hexExplosion.color = color;
+      function spawnSpiralExplosion(x, y) {
+        animeExplosion.active = true;
+        animeExplosion.x = x;
+        animeExplosion.y = y;
+        animeExplosion.phase = 0;
+        animeExplosion.startTime = Date.now();
       }
       
       function updateAndDrawSpiralExplosion() {
-        if (!hexExplosion.active) return;
+        if (!animeExplosion.active) return;
         
-        const elapsed = Date.now() - hexExplosion.startTime;
-        const duration = 800;  // Total animation duration
-        hexExplosion.phase = elapsed / duration * 3;  // 0 to 3
+        const elapsed = Date.now() - animeExplosion.startTime;
+        const duration = 400;  // Fast animation
+        animeExplosion.phase = elapsed / duration * 3;
         
-        if (hexExplosion.phase >= 3) {
-          hexExplosion.active = false;
+        if (animeExplosion.phase >= 3) {
+          animeExplosion.active = false;
           return;
         }
         
         ctx.save();
-        ctx.translate(hexExplosion.x, hexExplosion.y);
+        ctx.translate(animeExplosion.x, animeExplosion.y);
         
-        const phase = hexExplosion.phase;
-        const isGreen = hexExplosion.color === 'green';
-        
-        // Color palette
-        const baseColor = isGreen ? [100, 200, 120] : [160, 160, 170];
-        const accentColor = isGreen ? [50, 255, 100] : [200, 200, 210];
+        const phase = animeExplosion.phase;
         
         if (phase < 1) {
-          // Phase 1: EXPAND - hexagonal ring expands outward
+          // Phase 1: FAST EXPAND - circle grows rapidly
           const expand = phase;
-          const radius = 20 + expand * 60;
-          const alpha = 1 - expand * 0.3;
+          const radius = expand * 80;
+          const alpha = 0.8 - expand * 0.3;
+          const lineWidth = 4 - expand * 2;
           
-          // Outer hex ring
+          // Expanding ring
           ctx.beginPath();
-          for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
-            const distort = 1 + Math.sin(i * 2 + elapsed * 0.01) * 0.15 * expand;
-            const px = Math.cos(angle) * radius * distort;
-            const py = Math.sin(angle) * radius * distort;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          }
-          ctx.closePath();
-          ctx.strokeStyle = `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, ${alpha})`;
-          ctx.lineWidth = 3 - expand * 2;
+          ctx.arc(0, 0, radius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(100, 220, 120, ${alpha})`;
+          ctx.lineWidth = Math.max(1, lineWidth);
           ctx.stroke();
           
-          // Inner shockwave
+          // Inner fill fading
           ctx.beginPath();
-          ctx.arc(0, 0, radius * 0.6, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${alpha * 0.5})`;
-          ctx.lineWidth = 2;
-          ctx.stroke();
+          ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(150, 255, 150, ${alpha * 0.3})`;
+          ctx.fill();
           
         } else if (phase < 2) {
-          // Phase 2: DISTORT - fragments scatter and twist
-          const distort = phase - 1;
-          const fragmentCount = 8;
+          // Phase 2: COLLAPSE - ring shrinks back quickly
+          const collapse = phase - 1;
+          const radius = 80 * (1 - collapse * 0.7);
+          const alpha = 0.5 + collapse * 0.3;
           
-          for (let i = 0; i < fragmentCount; i++) {
-            const baseAngle = (i / fragmentCount) * Math.PI * 2;
-            const wobble = Math.sin(elapsed * 0.02 + i) * 0.5;
-            const angle = baseAngle + wobble * distort;
-            const dist = 40 + distort * 50 + Math.sin(i * 3) * 20;
-            
-            const fx = Math.cos(angle) * dist;
-            const fy = Math.sin(angle) * dist;
-            
-            // Fragment lines
-            ctx.beginPath();
-            ctx.moveTo(fx * 0.3, fy * 0.3);
-            ctx.lineTo(fx, fy);
-            const alpha = 1 - distort * 0.5;
-            ctx.strokeStyle = `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, ${alpha})`;
-            ctx.lineWidth = 2 - distort;
-            ctx.stroke();
-            
-            // Fragment dots
-            ctx.beginPath();
-            ctx.arc(fx, fy, 3 - distort * 2, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${alpha})`;
-            ctx.fill();
-          }
-          
-        } else {
-          // Phase 3: IMPLODE - everything rushes back to center and vanishes
-          const implode = phase - 2;
-          const reverseRadius = 80 * (1 - implode);
-          const alpha = 1 - implode;
-          
-          // Imploding ring
+          // Collapsing ring gets thicker
           ctx.beginPath();
-          ctx.arc(0, 0, reverseRadius, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, ${alpha * 0.7})`;
-          ctx.lineWidth = 1 + implode * 3;
+          ctx.arc(0, 0, radius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(100, 220, 120, ${alpha})`;
+          ctx.lineWidth = 2 + collapse * 4;
           ctx.stroke();
           
-          // Central flash
-          if (implode > 0.7) {
-            const flashIntensity = (implode - 0.7) / 0.3;
+        } else {
+          // Phase 3: IMPLODE - anime style snap to center
+          const implode = phase - 2;
+          const finalRadius = 24 * (1 - implode);
+          const alpha = 1 - implode * 0.5;
+          
+          // Imploding ring - thick and bright
+          ctx.beginPath();
+          ctx.arc(0, 0, finalRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(150, 255, 150, ${alpha})`;
+          ctx.lineWidth = 6 * (1 - implode);
+          ctx.stroke();
+          
+          // Central flash at the end
+          if (implode > 0.6) {
+            const flash = (implode - 0.6) / 0.4;
+            const flashSize = 15 * (1 - flash);
             ctx.beginPath();
-            ctx.arc(0, 0, 10 * (1 - flashIntensity), 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255, 255, 255, ${flashIntensity * 0.8})`;
+            ctx.arc(0, 0, flashSize, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${flash * 0.9})`;
             ctx.fill();
           }
         }
@@ -1813,11 +1812,25 @@
           
            // Donut-Shape zeichnen (Kammer-Wand)
            // Färbe cyan wenn 6 red particles gesammelt (MAX_RED_STACK)
+           // Or blue flash when enemy killed
            const isChamberStacked = redStackCount >= MAX_RED_STACK;
+           const cursorFlashDuration = 150;
+           const timeSinceCursorHit = Date.now() - cursorHitFlashTime;
+           let cursorColor;
+           if (timeSinceCursorHit < cursorFlashDuration) {
+             // Blue flash when killing enemy
+             cursorColor = '#00aaff';
+           } else if (isIdle) {
+             cursorColor = '#555555';
+           } else if (isChamberStacked) {
+             cursorColor = '#00ffff';
+           } else {
+             cursorColor = '#ffffff';
+           }
            ctx.beginPath();
            ctx.arc(0, 0, chamberOuterRadius, 0, Math.PI * 2);
            ctx.arc(0, 0, Math.max(2, chamberInnerRadius), 0, Math.PI * 2, true); // Loch
-           ctx.fillStyle = isIdle ? '#555555' : (isChamberStacked ? '#00ffff' : '#ffffff');
+           ctx.fillStyle = cursorColor;
            ctx.fill();
           
           // Füllstandsanzeige im Kammer-Rand (optional: subtiler Glow basierend auf Füllstand)
@@ -1890,11 +1903,23 @@
             ctx.fill();
            }
          } else {
-           // Normaler Core (ohne Kammer) - aber auch wenn chamberActive aber cursorEnergy < threshold
+           // Normaler Core (ohne Kammer)
            const isCoreStacked = redStackCount >= MAX_RED_STACK;
+           const coreFlashDuration = 150;
+           const timeSinceCoreHit = Date.now() - cursorHitFlashTime;
+           let coreColor;
+           if (timeSinceCoreHit < coreFlashDuration) {
+             coreColor = '#00aaff';  // Blue flash
+           } else if (isIdle) {
+             coreColor = '#555555';
+           } else if (isCoreStacked) {
+             coreColor = '#00ffff';
+           } else {
+             coreColor = '#ffffff';
+           }
            ctx.beginPath();
            ctx.arc(0, 0, cursorSize, 0, Math.PI * 2);
-           ctx.fillStyle = isIdle ? '#555555' : (isCoreStacked ? '#00ffff' : '#ffffff');
+           ctx.fillStyle = coreColor;
            ctx.fill();
          }
         
