@@ -1049,7 +1049,8 @@
         }
         
         // === LOGO COLLISION - damage! ===
-        const logoCollisionRadius = logoRadius + 20;
+        const currentLogoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
+        const logoCollisionRadius = currentLogoRadius + 20;
         if (distToLogo < logoCollisionRadius) {
           // Vibration and flicker
           logoVibrationTime = now;
