@@ -142,7 +142,8 @@
       // IMPORTS FROM MODULAR LIBRARY
       // ========================================
       import { hexToRgba, colorToHue } from '../lib/utils/color';
-      import { AudioSystem } from '../lib/audio/AudioSystem';
+      // New Tone.js audio system - immersive space ambient with SFX
+      import { ToneAudioSystem as AudioSystem } from '../lib/audio/tone';
       import { HapticManager } from '../lib/haptics/HapticManager';
       import {
         GAME_PHASE_TUTORIAL, GAME_PHASE_COLORED, GAME_PHASE_COMPLETE,
@@ -168,11 +169,11 @@
       // INIT AUDIO ON FIRST INTERACTION
       // ========================================
       let audioInitialized = false;
-      function initAudioOnInteraction() {
+      async function initAudioOnInteraction() {
         if (audioInitialized) return;
         audioInitialized = true;
-        AudioSystem.init();
-        AudioSystem.resume();
+        await AudioSystem.init();
+        await AudioSystem.resume();
       }
       
       document.addEventListener('click', initAudioOnInteraction, { once: false });
@@ -180,10 +181,20 @@
       
       // Pause/resume background music when tab visibility changes
       document.addEventListener('visibilitychange', () => {
-        if (document.hidden && AudioSystem.bgMusicStarted && AudioSystem.bgMusicGain) {
-          AudioSystem.bgMusicGain.gain.linearRampToValueAtTime(0, AudioSystem.ctx.currentTime + 0.5);
-        } else if (!document.hidden && AudioSystem.bgMusicStarted && !AudioSystem.muted && AudioSystem.bgMusicGain) {
-          AudioSystem.bgMusicGain.gain.linearRampToValueAtTime(0.25, AudioSystem.ctx.currentTime + 0.5);
+        // ToneAudioSystem handles this internally via mute state
+        if (document.hidden) {
+          // Mute when tab is hidden (if not already muted)
+          if (!AudioSystem.muted) {
+            AudioSystem.toggleMute();
+            // Mark that we auto-muted so we can auto-unmute
+            (window as any).__autoMutedByVisibility = true;
+          }
+        } else {
+          // Unmute when tab is visible again (only if we auto-muted)
+          if ((window as any).__autoMutedByVisibility && AudioSystem.muted) {
+            AudioSystem.toggleMute();
+            (window as any).__autoMutedByVisibility = false;
+          }
         }
       });
       
@@ -847,8 +858,8 @@
             
 
             
-            // Wenn gerade voll geworden, Red Particle spawnen (einmalig pro Ladung)
-            if (cursorEnergy >= MAX_ENERGY && !redParticle.active && !redParticleActive) {
+            // Wenn gerade voll geworden UND alle Farbphasen abgeschlossen, Red Particle spawnen
+            if (cursorEnergy >= MAX_ENERGY && !redParticle.active && !redParticleActive && coloredBridgePhaseComplete) {
               redParticleSpawnTime = Date.now() + 5000; // 5 Sekunden warten
               redParticleActive = true;
             }
@@ -1015,8 +1026,14 @@
              isInverted = true;
              canvas.style.filter = 'invert(1)';
              redStackCount = 1;
+             // Audio: Underwater mode mit treibendem Puls
+             AudioSystem.setInvertedMode(true);
            } else if (redStackCount < MAX_RED_STACK) {
              redStackCount++;
+             // Max Stack erreicht = epischer Moment!
+             if (redStackCount >= MAX_RED_STACK) {
+               AudioSystem.playMaxStack();
+             }
            }
           
           // Kleiner Partikel-Burst (weniger dramatisch, da in Kammer)
@@ -1042,11 +1059,12 @@
             hue: 0
           });
           
-          // Nächster Red Particle spawnt nach Pause (wenn Kammer nicht voll)
-          if (cursorEnergy >= MAX_ENERGY && chamberParticles.length < CHAMBER_THRESHOLD) {
-            redParticleSpawnTime = Date.now() + 2000;
-            redParticleActive = true;
-          }
+           // Nächster Red Particle spawnt nach Pause (bis MAX_RED_STACK erreicht)
+           // Rote Partikel können bis 6 gehen, nicht nur 5 wie colored particles
+           if (cursorEnergy >= MAX_ENERGY && redStackCount < MAX_RED_STACK) {
+             redParticleSpawnTime = Date.now() + 2000;
+             redParticleActive = true;
+           }
         }
         
         // Off screen - neuer Versuch nach Pause (kein Limit)
@@ -1120,14 +1138,16 @@
           logoVibrationTime = Date.now();
           // Audio feedback: Collection complete
           AudioSystem.playCollectionComplete();
+          // Stärkeres Vibration-Feedback wenn Kammer voll
+          HapticManager.levelUp();
         }
         
         // Aktuelle Farbe für diese Phase
         const currentColor = CHAMBER_COLORS_SEQUENCE[currentColorPhase];
         
-        // Spawn farbige Partikel (alle 2 Sekunden)
-        if (Date.now() > coloredParticleSpawnTime && 
-            coloredParticles.length < 2 && 
+        // Spawn farbige Partikel (alle 1.5 Sekunden)
+        if (Date.now() > coloredParticleSpawnTime &&
+            coloredParticles.length < 4 &&
             chamberParticles.length < CHAMBER_THRESHOLD) {
           
           const color = currentColor;
@@ -1142,9 +1162,9 @@
             default: x = -20; y = Math.random() * H;
           }
           
-          // Richtung grob zum Cursor
-          const targetX = cursorX + (Math.random() - 0.5) * 200;
-          const targetY = cursorY + (Math.random() - 0.5) * 200;
+          // Richtung gezielt zum Cursor für bessere Capture-Experience
+          const targetX = cursorX;
+          const targetY = cursorY;
           const dx = targetX - x;
           const dy = targetY - y;
           const dist = Math.sqrt(dx*dx + dy*dy);
@@ -1161,8 +1181,8 @@
             alpha: 0.9  // 10% weniger intensiv
           });
           
-          // Nächster Spawn in 2 Sekunden
-          coloredParticleSpawnTime = Date.now() + 2000;
+          // Nächster Spawn in 1.5 Sekunden
+          coloredParticleSpawnTime = Date.now() + 1500;
         }
         
         // Update & Draw colored particles
@@ -1225,7 +1245,7 @@
             p.vy += (dyCursor / distCursor) * pullStrength;
           }
 
-          if (distCursor < 30 && canCapture) {
+          if (distCursor < 45 && canCapture) {
             // SOFORT als captured markieren - verhindert jede weitere Verarbeitung
             p.captured = true;
 
@@ -1480,9 +1500,15 @@
       // MINI-BRIDGE SPAWN - Big Bang from Logo Center
       // ========================================
       function spawnMiniBridge() {
+        // Nur spawnen wenn wir noch in einer gültigen Farbphase sind (0, 1, 2)
+        if (currentColorPhase >= CHAMBER_COLORS_SEQUENCE.length) {
+          console.log('Alle Farbphasen abgeschlossen, keine Bridge mehr');
+          return;
+        }
+
         // Aktuelle Farbe für diese Phase
         const dominantColor = CHAMBER_COLORS_SEQUENCE[currentColorPhase];
-        
+
         // Audio & Haptic: Mini-Bridge Spawn - big bang effect
         AudioSystem.playBridgeSpawn();
         HapticManager.levelUp();
@@ -1558,16 +1584,20 @@
           upgradeLevel++;
           logoBaseScale += 0.18;
           AudioSystem.playLevelUp(upgradeLevel);
+          AudioSystem.setGameLevel(upgradeLevel); // Ambient passt sich an
+          AudioSystem.triggerSwell(2); // Epischer Swell bei Level-Up
           HapticManager.levelUp();
         }
-        
-        // Kammer leeren und Phase weiter
+
+        // Reset chamber state (aber NICHT red particle state - die sind unabhängig)
         chamberParticles.length = 0;
-        cursorEnergy = 0;
+        cursorEnergy = 0;  // WICHTIG: Energie zurücksetzen
         logoReadyForDischarge = false;
+
+        // Advance to next color phase
         currentColorPhase++;
-        
-        // Check if all phases complete
+
+        // Check if all 3 colored phases complete (orange=0, brown=1, green=2 → nach green ist phase=3)
         if (currentColorPhase >= 3) {
           coloredBridgePhaseComplete = true;
         }
@@ -1699,6 +1729,20 @@
       function render() {
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, W, H);
+        
+        // === AUDIO-VISUAL SYNC ===
+        // Intensity basiert auf Energie + Level für immersive Symbiose
+        const audioIntensity = Math.min(1, 0.3 + cursorEnergy * 0.4 + (upgradeLevel / 10) * 0.3);
+        AudioSystem.setIntensity(audioIntensity);
+        
+        // Chamber crackling - electric hum from caught particles
+        AudioSystem.setChamberCrackling(chamberParticles.length);
+        
+        // Bridge attraction sound - when logo or mini-bridges are attracting/vibrating
+        const bridgeAttractionStrength = logoReadyForDischarge ? 
+          Math.min(1, (Date.now() - logoVibrationTime) / 2000) : 
+          (hoveredBridgeIndex >= 0 ? 0.6 : 0);
+        AudioSystem.setBridgeAttraction(bridgeAttractionStrength);
         
         // drawGrid(); // Entfernt - zu dezent
         // Check idle state
@@ -1874,14 +1918,16 @@
             logoBaseScale += 0.18;
           }
           
-          // Audio & Haptic: Discharge
+          // Audio & Haptic: Discharge - epischer Moment!
           AudioSystem.playDischarge(upgradeLevel);
+          AudioSystem.triggerSwell(2.5); // Ambient crescendo
           HapticManager.discharge();
           
           // Audio & Haptic: Level Up (wenn Level gestiegen)
           if (upgradeLevel > prevLevel) {
             setTimeout(() => {
               AudioSystem.playLevelUp(upgradeLevel);
+              AudioSystem.setGameLevel(upgradeLevel); // Ambient evolution
               HapticManager.levelUp();
             }, 150);
           }
@@ -1891,6 +1937,8 @@
              redStackCount = 0;
              isInverted = false;
              canvas.style.filter = '';
+             // Audio: Zurück zum normalen epischen Sound
+             AudioSystem.setInvertedMode(false);
            }
 
            // Nach Discharge: Red Particles wieder aktivieren wenn Level < 10
@@ -2051,6 +2099,8 @@
             if (isInverted) {
               isInverted = false;
               canvas.style.filter = '';
+              // Audio: Zurück zum normalen epischen Sound
+              AudioSystem.setInvertedMode(false);
             }
             redStackCount = 0;
             
