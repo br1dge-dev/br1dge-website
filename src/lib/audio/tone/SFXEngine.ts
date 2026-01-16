@@ -281,6 +281,23 @@ class SFXEngineClass {
   }
   
   /**
+   * Red Heart Capture - Special ethereal sound for inverted mode
+   */
+  playRedHeartCapture(): void {
+    if (!this.initialized) return;
+    
+    const now = Tone.now();
+    
+    // ethereal swell up
+    if (this.harmonicSynth) {
+      this.harmonicSynth.triggerAttackRelease(['G5', 'D6'], '2n', now, 0.4);
+    }
+    
+    // Subtle swell
+    AmbientSoundscape.swell(2);
+  }
+  
+  /**
    * Discharge - Powerful, cinematic release
    */
   playDischarge(params: SFXParams = {}): void {
