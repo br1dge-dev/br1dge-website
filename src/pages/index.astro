@@ -1071,8 +1071,65 @@
         // === APPLY GRAVITY TO STARS ===
         applySpiralgravityToStars(spiralEnemy.x, spiralEnemy.y, spiralEnemy.radius, spiralEnemy.rotation, spiralEnemy.arms);
         
+        // === DRAW ORANGE CORE STAR ===
+        drawSpiralCore(spiralEnemy.x, spiralEnemy.y, spiralEnemy.rotation, spiralEnemy.dying ? 1 - spiralEnemy.deathProgress : 1);
+        
         // Play continuous suction sound
         AudioSystem.setSpiralSuction(Math.min(1, spiralEnemy.radius / 100));
+      }
+      
+      // Draw the spiral's orange glowing core - spiky star shape
+      function drawSpiralCore(x, y, rotation, intensity) {
+        if (intensity <= 0) return;
+        
+        const time = Date.now() / 1000;
+        const pulseSize = 1 + Math.sin(time * 4) * 0.15;  // Pulsing
+        const flicker = 0.85 + Math.random() * 0.15;  // Flicker
+        
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotation * 0.5);  // Slow rotation
+        
+        // Outer glow - soft radial gradient
+        const glowRadius = 25 * pulseSize * intensity;
+        const outerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
+        outerGlow.addColorStop(0, `rgba(255, 140, 50, ${0.6 * intensity * flicker})`);
+        outerGlow.addColorStop(0.4, `rgba(255, 100, 30, ${0.3 * intensity * flicker})`);
+        outerGlow.addColorStop(1, 'rgba(255, 80, 20, 0)');
+        ctx.fillStyle = outerGlow;
+        ctx.fillRect(-glowRadius, -glowRadius, glowRadius * 2, glowRadius * 2);
+        
+        // Draw spiky star shape (6-8 points)
+        const points = 6 + Math.floor(Math.sin(time) + 1);
+        const outerRadius = 12 * pulseSize * intensity;
+        const innerRadius = 4 * pulseSize * intensity;
+        
+        ctx.beginPath();
+        for (let i = 0; i < points * 2; i++) {
+          const angle = (i * Math.PI) / points;
+          const radius = i % 2 === 0 ? outerRadius : innerRadius;
+          const px = Math.cos(angle) * radius;
+          const py = Math.sin(angle) * radius;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        
+        // Fill with gradient
+        const starGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, outerRadius);
+        starGrad.addColorStop(0, `rgba(255, 220, 180, ${intensity * flicker})`);  // Hot white center
+        starGrad.addColorStop(0.3, `rgba(255, 160, 60, ${0.9 * intensity * flicker})`);  // Orange
+        starGrad.addColorStop(1, `rgba(255, 100, 30, ${0.7 * intensity * flicker})`);  // Deep orange
+        ctx.fillStyle = starGrad;
+        ctx.fill();
+        
+        // Bright core point
+        ctx.beginPath();
+        ctx.arc(0, 0, 3 * intensity, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 240, ${intensity * flicker})`;
+        ctx.fill();
+        
+        ctx.restore();
       }
       
       // Apply spiral gravity to ambient stars - this is how we "see" the spiral
