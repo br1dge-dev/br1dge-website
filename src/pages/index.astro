@@ -2322,8 +2322,8 @@
         const ringsFullForDischarge = cursorEnergy >= requiredEnergyForDischarge;
         const chamberFull = chamberParticles.length >= CHAMBER_THRESHOLD;
         
-        if (gamePhase !== GAME_PHASE_TUTORIAL && dist < logoRadius) {
-          // Check if all conditions met for discharge
+        if (gamePhase !== GAME_PHASE_TUTORIAL && dist < logoRadius && !isInverted) {
+          // Check if all conditions met for discharge (ONLY in normal mode, not inverted)
           if (logoReadyForDischarge && chamberFull && allRingsEmitted && ringsFullForDischarge) {
             spawnMiniBridge();
             return;
