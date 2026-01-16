@@ -333,26 +333,27 @@ class SFXEngineClass {
     const now = Tone.now();
     
     // Warm sub impact - like a deep bell
+    // Use slightly future time to avoid timing conflicts
     if (this.subSynth) {
       try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
-      this.subSynth.triggerAttackRelease('D2', '4n', now, 0.7);
+      this.subSynth.triggerAttackRelease('D2', '4n', now + 0.05, 0.7);
     }
     
     // Magical chord - major with added 9th (D, F#, A, E) = dreamy, hopeful
-    this.melodicSynth?.triggerAttackRelease(['D3', 'F#3', 'A3'], '4n', now + 0.02, 0.5);
+    this.melodicSynth?.triggerAttackRelease(['D3', 'F#3', 'A3'], '4n', now + 0.08, 0.5);
     
     // Shimmering high harmonics - like stardust
     if (this.harmonicSynth) {
-      this.harmonicSynth.triggerAttackRelease('D5', '4n', now + 0.05, 0.35);
-      this.harmonicSynth.triggerAttackRelease('A5', '2n', now + 0.12, 0.25);
-      this.harmonicSynth.triggerAttackRelease('E6', '2n', now + 0.2, 0.15);
+      this.harmonicSynth.triggerAttackRelease('D5', '4n', now + 0.12, 0.35);
+      this.harmonicSynth.triggerAttackRelease('A5', '2n', now + 0.18, 0.25);
+      this.harmonicSynth.triggerAttackRelease('E6', '2n', now + 0.25, 0.15);
     }
     
     // Soft whoosh - like wind, not harsh
     if (this.noiseFilter && this.noiseSynth) {
-      this.noiseFilter.frequency.setValueAtTime(1200, now);
+      this.noiseFilter.frequency.setValueAtTime(1200, now + 0.1);
       this.noiseFilter.frequency.exponentialRampTo(300, 0.5);
-      this.noiseSynth.triggerAttackRelease('16n', now + 0.03);
+      this.noiseSynth.triggerAttackRelease('16n', now + 0.1);
     }
   }
   

@@ -1165,10 +1165,13 @@
           chamberSpawnPhase = 0;
         }
         
-        // Check ob 5 Partikel gesammelt UND alle Ringe voll - Logo ready for discharge
+        // Check ob 5 Partikel gesammelt UND freigeschaltete Ringe voll - Logo ready for discharge
         // Discharge ist NUR möglich wenn BEIDE Bedingungen erfüllt sind
-        const allRingsFull = cursorEnergy >= MAX_ENERGY;
-        if (chamberParticles.length >= CHAMBER_THRESHOLD && allRingsFull && !logoReadyForDischarge) {
+        // Bei Phase 0: 3 Ringe = 60%, Phase 1: 4 Ringe = 80%, Phase 2: 5 Ringe = 100%
+        const unlockedRingsForCheck = getCurrentRings();
+        const requiredEnergy = (unlockedRingsForCheck / 5) * MAX_ENERGY;
+        const allUnlockedRingsFull = cursorEnergy >= requiredEnergy;
+        if (chamberParticles.length >= CHAMBER_THRESHOLD && allUnlockedRingsFull && !logoReadyForDischarge) {
           logoReadyForDischarge = true;
           logoVibrationTime = Date.now();
           // Audio feedback: Collection complete
@@ -1884,7 +1887,10 @@
         
         // CHAMBER DISCHARGE: Only when ALL rings are FULL and ALL previous rings have been emitted
         const allRingsEmitted = ringsExpanded >= ringsMax;
-        const ringsFullForDischarge = cursorEnergy >= MAX_ENERGY;
+        // Check if UNLOCKED rings are full (not all 5)
+        const unlockedRingsCount = getCurrentRings();
+        const requiredEnergyForDischarge = (unlockedRingsCount / 5) * MAX_ENERGY;
+        const ringsFullForDischarge = cursorEnergy >= requiredEnergyForDischarge;
         const chamberFull = chamberParticles.length >= CHAMBER_THRESHOLD;
         
         if (gamePhase !== GAME_PHASE_TUTORIAL && dist < logoRadius) {
