@@ -315,11 +315,8 @@
       let logoReadyForDischarge = false;
       let logoVibrationTime = 0;
       
-       // Phase tracking: colored bridges first, then red particles
-       let coloredBridgePhaseComplete = false;
-
-       // Track spawned bridges per phase to prevent duplicates (0=orange, 1=brown, 2=green)
-       const spawnedBridgesPerPhase = [false, false, false];
+      // Phase tracking: colored bridges first, then red particles
+      let coloredBridgePhaseComplete = false;
       
       // Game complete state (für Restart-Button nach Modal)
       let gameCompleted = false;
@@ -861,8 +858,8 @@
             
 
             
-            // Wenn gerade voll geworden, Red Particle spawnen (einmalig pro Ladung)
-            if (cursorEnergy >= MAX_ENERGY && !redParticle.active && !redParticleActive) {
+            // Wenn gerade voll geworden UND alle Farbphasen abgeschlossen, Red Particle spawnen
+            if (cursorEnergy >= MAX_ENERGY && !redParticle.active && !redParticleActive && coloredBridgePhaseComplete) {
               redParticleSpawnTime = Date.now() + 5000; // 5 Sekunden warten
               redParticleActive = true;
             }
@@ -1499,27 +1496,22 @@
         ctx.restore();
       }
       
-       // ========================================
-       // MINI-BRIDGE SPAWN - Big Bang from Logo Center
-       // ========================================
-       function spawnMiniBridge() {
-         // Check ob für diese Phase bereits eine Bridge existiert (verhindert Duplicates)
-         if (currentColorPhase < spawnedBridgesPerPhase.length && spawnedBridgesPerPhase[currentColorPhase]) {
-           console.log(`Bridge für Phase ${currentColorPhase} bereits vorhanden, überspringe`);
-           return;
-         }
+      // ========================================
+      // MINI-BRIDGE SPAWN - Big Bang from Logo Center
+      // ========================================
+      function spawnMiniBridge() {
+        // Nur spawnen wenn wir noch in einer gültigen Farbphase sind (0, 1, 2)
+        if (currentColorPhase >= CHAMBER_COLORS_SEQUENCE.length) {
+          console.log('Alle Farbphasen abgeschlossen, keine Bridge mehr');
+          return;
+        }
 
-         // Aktuelle Farbe für diese Phase
-         const dominantColor = CHAMBER_COLORS_SEQUENCE[currentColorPhase];
+        // Aktuelle Farbe für diese Phase
+        const dominantColor = CHAMBER_COLORS_SEQUENCE[currentColorPhase];
 
-         // Markiere diese Phase als abgeschlossen
-         if (currentColorPhase < spawnedBridgesPerPhase.length) {
-           spawnedBridgesPerPhase[currentColorPhase] = true;
-         }
-
-         // Audio & Haptic: Mini-Bridge Spawn - big bang effect
-         AudioSystem.playBridgeSpawn();
-         HapticManager.levelUp();
+        // Audio & Haptic: Mini-Bridge Spawn - big bang effect
+        AudioSystem.playBridgeSpawn();
+        HapticManager.levelUp();
         
         // URL für diese Farbe
         const url = COLOR_URLS[dominantColor] || null;
@@ -1597,24 +1589,15 @@
           HapticManager.levelUp();
         }
 
-        // Progress phase tracking
-        coloredBridgePhaseComplete = true;
-
-        // Reset ALL chamber state including red particles/inverted mode
+        // Reset chamber state (aber NICHT red particle state - die sind unabhängig)
         chamberParticles.length = 0;
-        redStackCount = 0;
-        isInverted = false;
-        canvas.style.filter = '';
-        AudioSystem.setInvertedMode(false);
-
+        cursorEnergy = 0;  // WICHTIG: Energie zurücksetzen
         logoReadyForDischarge = false;
 
-        // Advance to next color phase (unless already at green)
-        if (currentColorPhase < CHAMBER_COLORS_SEQUENCE.length - 1) {
-          currentColorPhase++;
-        }
+        // Advance to next color phase
+        currentColorPhase++;
 
-        // Check if all phases complete
+        // Check if all 3 colored phases complete (orange=0, brown=1, green=2 → nach green ist phase=3)
         if (currentColorPhase >= 3) {
           coloredBridgePhaseComplete = true;
         }
