@@ -79,18 +79,20 @@ class AmbientSoundscapeClass {
     this.subGain.connect(mainInput);
     
     // === 2. ROTATING DRONES - Multiple instruments ===
+    // Softer filter for less presence
     this.droneFilter = new Tone.Filter({
-      frequency: 900,
+      frequency: 600,  // Lower cutoff - more muffled
       type: 'lowpass',
-      rolloff: -12,
+      rolloff: -24,    // Steeper rolloff for softer highs
+      Q: 0.5,          // Low resonance
     });
     this.droneFilter.connect(mainInput);
     this.droneFilter.connect(reverbSend);
     
-    // Drone 0: Fat Triangle (Warm, full)
+    // Drone 0: Soft Triangle (Warm, subtle)
     const drone0 = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'fattriangle', spread: 25, count: 3 },
-      envelope: { attack: 3, decay: 1, sustain: 0.85, release: 4 },
+      oscillator: { type: 'triangle' },  // Single osc, not fat
+      envelope: { attack: 5, decay: 2, sustain: 0.6, release: 6 },  // Slower, softer
     });
     const gain0 = new Tone.Gain(0);
     drone0.connect(gain0);
@@ -98,12 +100,12 @@ class AmbientSoundscapeClass {
     this.droneSynths.push(drone0);
     this.droneGains.push(gain0);
     
-    // Drone 1: FM Synth (Complex, evolving)
+    // Drone 1: Gentle FM Synth (Subtle movement)
     const drone1 = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 1.5,
-      modulationIndex: 2.5,
-      envelope: { attack: 4, decay: 2, sustain: 0.8, release: 5 },
-      modulationEnvelope: { attack: 3, decay: 1, sustain: 0.7, release: 4 },
+      harmonicity: 1.0,       // Less harsh harmonics
+      modulationIndex: 1.2,   // Subtle modulation
+      envelope: { attack: 6, decay: 3, sustain: 0.5, release: 7 },
+      modulationEnvelope: { attack: 5, decay: 2, sustain: 0.4, release: 5 },
     });
     const gain1 = new Tone.Gain(0);
     drone1.connect(gain1);
@@ -111,10 +113,10 @@ class AmbientSoundscapeClass {
     this.droneSynths.push(drone1);
     this.droneGains.push(gain1);
     
-    // Drone 2: Fat Sawtooth (Rich, brassy)
+    // Drone 2: Soft Sine (Pure, ambient)
     const drone2 = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'fatsawtooth', spread: 15, count: 3 },
-      envelope: { attack: 3.5, decay: 1, sustain: 0.75, release: 4 },
+      oscillator: { type: 'sine' },  // Pure sine - very soft
+      envelope: { attack: 5, decay: 2, sustain: 0.55, release: 6 },
     });
     const gain2 = new Tone.Gain(0);
     drone2.connect(gain2);
@@ -122,29 +124,35 @@ class AmbientSoundscapeClass {
     this.droneSynths.push(drone2);
     this.droneGains.push(gain2);
     
-    // === 3. STRINGS - Emotionale Streicher ===
+    // === 3. STRINGS - Soft, distant Streicher ===
     this.stringChorus = new Tone.Chorus({
-      frequency: 0.3,
-      depth: 0.8,
-      wet: 0.5,
+      frequency: 0.15,   // Slower modulation
+      depth: 0.4,        // Less intense
+      wet: 0.3,          // More dry signal
     }).start();
+    
+    // Add gentle filter before strings
+    const stringFilter = new Tone.Filter({
+      frequency: 1200,
+      type: 'lowpass',
+      rolloff: -12,
+    });
     
     this.stringSynth = new Tone.PolySynth(Tone.Synth, {
       oscillator: { 
-        type: 'fatsawtooth',
-        spread: 30,
-        count: 3,
+        type: 'triangle',  // Softer than sawtooth
       },
       envelope: {
-        attack: 2.5,
-        decay: 1,
-        sustain: 0.7,
-        release: 3,
+        attack: 4,       // Slower fade in
+        decay: 2,
+        sustain: 0.5,    // Lower sustain
+        release: 5,      // Longer release
       },
     });
     
     this.stringGain = new Tone.Gain(0);
-    this.stringSynth.connect(this.stringChorus);
+    this.stringSynth.connect(stringFilter);
+    stringFilter.connect(this.stringChorus);
     this.stringChorus.connect(this.stringGain);
     this.stringGain.connect(mainInput);
     this.stringGain.connect(reverbSend);
@@ -240,18 +248,18 @@ class AmbientSoundscapeClass {
     
     const now = Tone.now();
     
-    // Start sub oscillator
+    // Start sub oscillator - subtle foundation
     this.subOsc?.start(now);
-    this.subGain?.gain.linearRampTo(0.25, 4);
+    this.subGain?.gain.linearRampTo(0.12, 4);  // Reduced from 0.25
     
-    // Fade in first drone
+    // Fade in first drone - much quieter
     this.currentDroneIndex = 0;
-    this.droneGains[0]?.gain.linearRampTo(0.15, 6);
+    this.droneGains[0]?.gain.linearRampTo(0.06, 6);  // Reduced from 0.15
     
-    // Fade in other layers gradually
-    this.stringGain?.gain.linearRampTo(0.12, 8);
-    this.brassGain?.gain.linearRampTo(0.06, 10);
-    this.shimmerGain?.gain.linearRampTo(0.08, 12);
+    // Fade in other layers gradually - all quieter
+    this.stringGain?.gain.linearRampTo(0.05, 8);   // Reduced from 0.12
+    this.brassGain?.gain.linearRampTo(0.02, 10);   // Reduced from 0.06
+    this.shimmerGain?.gain.linearRampTo(0.04, 12); // Reduced from 0.08
     
     // Start with first chord
     this.playChord(0);
@@ -284,19 +292,19 @@ class AmbientSoundscapeClass {
     const prevDroneIndex = this.currentDroneIndex;
     this.currentDroneIndex = (this.currentDroneIndex + 1) % this.droneSynths.length;
     
-    // Crossfade between drones
+    // Crossfade between drones - slower, more gentle
     const prevDrone = this.droneSynths[prevDroneIndex];
     const prevGain = this.droneGains[prevDroneIndex];
     const newDrone = this.droneSynths[this.currentDroneIndex];
     const newGain = this.droneGains[this.currentDroneIndex];
     
-    // Fade out old drone
-    prevGain?.gain.linearRampTo(0.0001, 3);
-    setTimeout(() => prevDrone?.releaseAll(), 3000);
+    // Fade out old drone - slower
+    prevGain?.gain.linearRampTo(0.0001, 5);
+    setTimeout(() => prevDrone?.releaseAll(), 5000);
     
-    // Fade in new drone with chord
-    newDrone?.triggerAttack(chord.organ, now + 0.5);
-    newGain?.gain.linearRampTo(0.15, 3);
+    // Fade in new drone with chord - quieter
+    newDrone?.triggerAttack(chord.organ, now + 1);  // Delayed start
+    newGain?.gain.linearRampTo(0.06, 5);  // Reduced from 0.15
     
     // Crossfade strings
     this.stringSynth?.releaseAll(now);
@@ -415,12 +423,12 @@ class AmbientSoundscapeClass {
     
     if (!this.initialized || !this._active) return;
     
-    // Scale all layers based on intensity
-    const subLevel = 0.15 + this.intensity * 0.2;
-    const organLevel = 0.1 + this.intensity * 0.15;
-    const stringLevel = 0.08 + this.intensity * 0.15;
-    const brassLevel = this.intensity > 0.4 ? 0.03 + (this.intensity - 0.4) * 0.15 : 0.001;
-    const shimmerLevel = 0.05 + this.intensity * 0.1;
+    // Scale all layers based on intensity - much more subtle overall
+    const subLevel = 0.08 + this.intensity * 0.1;      // Reduced significantly
+    const organLevel = 0.04 + this.intensity * 0.06;   // Much quieter drones
+    const stringLevel = 0.03 + this.intensity * 0.06;  // Distant strings
+    const brassLevel = this.intensity > 0.5 ? 0.01 + (this.intensity - 0.5) * 0.06 : 0.001;  // Brass only at high intensity
+    const shimmerLevel = 0.02 + this.intensity * 0.05; // Subtle sparkle
     
     this.subGain?.gain.linearRampTo(subLevel, 2);
     // Only adjust active drone
@@ -429,8 +437,8 @@ class AmbientSoundscapeClass {
     this.brassGain?.gain.linearRampTo(brassLevel, 2);
     this.shimmerGain?.gain.linearRampTo(shimmerLevel, 2);
     
-    // Open filter with intensity
-    const filterFreq = 500 + this.intensity * 2000;
+    // Keep filter more closed for softer sound
+    const filterFreq = 400 + this.intensity * 800;  // Reduced range
     this.droneFilter?.frequency.linearRampTo(filterFreq, 2);
   }
   
