@@ -212,6 +212,8 @@
       
       // Logo Energie-Ringe (akkumulierte Energie-Releases)
       const logoOutlines = [];
+      let ringsExpanded = 0;  // Track how many rings have been emitted
+      let ringsMax = 5;  // Will be set based on upgradeLevel
       
       // Cursor energy (von Partikeln gesammelt)
       let cursorEnergy = 0;
@@ -466,10 +468,10 @@
           
           <div style="font-size: 7rem; font-weight: 100; margin-bottom: 0.5rem; letter-spacing: -0.05em;">∩</div>
           <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
-            <h1 style="font-size: 2rem; font-weight: 200; letter-spacing: 0.3em; text-transform: uppercase; margin: 0;">Level 10</h1>
+            <h1 style="font-size: 2rem; font-weight: 200; letter-spacing: 0.3em; text-transform: uppercase; margin: 0;">Congratulations</h1>
             <button id="restart-btn" style="background: transparent; border: none; color: rgba(0,0,0,0.3); font-size: 0.9rem; cursor: none; transition: all 0.3s; font-family: inherit;" title="Restart">↻</button>
           </div>
-          <p style="font-size: 0.9rem; margin-bottom: 2rem; opacity: 0.5; font-weight: 300;">Good job! You may now follow me</p>
+          <p style="font-size: 0.9rem; margin-bottom: 2rem; opacity: 0.5; font-weight: 300;">You made it this far, treat yourself with a follow. Tell me what you think about my website!</p>
           
           <div style="display: flex; gap: 1.2rem; margin-bottom: 1.5rem;">
             <a href="https://x.com/br1dge_eth" target="_blank" class="modal-link" style="color: #000; text-decoration: none; font-size: 0.9rem; padding: 0.7rem 1.8rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">X / TWITTER</a>
@@ -499,9 +501,7 @@
               </a>
             </div>
           </details>
-          
-          <p style="font-size: 0.75rem; opacity: 0.5; font-weight: 300; text-align: center; max-width: 280px; line-height: 1.5;">Kudos to Switch Angel for the awesome track! Make sure to <a href="https://www.youtube.com/watch?v=hFSwWzxrqUA" target="_blank" style="color: #000; text-decoration: underline;">subscribe to her channel</a> →</p>
-          
+           
           <div id="modal-cursor" style="position: fixed; pointer-events: none; z-index: 1001;">
             <div style="width: 6px; height: 6px; background: #000; border-radius: 50%;"></div>
             <div style="position: absolute; top: -9px; left: -9px; width: 24px; height: 24px; border: 1px solid rgba(0,0,0,0.3); border-radius: 50%;"></div>
@@ -667,24 +667,28 @@
         
         // Chromatic Aberration - sichtbar, ab Level 5 nur noch geringe Verstärkung
         if (upgradeLevel > 0) {
-          // Offset: Level 1-4 gentle growth, level 5+ almost flat
+          // Offset: Level 1-4 gentle growth, level 5+ almost flat, lvl 8-10 minimal
           let offset;
           if (upgradeLevel <= 4) {
             offset = 1.5 + upgradeLevel * 0.6; // 1.5-3.9px
+          } else if (upgradeLevel <= 7) {
+            offset = 3.9 + (upgradeLevel - 4) * 0.02; // 3.9-4.5px
           } else {
-            // Level 5+: barely increases (max ~4.2px)
-            offset = 3.9 + (upgradeLevel - 4) * 0.05;
+            // Level 8-10: barely visible (max ~4.7px)
+            offset = 4.5 + (upgradeLevel - 7) * 0.02;
           }
           
           const effectiveOffset = offset;
           
-          // Alpha: very subtle, level 5+ barely visible
+          // Alpha: very subtle, level 5+ barely visible, lvl 8-10 minimal
           let alphaBase;
           if (upgradeLevel <= 4) {
             alphaBase = 0.08 + upgradeLevel * 0.025; // 0.08-0.18
+          } else if (upgradeLevel <= 7) {
+            alphaBase = 0.18 + (upgradeLevel - 4) * 0.004; // 0.18-0.19
           } else {
-            // Level 5+: max ~0.2
-            alphaBase = 0.18 + (upgradeLevel - 4) * 0.004;
+            // Level 8-10: max ~0.195
+            alphaBase = 0.19 + (upgradeLevel - 7) * 0.002;
           }
           
           // Single layer - cleaner look
@@ -1842,14 +1846,19 @@
           hue: 0
         });
         
-        // CHAMBER DISCHARGE: Wenn Logo ready und auf Logo geklickt (Colored Particles)
+        // CHAMBER DISCHARGE: Only when ALL rings have been emitted
+        const allRingsEmitted = ringsExpanded >= ringsMax;
         if (gamePhase !== GAME_PHASE_TUTORIAL &&
-            dist < logoRadius && logoReadyForDischarge && chamberParticles.length >= CHAMBER_THRESHOLD) {
+            dist < logoRadius && logoReadyForDischarge && chamberParticles.length >= CHAMBER_THRESHOLD && allRingsEmitted) {
           spawnMiniBridge();
           return;
         }
 
         // TUTORIAL DISCHARGE: Click logo at threshold to progress tutorial
+        // Tutorial has its own ring system (3 rings), always allow discharge
+        const tutorialRingsMax = 3;
+        ringsMax = tutorialRingsMax;
+        ringsExpanded = tutorialRingsMax;  // Tutorial allows immediate discharge
         if (gamePhase === GAME_PHASE_TUTORIAL && dist < logoRadius && logoReadyForDischarge) {
           // Start background music on first discharge
           if (!AudioSystem.bgMusicStarted) {
@@ -1879,6 +1888,10 @@
             logoOutlines.push({ alpha: 0.8, radius: 10, hue: 200 });
             logoTargetScale = 1.15;
             setTimeout(() => { logoTargetScale = 1; }, 150);
+            
+            // Set tutorial rings max (4 for phase 2)
+            ringsMax = 4;
+            ringsExpanded = 4;  // Allow immediate discharge
 
             // Transition to colored particles after short delay
             setTimeout(() => {
@@ -1943,25 +1956,30 @@
              redParticleSpawnTime = Date.now() + 3000; // 3s warten vor nächstem Red Particle
            }
           
-          // Start background music on first discharge (earlier than before)
-          if (!AudioSystem.bgMusicStarted) {
-            AudioSystem.startBgMusic();
-          }
-          
-          const intensity = cursorEnergy;
-          const releaseHue = isMaxStack ? 45 : (upgradeLevel * 40) % 360; // Gold bei max stack
-          
-          // Mehr Ringe bei höheren Levels / max stack
-          const ringCount = isMaxStack ? 30 : (5 + upgradeLevel * 2);
-          for (let o = 0; o < ringCount; o++) {
-            setTimeout(() => {
-              logoOutlines.push({
-                alpha: 1,
-                radius: 10 + o * 6,
-                hue: isMaxStack ? (45 + o * 5) % 60 : (releaseHue + o * 15) % 360
-              });
-            }, o * (isMaxStack ? 10 : 20));
-          }
+           // Start background music on first discharge (earlier than before)
+           if (!AudioSystem.bgMusicStarted) {
+             AudioSystem.startBgMusic();
+           }
+           
+           const intensity = cursorEnergy;
+           const releaseHue = isMaxStack ? 45 : (upgradeLevel * 40) % 360; // Gold bei max stack
+           
+           // Set max rings for this discharge - can only discharge again when all are emitted
+           ringsMax = isMaxStack ? 30 : (5 + upgradeLevel * 2);
+           ringsExpanded = 0;  // Reset counter
+           
+           // Mehr Ringe bei höheren Levels / max stack
+           const ringCount = ringsMax;
+           for (let o = 0; o < ringCount; o++) {
+             setTimeout(() => {
+               logoOutlines.push({
+                 alpha: 1,
+                 radius: 10 + o * 6,
+                 hue: isMaxStack ? (45 + o * 5) % 60 : (releaseHue + o * 15) % 360
+               });
+               ringsExpanded++;  // Track emitted rings
+             }, o * (isMaxStack ? 10 : 20));
+           }
           
           // Scale punch - stärker bei höheren Levels / max stack
           logoTargetScale = isMaxStack ? 1.5 : (1.2 + upgradeLevel * 0.05);
