@@ -332,6 +332,28 @@
       // Ambient floating particles
       const ambientParticles = [];
       
+      // === SPIRAL ENEMY ===
+      // Invisible spiral that sucks in stars, moves toward logo
+      // Only visible through gravitational effect on stars
+      let spiralEnemy = {
+        active: false,
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        rotation: 0,
+        arms: 3,  // 3-5 arms, varies per spawn
+        radius: 80,  // gravitational influence radius
+        dying: false,  // true when dissolving after cursor collision
+        deathTime: 0,
+        deathProgress: 0
+      };
+      let lastSpiralSpawnTime = 0;
+      const SPIRAL_SPAWN_INTERVAL = 15000;  // 15 seconds
+      const SPIRAL_SPEED = 0.4;  // slow movement toward logo
+      const SPIRAL_FLEE_SPEED = 2.5;  // faster when fleeing cursor
+      const SPIRAL_DEATH_DURATION = 3500;  // 3.5 seconds to dissolve
+      
       function resize() {
         W = canvas.width = window.innerWidth;
         H = canvas.height = window.innerHeight;
@@ -928,7 +950,165 @@
         }
       }
       
-
+      // === SPIRAL ENEMY LOGIC ===
+      function updateAndDrawSpiralEnemy() {
+        const now = Date.now();
+        
+        // Only spawn after tutorial phase
+        if (gamePhase === GAME_PHASE_TUTORIAL) {
+          lastSpiralSpawnTime = now;
+          return;
+        }
+        
+        // Spawn new spiral every 15 seconds if none active
+        if (!spiralEnemy.active && now - lastSpiralSpawnTime > SPIRAL_SPAWN_INTERVAL) {
+          // Spawn from random edge
+          const edge = Math.floor(Math.random() * 4);
+          switch(edge) {
+            case 0: spiralEnemy.x = Math.random() * W; spiralEnemy.y = -50; break;
+            case 1: spiralEnemy.x = W + 50; spiralEnemy.y = Math.random() * H; break;
+            case 2: spiralEnemy.x = Math.random() * W; spiralEnemy.y = H + 50; break;
+            default: spiralEnemy.x = -50; spiralEnemy.y = Math.random() * H;
+          }
+          spiralEnemy.active = true;
+          spiralEnemy.dying = false;
+          spiralEnemy.deathProgress = 0;
+          spiralEnemy.arms = 3 + Math.floor(Math.random() * 3);  // 3-5 arms
+          spiralEnemy.rotation = Math.random() * Math.PI * 2;
+          spiralEnemy.radius = 70 + Math.random() * 30;  // 70-100 radius
+          lastSpiralSpawnTime = now;
+          
+          // Play ominous spawn sound
+          AudioSystem.playSpiralSpawn();
+        }
+        
+        if (!spiralEnemy.active) return;
+        
+        // Update rotation (fast spinning)
+        spiralEnemy.rotation += 0.15;
+        
+        // Calculate distances
+        const dxLogo = centerX - spiralEnemy.x;
+        const dyLogo = centerY - spiralEnemy.y;
+        const distToLogo = Math.sqrt(dxLogo * dxLogo + dyLogo * dyLogo);
+        
+        const dxCursor = cursorX - spiralEnemy.x;
+        const dyCursor = cursorY - spiralEnemy.y;
+        const distToCursor = Math.sqrt(dxCursor * dxCursor + dyCursor * dyCursor);
+        
+        // === DYING STATE (after cursor collision) ===
+        if (spiralEnemy.dying) {
+          spiralEnemy.deathProgress = (now - spiralEnemy.deathTime) / SPIRAL_DEATH_DURATION;
+          
+          if (spiralEnemy.deathProgress >= 1) {
+            spiralEnemy.active = false;
+            spiralEnemy.dying = false;
+            return;
+          }
+          
+          // Spiral shrinks and fades during death
+          spiralEnemy.radius = (70 + Math.random() * 30) * (1 - spiralEnemy.deathProgress);
+          
+          // Still affects stars but weaker
+          applySpiralgravityToStars(spiralEnemy.x, spiralEnemy.y, spiralEnemy.radius * 0.5, spiralEnemy.rotation, spiralEnemy.arms);
+          return;
+        }
+        
+        // === MOVEMENT LOGIC ===
+        // Base: move slowly toward logo
+        let moveX = (dxLogo / distToLogo) * SPIRAL_SPEED;
+        let moveY = (dyLogo / distToLogo) * SPIRAL_SPEED;
+        
+        // Flee from cursor if close (within 150px)
+        const fleeRadius = 150;
+        if (distToCursor < fleeRadius) {
+          const fleeFactor = 1 - (distToCursor / fleeRadius);
+          const fleeX = -(dxCursor / distToCursor) * SPIRAL_FLEE_SPEED * fleeFactor;
+          const fleeY = -(dyCursor / distToCursor) * SPIRAL_FLEE_SPEED * fleeFactor;
+          moveX += fleeX;
+          moveY += fleeY;
+        }
+        
+        spiralEnemy.x += moveX;
+        spiralEnemy.y += moveY;
+        
+        // === CURSOR COLLISION - push away and dissolve ===
+        const cursorCollisionRadius = 40;
+        if (distToCursor < cursorCollisionRadius && !spiralEnemy.dying) {
+          spiralEnemy.dying = true;
+          spiralEnemy.deathTime = now;
+          
+          // Push away from cursor
+          spiralEnemy.x += -(dxCursor / distToCursor) * 50;
+          spiralEnemy.y += -(dyCursor / distToCursor) * 50;
+          
+          // Play defeat sound
+          AudioSystem.playSpiralDefeat();
+          HapticManager.collect();
+          return;
+        }
+        
+        // === LOGO COLLISION - damage! ===
+        const logoCollisionRadius = logoRadius + 20;
+        if (distToLogo < logoCollisionRadius) {
+          // Vibration and flicker
+          logoVibrationTime = now;
+          logoReadyForDischarge = false;
+          
+          // Downgrade 2 levels (lose 40% energy = 2 rings)
+          cursorEnergy = Math.max(0, cursorEnergy - 0.4);
+          
+          // Play damage sound
+          AudioSystem.playSpiralDamage();
+          HapticManager.levelUp();  // Strong vibration
+          
+          // Spiral consumed
+          spiralEnemy.active = false;
+          return;
+        }
+        
+        // === APPLY GRAVITY TO STARS ===
+        applySpiralgravityToStars(spiralEnemy.x, spiralEnemy.y, spiralEnemy.radius, spiralEnemy.rotation, spiralEnemy.arms);
+        
+        // Play continuous suction sound
+        AudioSystem.setSpiralSuction(Math.min(1, spiralEnemy.radius / 100));
+      }
+      
+      // Apply spiral gravity to ambient stars - this is how we "see" the spiral
+      function applySpiralgravityToStars(sx, sy, radius, rotation, arms) {
+        for (const p of ambientParticles) {
+          if (p.absorbed) continue;
+          
+          const dx = sx - p.x;
+          const dy = sy - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          
+          if (dist < radius && dist > 5) {
+            // Spiral arm effect - pull stronger along spiral arms
+            const angle = Math.atan2(dy, dx);
+            const armAngle = (angle - rotation) * arms;
+            const armStrength = 0.5 + Math.sin(armAngle) * 0.5;
+            
+            // Gravitational pull toward spiral center
+            const pullStrength = (1 - dist / radius) * 0.25 * armStrength;
+            p.vx += (dx / dist) * pullStrength;
+            p.vy += (dy / dist) * pullStrength;
+            
+            // Rotational component (swirl)
+            const tangentX = -dy / dist;
+            const tangentY = dx / dist;
+            const swirlStrength = (1 - dist / radius) * 0.15;
+            p.vx += tangentX * swirlStrength;
+            p.vy += tangentY * swirlStrength;
+            
+            // Stars near center get absorbed (destroyed)
+            if (dist < 15) {
+              p.absorbed = true;
+              p.alpha *= 0.1;
+            }
+          }
+        }
+      }
       
       // Red Particle - spawnt NUR wenn Colored Bridge Phase abgeschlossen
       function drawRedParticle() {
@@ -1819,6 +1999,7 @@
         
         drawFloatingBridges();
         drawAmbientParticles();
+        updateAndDrawSpiralEnemy();  // Spiral enemy (invisible, affects stars)
         drawColoredParticles();
         drawRedParticle();
         drawParticles();
