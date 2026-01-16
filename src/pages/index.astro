@@ -1032,15 +1032,15 @@
         spiralEnemy.x += moveX;
         spiralEnemy.y += moveY;
         
-        // === CURSOR COLLISION - push away and dissolve ===
+        // === CURSOR COLLISION - push away and dissolve with explosion ===
         const cursorCollisionRadius = 40;
         if (distToCursor < cursorCollisionRadius && !spiralEnemy.dying) {
-          spiralEnemy.dying = true;
-          spiralEnemy.deathTime = now;
+          // Spawn orange explosion!
+          spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y);
           
-          // Push away from cursor
-          spiralEnemy.x += -(dxCursor / distToCursor) * 50;
-          spiralEnemy.y += -(dyCursor / distToCursor) * 50;
+          // Instant death - no slow dissolve
+          spiralEnemy.active = false;
+          spiralEnemy.dying = false;
           
           // Play defeat sound
           AudioSystem.playSpiralDefeat();
@@ -1048,10 +1048,13 @@
           return;
         }
         
-        // === LOGO COLLISION - damage! ===
+        // === LOGO COLLISION - damage with explosion! ===
         const currentLogoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
         const logoCollisionRadius = currentLogoRadius + 20;
         if (distToLogo < logoCollisionRadius) {
+          // Spawn orange explosion at collision point!
+          spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y);
+          
           // Vibration and flicker
           logoVibrationTime = now;
           logoReadyForDischarge = false;
@@ -1078,58 +1081,91 @@
         AudioSystem.setSpiralSuction(Math.min(1, spiralEnemy.radius / 100));
       }
       
-      // Draw the spiral's orange glowing core - spiky star shape
+      // Draw the spiral's core - minimal, flat, stylish
       function drawSpiralCore(x, y, rotation, intensity) {
         if (intensity <= 0) return;
         
         const time = Date.now() / 1000;
-        const pulseSize = 1 + Math.sin(time * 4) * 0.15;  // Pulsing
-        const flicker = 0.85 + Math.random() * 0.15;  // Flicker
+        const flicker = 0.9 + Math.random() * 0.1;
         
         ctx.save();
         ctx.translate(x, y);
-        ctx.rotate(rotation * 0.5);  // Slow rotation
+        ctx.rotate(rotation);
         
-        // Outer glow - soft radial gradient
-        const glowRadius = 25 * pulseSize * intensity;
-        const outerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
-        outerGlow.addColorStop(0, `rgba(255, 140, 50, ${0.6 * intensity * flicker})`);
-        outerGlow.addColorStop(0.4, `rgba(255, 100, 30, ${0.3 * intensity * flicker})`);
-        outerGlow.addColorStop(1, 'rgba(255, 80, 20, 0)');
-        ctx.fillStyle = outerGlow;
-        ctx.fillRect(-glowRadius, -glowRadius, glowRadius * 2, glowRadius * 2);
+        // Minimal: just a small bright point with subtle glow
+        const coreSize = 4 * intensity;
         
-        // Draw spiky star shape (6-8 points)
-        const points = 6 + Math.floor(Math.sin(time) + 1);
-        const outerRadius = 12 * pulseSize * intensity;
-        const innerRadius = 4 * pulseSize * intensity;
-        
+        // Subtle outer glow
+        const glowRadius = 15 * intensity;
+        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
+        glow.addColorStop(0, `rgba(255, 120, 50, ${0.4 * intensity * flicker})`);
+        glow.addColorStop(1, 'rgba(255, 80, 30, 0)');
+        ctx.fillStyle = glow;
         ctx.beginPath();
-        for (let i = 0; i < points * 2; i++) {
-          const angle = (i * Math.PI) / points;
-          const radius = i % 2 === 0 ? outerRadius : innerRadius;
-          const px = Math.cos(angle) * radius;
-          const py = Math.sin(angle) * radius;
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        
-        // Fill with gradient
-        const starGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, outerRadius);
-        starGrad.addColorStop(0, `rgba(255, 220, 180, ${intensity * flicker})`);  // Hot white center
-        starGrad.addColorStop(0.3, `rgba(255, 160, 60, ${0.9 * intensity * flicker})`);  // Orange
-        starGrad.addColorStop(1, `rgba(255, 100, 30, ${0.7 * intensity * flicker})`);  // Deep orange
-        ctx.fillStyle = starGrad;
+        ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
         ctx.fill();
         
-        // Bright core point
+        // Core: small bright dot
         ctx.beginPath();
-        ctx.arc(0, 0, 3 * intensity, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 240, ${intensity * flicker})`;
+        ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 180, 100, ${intensity * flicker})`;
+        ctx.fill();
+        
+        // Hot center
+        ctx.beginPath();
+        ctx.arc(0, 0, coreSize * 0.4, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 240, 220, ${intensity * flicker})`;
         ctx.fill();
         
         ctx.restore();
+      }
+      
+      // Orange explosion particles (for spiral defeat)
+      const spiralExplosionParticles = [];
+      
+      function spawnSpiralExplosion(x, y) {
+        const particleCount = 25;
+        for (let i = 0; i < particleCount; i++) {
+          const angle = (i / particleCount) * Math.PI * 2 + Math.random() * 0.3;
+          const speed = 3 + Math.random() * 5;
+          spiralExplosionParticles.push({
+            x: x,
+            y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: 2 + Math.random() * 3,
+            alpha: 1,
+            life: 1
+          });
+        }
+      }
+      
+      function updateAndDrawSpiralExplosion() {
+        for (let i = spiralExplosionParticles.length - 1; i >= 0; i--) {
+          const p = spiralExplosionParticles[i];
+          
+          // Update
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vx *= 0.96;
+          p.vy *= 0.96;
+          p.life -= 0.025;
+          p.alpha = p.life;
+          p.size *= 0.98;
+          
+          // Remove dead particles
+          if (p.life <= 0) {
+            spiralExplosionParticles.splice(i, 1);
+            continue;
+          }
+          
+          // Draw - orange fading to dark
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          const orangeIntensity = Math.floor(180 * p.life);
+          ctx.fillStyle = `rgba(255, ${100 + orangeIntensity * 0.4}, ${50 * p.life}, ${p.alpha})`;
+          ctx.fill();
+        }
       }
       
       // Apply spiral gravity to ambient stars - this is how we "see" the spiral
@@ -2057,7 +2093,8 @@
         
         drawFloatingBridges();
         drawAmbientParticles();
-        updateAndDrawSpiralEnemy();  // Spiral enemy (invisible, affects stars)
+        updateAndDrawSpiralEnemy();  // Spiral enemy (affects stars)
+        updateAndDrawSpiralExplosion();  // Orange explosion particles
         drawColoredParticles();
         drawRedParticle();
         drawParticles();
