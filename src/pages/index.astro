@@ -2388,9 +2388,10 @@
           return;
         }
 
-        // Nur wenn auf Logo geklickt UND Ringe voll UND nicht in Chamber-Phase
-        // Im Inverted Mode: Discharge bei vollen Ringen, egal wie viele hearts (1-6)
-        const canDischargeInverted = isInverted && cursorEnergy >= MAX_ENERGY && redStackCount > 0;
+        // Nur wenn auf Logo geklickt UND nicht in Chamber-Phase
+        // Im Inverted Mode: Discharge JEDERZEIT wenn mindestens 1 heart gefangen (Ringe waren ja voll um heart zu fangen)
+        // Normal Mode: Discharge wenn Ringe voll
+        const canDischargeInverted = isInverted && redStackCount > 0;  // Jederzeit mit hearts
         const canDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD;
         
         if (dist < logoRadius && (canDischargeInverted || canDischargeNormal) && upgradeLevel < 10 && coloredBridgePhaseComplete) {
@@ -2552,7 +2553,8 @@
           });
           
           // Touch discharge: same logic as mouse
-          const canTouchDischargeInverted = isInverted && cursorEnergy >= MAX_ENERGY && redStackCount > 0;
+          // Inverted: discharge ANYTIME with hearts
+          const canTouchDischargeInverted = isInverted && redStackCount > 0;
           const canTouchDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD;
           
           if (dist < logoRadius && (canTouchDischargeInverted || canTouchDischargeNormal) && upgradeLevel < 10) {
