@@ -344,15 +344,16 @@
         rotation: 0,
         arms: 3,  // 3-5 arms, varies per spawn
         radius: 80,  // gravitational influence radius
-        dying: false,  // true when dissolving after cursor collision
+        dying: false,
         deathTime: 0,
-        deathProgress: 0
+        deathProgress: 0,
+        flutterPhase: 0  // For fluttering flight path
       };
       let lastSpiralSpawnTime = 0;
       const SPIRAL_SPAWN_INTERVAL = 15000;  // 15 seconds
-      const SPIRAL_SPEED = 0.4;  // slow movement toward logo
-      const SPIRAL_FLEE_SPEED = 2.5;  // faster when fleeing cursor
-      const SPIRAL_DEATH_DURATION = 3500;  // 3.5 seconds to dissolve
+      const SPIRAL_SPEED = 0.5;  // +25% speed (was 0.4)
+      const SPIRAL_FLEE_SPEED = 3.0;  // +25% flee speed (was 2.5)
+      const SPIRAL_DEATH_DURATION = 3500;
       
       function resize() {
         W = canvas.width = window.innerWidth;
@@ -1015,9 +1016,20 @@
         }
         
         // === MOVEMENT LOGIC ===
-        // Base: move slowly toward logo
+        // Update flutter phase for organic movement
+        spiralEnemy.flutterPhase += 0.08;
+        
+        // Base: move toward logo with fluttering motion
         let moveX = (dxLogo / distToLogo) * SPIRAL_SPEED;
         let moveY = (dyLogo / distToLogo) * SPIRAL_SPEED;
+        
+        // Add flutter/wobble perpendicular to movement direction
+        const perpX = -dyLogo / distToLogo;  // Perpendicular vector
+        const perpY = dxLogo / distToLogo;
+        const flutterAmount = Math.sin(spiralEnemy.flutterPhase) * 0.8 + 
+                              Math.sin(spiralEnemy.flutterPhase * 2.3) * 0.4;
+        moveX += perpX * flutterAmount;
+        moveY += perpY * flutterAmount;
         
         // Flee from cursor if close (within 150px)
         const fleeRadius = 150;
@@ -1032,41 +1044,42 @@
         spiralEnemy.x += moveX;
         spiralEnemy.y += moveY;
         
-        // === CURSOR COLLISION - push away and dissolve with explosion ===
-        const cursorCollisionRadius = 40;
+        // === CURSOR COLLISION - gray/green hex explosion ===
+        const cursorCollisionRadius = 35;
         if (distToCursor < cursorCollisionRadius && !spiralEnemy.dying) {
-          // Spawn orange explosion!
-          spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y);
+          // Gray hex-tech explosion for cursor kill
+          spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y, 'gray');
           
-          // Instant death - no slow dissolve
           spiralEnemy.active = false;
           spiralEnemy.dying = false;
           
-          // Play defeat sound
           AudioSystem.playSpiralDefeat();
           HapticManager.collect();
           return;
         }
         
-        // === LOGO COLLISION - damage with explosion! ===
-        const currentLogoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
-        const logoCollisionRadius = currentLogoRadius + 20;
+        // === LOGO COLLISION - must touch actual visible logo ===
+        // Logo visual size is much smaller than the max hitbox
+        // Use a tighter collision based on current energy level
+        const baseLogoSize = Math.min(W, H) * 0.08;  // Base logo is ~8% of screen
+        const energyBonus = cursorEnergy * Math.min(W, H) * 0.04;  // Grows with energy
+        const actualLogoRadius = baseLogoSize + energyBonus;  // Actual visible size
+        const skullSize = 16;  // Skull body size
+        const logoCollisionRadius = actualLogoRadius + skullSize * 0.5;  // Touch when skull meets logo edge
+        
         if (distToLogo < logoCollisionRadius) {
-          // Spawn orange explosion at collision point!
-          spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y);
+          // Green hex-tech explosion for logo damage
+          spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y, 'green');
           
-          // Vibration and flicker
           logoVibrationTime = now;
           logoReadyForDischarge = false;
           
           // Downgrade 2 levels (lose 40% energy = 2 rings)
           cursorEnergy = Math.max(0, cursorEnergy - 0.4);
           
-          // Play damage sound
           AudioSystem.playSpiralDamage();
-          HapticManager.levelUp();  // Strong vibration
+          HapticManager.levelUp();
           
-          // Spiral consumed
           spiralEnemy.active = false;
           return;
         }
@@ -1081,91 +1094,200 @@
         AudioSystem.setSpiralSuction(Math.min(1, spiralEnemy.radius / 100));
       }
       
-      // Draw the spiral's core - minimal, flat, stylish
+      // Draw skull - the spiral's body (light gray, no glow, same size as heart)
       function drawSpiralCore(x, y, rotation, intensity) {
         if (intensity <= 0) return;
         
-        const time = Date.now() / 1000;
-        const flicker = 0.9 + Math.random() * 0.1;
-        
         ctx.save();
         ctx.translate(x, y);
-        ctx.rotate(rotation);
         
-        // Minimal: just a small bright point with subtle glow
-        const coreSize = 4 * intensity;
+        // Skull size similar to red heart (~15-18px)
+        const size = 16 * intensity;
+        const gray = Math.floor(180 + Math.random() * 20);  // Light gray with slight flicker
         
-        // Subtle outer glow
-        const glowRadius = 15 * intensity;
-        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
-        glow.addColorStop(0, `rgba(255, 120, 50, ${0.4 * intensity * flicker})`);
-        glow.addColorStop(1, 'rgba(255, 80, 30, 0)');
-        ctx.fillStyle = glow;
+        ctx.fillStyle = `rgba(${gray}, ${gray}, ${gray}, ${intensity * 0.9})`;
+        ctx.strokeStyle = `rgba(${gray - 40}, ${gray - 40}, ${gray - 40}, ${intensity * 0.7})`;
+        ctx.lineWidth = 1;
+        
+        // Skull shape - simplified iconic skull
         ctx.beginPath();
-        ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
+        
+        // Cranium (top rounded part)
+        ctx.arc(0, -size * 0.15, size * 0.7, Math.PI, 0, false);
+        
+        // Sides of skull down to jaw
+        ctx.lineTo(size * 0.7, size * 0.3);
+        ctx.quadraticCurveTo(size * 0.5, size * 0.6, size * 0.3, size * 0.7);
+        
+        // Jaw bottom (teeth area)
+        ctx.lineTo(size * 0.25, size * 0.75);
+        ctx.lineTo(-size * 0.25, size * 0.75);
+        ctx.lineTo(-size * 0.3, size * 0.7);
+        
+        // Left side back up
+        ctx.quadraticCurveTo(-size * 0.5, size * 0.6, -size * 0.7, size * 0.3);
+        ctx.closePath();
+        
+        ctx.fill();
+        ctx.stroke();
+        
+        // Eye sockets (dark)
+        ctx.fillStyle = `rgba(40, 40, 40, ${intensity * 0.9})`;
+        
+        // Left eye
+        ctx.beginPath();
+        ctx.ellipse(-size * 0.28, size * 0.05, size * 0.18, size * 0.22, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        // Core: small bright dot
+        // Right eye  
         ctx.beginPath();
-        ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 180, 100, ${intensity * flicker})`;
+        ctx.ellipse(size * 0.28, size * 0.05, size * 0.18, size * 0.22, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        // Hot center
+        // Nose hole (triangle)
         ctx.beginPath();
-        ctx.arc(0, 0, coreSize * 0.4, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 240, 220, ${intensity * flicker})`;
+        ctx.moveTo(0, size * 0.2);
+        ctx.lineTo(-size * 0.1, size * 0.4);
+        ctx.lineTo(size * 0.1, size * 0.4);
+        ctx.closePath();
         ctx.fill();
+        
+        // Teeth (simple lines)
+        ctx.strokeStyle = `rgba(40, 40, 40, ${intensity * 0.6})`;
+        ctx.lineWidth = 1;
+        for (let i = -2; i <= 2; i++) {
+          ctx.beginPath();
+          ctx.moveTo(i * size * 0.12, size * 0.55);
+          ctx.lineTo(i * size * 0.12, size * 0.72);
+          ctx.stroke();
+        }
         
         ctx.restore();
       }
       
-      // Orange explosion particles (for spiral defeat)
-      const spiralExplosionParticles = [];
+      // Hex-tech explosion state
+      let hexExplosion = {
+        active: false,
+        x: 0,
+        y: 0,
+        phase: 0,  // 0-1: expand, 1-2: distort, 2-3: implode
+        startTime: 0,
+        color: 'gray'  // 'gray' for cursor, 'green' for logo
+      };
       
-      function spawnSpiralExplosion(x, y) {
-        const particleCount = 25;
-        for (let i = 0; i < particleCount; i++) {
-          const angle = (i / particleCount) * Math.PI * 2 + Math.random() * 0.3;
-          const speed = 3 + Math.random() * 5;
-          spiralExplosionParticles.push({
-            x: x,
-            y: y,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            size: 2 + Math.random() * 3,
-            alpha: 1,
-            life: 1
-          });
-        }
+      function spawnSpiralExplosion(x, y, color = 'gray') {
+        hexExplosion.active = true;
+        hexExplosion.x = x;
+        hexExplosion.y = y;
+        hexExplosion.phase = 0;
+        hexExplosion.startTime = Date.now();
+        hexExplosion.color = color;
       }
       
       function updateAndDrawSpiralExplosion() {
-        for (let i = spiralExplosionParticles.length - 1; i >= 0; i--) {
-          const p = spiralExplosionParticles[i];
+        if (!hexExplosion.active) return;
+        
+        const elapsed = Date.now() - hexExplosion.startTime;
+        const duration = 800;  // Total animation duration
+        hexExplosion.phase = elapsed / duration * 3;  // 0 to 3
+        
+        if (hexExplosion.phase >= 3) {
+          hexExplosion.active = false;
+          return;
+        }
+        
+        ctx.save();
+        ctx.translate(hexExplosion.x, hexExplosion.y);
+        
+        const phase = hexExplosion.phase;
+        const isGreen = hexExplosion.color === 'green';
+        
+        // Color palette
+        const baseColor = isGreen ? [100, 200, 120] : [160, 160, 170];
+        const accentColor = isGreen ? [50, 255, 100] : [200, 200, 210];
+        
+        if (phase < 1) {
+          // Phase 1: EXPAND - hexagonal ring expands outward
+          const expand = phase;
+          const radius = 20 + expand * 60;
+          const alpha = 1 - expand * 0.3;
           
-          // Update
-          p.x += p.vx;
-          p.y += p.vy;
-          p.vx *= 0.96;
-          p.vy *= 0.96;
-          p.life -= 0.025;
-          p.alpha = p.life;
-          p.size *= 0.98;
+          // Outer hex ring
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+            const distort = 1 + Math.sin(i * 2 + elapsed * 0.01) * 0.15 * expand;
+            const px = Math.cos(angle) * radius * distort;
+            const py = Math.sin(angle) * radius * distort;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.strokeStyle = `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, ${alpha})`;
+          ctx.lineWidth = 3 - expand * 2;
+          ctx.stroke();
           
-          // Remove dead particles
-          if (p.life <= 0) {
-            spiralExplosionParticles.splice(i, 1);
-            continue;
+          // Inner shockwave
+          ctx.beginPath();
+          ctx.arc(0, 0, radius * 0.6, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${alpha * 0.5})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+        } else if (phase < 2) {
+          // Phase 2: DISTORT - fragments scatter and twist
+          const distort = phase - 1;
+          const fragmentCount = 8;
+          
+          for (let i = 0; i < fragmentCount; i++) {
+            const baseAngle = (i / fragmentCount) * Math.PI * 2;
+            const wobble = Math.sin(elapsed * 0.02 + i) * 0.5;
+            const angle = baseAngle + wobble * distort;
+            const dist = 40 + distort * 50 + Math.sin(i * 3) * 20;
+            
+            const fx = Math.cos(angle) * dist;
+            const fy = Math.sin(angle) * dist;
+            
+            // Fragment lines
+            ctx.beginPath();
+            ctx.moveTo(fx * 0.3, fy * 0.3);
+            ctx.lineTo(fx, fy);
+            const alpha = 1 - distort * 0.5;
+            ctx.strokeStyle = `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, ${alpha})`;
+            ctx.lineWidth = 2 - distort;
+            ctx.stroke();
+            
+            // Fragment dots
+            ctx.beginPath();
+            ctx.arc(fx, fy, 3 - distort * 2, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${alpha})`;
+            ctx.fill();
           }
           
-          // Draw - orange fading to dark
+        } else {
+          // Phase 3: IMPLODE - everything rushes back to center and vanishes
+          const implode = phase - 2;
+          const reverseRadius = 80 * (1 - implode);
+          const alpha = 1 - implode;
+          
+          // Imploding ring
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-          const orangeIntensity = Math.floor(180 * p.life);
-          ctx.fillStyle = `rgba(255, ${100 + orangeIntensity * 0.4}, ${50 * p.life}, ${p.alpha})`;
-          ctx.fill();
+          ctx.arc(0, 0, reverseRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, ${alpha * 0.7})`;
+          ctx.lineWidth = 1 + implode * 3;
+          ctx.stroke();
+          
+          // Central flash
+          if (implode > 0.7) {
+            const flashIntensity = (implode - 0.7) / 0.3;
+            ctx.beginPath();
+            ctx.arc(0, 0, 10 * (1 - flashIntensity), 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${flashIntensity * 0.8})`;
+            ctx.fill();
+          }
         }
+        
+        ctx.restore();
       }
       
       // Apply spiral gravity to ambient stars - this is how we "see" the spiral
