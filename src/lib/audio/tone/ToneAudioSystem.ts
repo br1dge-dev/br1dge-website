@@ -104,6 +104,22 @@ class ToneAudioSystemClass {
   }
   
   /**
+   * Play super star collection sound (bright, shimmering)
+   */
+  playSuperStarCollect(): void {
+    if (!this.initialized || this.muted) return;
+    SFXEngine.playSuperStarCollect();
+  }
+  
+  /**
+   * Play rejected discharge sound (soft denial)
+   */
+  playRejectDischarge(): void {
+    if (!this.initialized || this.muted) return;
+    SFXEngine.playRejectDischarge();
+  }
+  
+  /**
    * Play capture sound (red/colored particle)
    */
   playCapture(): void {

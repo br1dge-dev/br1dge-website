@@ -201,7 +201,8 @@ class SFXEngineClass {
   private lastCollectTime = 0;
   
   /**
-   * Collect - Satisfying loot sound with combo buildup
+   * Collect - Subtle, ambient star collection - like distant wind chimes
+   * Quieter and more atmospheric to not overwhelm during rapid collection
    */
   playCollect(params: SFXParams = {}): void {
     if (!this.initialized || !this.melodicSynth) return;
@@ -218,34 +219,76 @@ class SFXEngineClass {
     this.lastCollectTime = currentTime;
     
     const pitch = params.pitch ?? 0;
-    const baseVelocity = params.velocity ?? 0.6;
+    // Much quieter base velocity for ambient feel
+    const baseVelocity = params.velocity ?? 0.25;
     
-    // Combo boost - louder and richer with rapid collection
-    const comboBoost = 1 + this.collectCombo * 0.1;
-    const velocity = Math.min(1, baseVelocity * comboBoost);
+    // Gentler combo boost - subtle crescendo
+    const comboBoost = 1 + this.collectCombo * 0.05;
+    const velocity = Math.min(0.5, baseVelocity * comboBoost);
     
     // Note selection - higher pitch with combo
     const noteIndex = Math.min(pitch + Math.floor(this.collectCombo / 3), NOTES.collectScale.length - 1);
     const note = NOTES.collectScale[noteIndex];
     
-    // Main satisfying pluck
-    this.melodicSynth.triggerAttackRelease(note, '16n', now, velocity * 0.8);
+    // Soft melodic ping - like a single raindrop
+    this.melodicSynth.triggerAttackRelease(note, '32n', now, velocity * 0.6);
     
-    // Sub thump for weight (feels more substantial)
-    if (this.subSynth && this.collectCombo >= 2) {
-      this.subSynth.triggerAttackRelease('G2', '32n', now, velocity * 0.3);
+    // Very subtle sub only on higher combos
+    if (this.subSynth && this.collectCombo >= 5) {
+      this.subSynth.triggerAttackRelease('G2', '32n', now, velocity * 0.15);
     }
     
-    // Shimmer layer on high combo (reward!)
-    if (this.harmonicSynth && this.collectCombo >= 4) {
+    // Delicate shimmer on high combo (reward!)
+    if (this.harmonicSynth && this.collectCombo >= 6) {
       const upperNote = note.replace(/\d/, (m) => String(Math.min(7, Number(m) + 1)));
-      this.harmonicSynth.triggerAttackRelease(upperNote, '16n', now + 0.01, velocity * 0.4);
+      this.harmonicSynth.triggerAttackRelease(upperNote, '32n', now + 0.01, velocity * 0.2);
+    }
+  }
+  
+  /**
+   * Super Star Collect - Celestial stardust chime, like catching a shooting star
+   * Inspired by orchestral celesta/glockenspiel with string harmonics
+   */
+  playSuperStarCollect(): void {
+    if (!this.initialized || !this.melodicSynth) return;
+    
+    const now = Tone.now();
+    
+    // Perfect fifth interval - the most pleasing harmonic relationship
+    // Like a tiny music box or distant wind chimes
+    this.melodicSynth.triggerAttackRelease('G5', '8n', now, 0.28);
+    this.melodicSynth.triggerAttackRelease('D5', '8n', now + 0.015, 0.22);
+    
+    // Ethereal octave shimmer - like string harmonics
+    if (this.harmonicSynth) {
+      this.harmonicSynth.triggerAttackRelease('G6', '4n', now + 0.04, 0.12);
+    }
+  }
+  
+  /**
+   * Rejected Discharge - Soft, muted denial when requirements not met
+   * Like a gentle "not yet" - warm but clearly indicating incompleteness
+   * Inspired by muted brass or distant timpani
+   */
+  playRejectDischarge(): void {
+    if (!this.initialized) return;
+    
+    const now = Tone.now();
+    
+    // Low muted thud - like a soft door closing, not harsh
+    if (this.subSynth) {
+      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+      this.subSynth.triggerAttackRelease('D2', '8n', now, 0.35);
     }
     
-    // Extra sparkle on big combos
-    if (this.harmonicSynth && this.collectCombo >= 7) {
-      const sparkleNote = NOTES.collectScale[NOTES.collectScale.length - 1];
-      this.harmonicSynth.triggerAttackRelease(sparkleNote, '8n', now + 0.02, velocity * 0.25);
+    // Muted melodic hint - minor second for gentle tension
+    this.melodicSynth?.triggerAttackRelease('G3', '16n', now + 0.02, 0.2);
+    
+    // Soft filtered noise - like a whispered "shh"
+    if (this.noiseFilter && this.noiseSynth) {
+      this.noiseFilter.frequency.setValueAtTime(300, now);
+      this.noiseFilter.frequency.rampTo(100, 0.15);
+      this.noiseSynth.triggerAttackRelease('32n', now + 0.01);
     }
   }
   
@@ -281,20 +324,35 @@ class SFXEngineClass {
   }
   
   /**
-   * Red Heart Capture - Special ethereal sound for inverted mode
+   * Red Heart Capture - PUNCHY, visceral, like catching lightning
+   * This is the moment of transformation - make it FEEL powerful
    */
   playRedHeartCapture(): void {
     if (!this.initialized) return;
     
     const now = Tone.now();
     
-    // ethereal swell up
-    if (this.harmonicSynth) {
-      this.harmonicSynth.triggerAttackRelease(['G5', 'D6'], '2n', now, 0.4);
+    // MASSIVE sub hit - like a giant heartbeat
+    if (this.subSynth) {
+      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+      this.subSynth.triggerAttackRelease('D1', '2n', now, 0.95);
     }
     
-    // Subtle swell
-    AmbientSoundscape.swell(2);
+    // Dissonant power chord - tritone for tension (D + Ab)
+    this.melodicSynth?.triggerAttackRelease(['D3', 'Ab3'], '4n', now + 0.02, 0.7);
+    
+    // Screaming high note - like a siren wail
+    if (this.harmonicSynth) {
+      this.harmonicSynth.triggerAttackRelease('D5', '8n', now + 0.05, 0.5);
+      this.harmonicSynth.triggerAttackRelease('Ab5', '4n', now + 0.1, 0.4);
+    }
+    
+    // Aggressive noise burst - impact texture
+    if (this.noiseFilter && this.noiseSynth) {
+      this.noiseFilter.frequency.setValueAtTime(2000, now);
+      this.noiseFilter.frequency.exponentialRampTo(100, 0.4);
+      this.noiseSynth.triggerAttackRelease('8n', now);
+    }
   }
   
   /**

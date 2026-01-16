@@ -28,6 +28,14 @@ class AmbientSoundscapeClass {
   // 5. Subtiler Chorus
   private chorus: Tone.Chorus | null = null;
   
+  // === INVERTED MODE LAYERS (separate from normal) ===
+  private invertedPulse: Tone.Oscillator | null = null;
+  private invertedPulseGain: Tone.Gain | null = null;
+  private invertedDrone: Tone.PolySynth | null = null;
+  private invertedDroneGain: Tone.Gain | null = null;
+  private invertedLFO: Tone.LFO | null = null;
+  private invertedFilter: Tone.Filter | null = null;
+  
   // State
   private _active = false;
   private intensity = 0.5;
@@ -107,6 +115,48 @@ class AmbientSoundscapeClass {
     this.harmonicSynth.connect(this.harmonicGain);
     this.harmonicGain.connect(this.padFilter);
     
+    // === INVERTED MODE: Aggressive pulsing drone ===
+    // Filter for inverted sounds
+    this.invertedFilter = new Tone.Filter({
+      frequency: 600,
+      type: 'lowpass',
+      rolloff: -24,
+      Q: 4,  // Resonant, aggressive
+    });
+    this.invertedFilter.connect(mainInput);
+    this.invertedFilter.connect(reverbSend);
+    
+    // Deep pulsing sub - heartbeat of the inverted world
+    this.invertedPulse = new Tone.Oscillator({
+      frequency: 36.7,  // D1 - very deep
+      type: 'sawtooth',  // Aggressive
+    });
+    this.invertedPulseGain = new Tone.Gain(0);
+    this.invertedPulse.connect(this.invertedPulseGain);
+    this.invertedPulseGain.connect(this.invertedFilter);
+    
+    // LFO for pulsing - creates the heartbeat rhythm
+    this.invertedLFO = new Tone.LFO({
+      frequency: 1.2,  // ~72 BPM heartbeat
+      min: 0,
+      max: 0.25,
+      type: 'sine',
+    });
+    
+    // Dissonant drone - tritone (devil's interval) + minor 2nd
+    this.invertedDrone = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'triangle' },
+      envelope: {
+        attack: 0.5,
+        decay: 0.3,
+        sustain: 0.8,
+        release: 2,
+      },
+    });
+    this.invertedDroneGain = new Tone.Gain(0);
+    this.invertedDrone.connect(this.invertedDroneGain);
+    this.invertedDroneGain.connect(this.invertedFilter);
+    
     this.initialized = true;
   }
   
@@ -183,23 +233,61 @@ class AmbientSoundscapeClass {
   }
   
   /**
-   * Inverted mode - starke Abdämpfung, Unterwasser-Feeling
+   * Inverted mode - AGGRESSIVE transformation
+   * The world turns inside out: dissonant, pulsing, threatening
+   * Like being pulled into a black hole
    */
   setInvertedMode(active: boolean): void {
     if (!this.initialized) return;
     
     this.invertedMode = active;
+    const now = Tone.now();
     
     if (active) {
-      // Stark abdämpfen
-      this.subGain?.gain.linearRampTo(0.15, 0.3);  // Sub lauter für Punch
-      this.padGain?.gain.linearRampTo(0.02, 0.3);  // Pad fast aus
-      this.harmonicGain?.gain.linearRampTo(0.01, 0.3);
-      this.padFilter?.frequency.linearRampTo(400, 0.3);  // Filter schließen
+      // === KILL NORMAL AMBIENT ===
+      this.subGain?.gain.linearRampTo(0, 0.5);
+      this.padGain?.gain.linearRampTo(0, 0.5);
+      this.harmonicGain?.gain.linearRampTo(0, 0.5);
+      this.padFilter?.frequency.linearRampTo(200, 0.3);
+      
+      // === UNLEASH THE BEAST ===
+      // Start pulsing sub
+      this.invertedPulse?.start(now);
+      this.invertedLFO?.start(now);
+      this.invertedLFO?.connect(this.invertedPulseGain!.gain);
+      
+      // Dissonant tritone drone (D2 + Ab2 = tritone, + Eb2 = minor 2nd cluster)
+      this.invertedDrone?.triggerAttack(['D2', 'Ab2', 'Eb3'], now + 0.1);
+      this.invertedDroneGain?.gain.linearRampTo(0.12, 0.8);
+      
+      // Open filter with resonance sweep
+      this.invertedFilter?.frequency.linearRampTo(300, 0.2);
+      this.invertedFilter?.frequency.linearRampTo(800, 2);
+      
+      // Increase LFO speed over time (heartbeat getting faster)
+      this.invertedLFO?.frequency.linearRampTo(1.8, 5);
+      
     } else {
-      // Zurück zu normal
-      this.setIntensity(this.intensity);
-      this.padFilter?.frequency.linearRampTo(1200, 2);
+      // === RETURN TO NORMAL ===
+      // Fade out inverted layers
+      this.invertedPulseGain?.gain.linearRampTo(0, 1.5);
+      this.invertedDroneGain?.gain.linearRampTo(0, 1.5);
+      this.invertedFilter?.frequency.linearRampTo(200, 1);
+      
+      // Stop after fade
+      setTimeout(() => {
+        this.invertedLFO?.stop();
+        this.invertedLFO?.disconnect();
+        this.invertedPulse?.stop();
+        this.invertedDrone?.releaseAll();
+        if (this.invertedLFO) this.invertedLFO.frequency.value = 1.2;  // Reset
+      }, 1600);
+      
+      // Bring back normal ambient
+      setTimeout(() => {
+        this.setIntensity(this.intensity);
+        this.padFilter?.frequency.linearRampTo(1200, 2);
+      }, 800);
     }
   }
   
@@ -235,6 +323,14 @@ class AmbientSoundscapeClass {
     this.harmonicGain?.dispose();
     this.padFilter?.dispose();
     this.chorus?.dispose();
+    
+    // Inverted mode cleanup
+    this.invertedPulse?.dispose();
+    this.invertedPulseGain?.dispose();
+    this.invertedDrone?.dispose();
+    this.invertedDroneGain?.dispose();
+    this.invertedLFO?.dispose();
+    this.invertedFilter?.dispose();
     
     this.initialized = false;
     this._active = false;

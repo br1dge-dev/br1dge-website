@@ -471,7 +471,7 @@
             <h1 style="font-size: 2rem; font-weight: 200; letter-spacing: 0.3em; text-transform: uppercase; margin: 0;">Congratulations</h1>
             <button id="restart-btn" style="background: transparent; border: none; color: rgba(0,0,0,0.3); font-size: 0.9rem; cursor: none; transition: all 0.3s; font-family: inherit;" title="Restart">↻</button>
           </div>
-          <p style="font-size: 0.9rem; margin-bottom: 2rem; opacity: 0.5; font-weight: 300;">You made it this far, treat yourself with a follow. Tell me what you think about my website!</p>
+          <p style="font-size: 0.9rem; margin-bottom: 2rem; opacity: 0.5; font-weight: 300;">You made it this far, we're basically friends now. Drop a follow and share your experience.</p>
           
           <div style="display: flex; gap: 1.2rem; margin-bottom: 1.5rem;">
             <a href="https://x.com/br1dge_eth" target="_blank" class="modal-link" style="color: #000; text-decoration: none; font-size: 0.9rem; padding: 0.7rem 1.8rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">X / TWITTER</a>
@@ -758,8 +758,8 @@
         const time = Date.now() / 1000;
         
         // Partikel spawnen - gleichmäßige Verteilung über gesamten Bildschirm
-        const maxParticles = 180;
-        const spawnRate = 0.45;
+        const maxParticles = 280;
+        const spawnRate = 0.65;
         
         if (ambientParticles.length < maxParticles && Math.random() < spawnRate) {
           let x, y, vx, vy;
@@ -807,12 +807,16 @@
             vy = Math.sin(driftAngle) * driftSpeed;
           }
           
+          // 5% chance for super star (brighter, bigger, 10x energy)
+          const isSuperStar = Math.random() < 0.05;
+          
           ambientParticles.push({
             x, y, vx, vy,
-            size: 0.8 + Math.random() * 1.2,  // Kleiner (0.8-2.0 statt 1.5-4.0)
-            alpha: 0.30 + Math.random() * 0.30,  // 20% heller (0.30-0.60 statt 0.25-0.50)
+            size: isSuperStar ? 2.5 + Math.random() * 1.0 : 0.8 + Math.random() * 1.2,
+            alpha: isSuperStar ? 0.85 + Math.random() * 0.15 : 0.30 + Math.random() * 0.30,
             twinkle: Math.random() * Math.PI * 2,
-            absorbed: false
+            absorbed: false,
+            isSuperStar: isSuperStar
           });
         }
         
@@ -844,11 +848,21 @@
            if (dist < 20 && !p.absorbed && cursorEnergy < MAX_ENERGY && !isIdle && !(gamePhase === GAME_PHASE_TUTORIAL && logoReadyForDischarge)) {
             p.absorbed = true;
             const prevEnergy = cursorEnergy;
-            cursorEnergy = Math.min(MAX_ENERGY, cursorEnergy + 0.008);
+            
+            // Energy gain: Tutorial and first colored phase (currentColorPhase=0) are slower
+            // Base: 0.0027 per star (~75 stars per ring)
+            // Tutorial/Phase0: 0.00135 per star (~150 stars per ring) = half speed
+            const isSlowPhase = gamePhase === GAME_PHASE_TUTORIAL || (gamePhase === GAME_PHASE_COLORED && currentColorPhase === 0);
+            const baseEnergy = isSlowPhase ? 0.00135 : 0.0027;
+            const energyGain = p.isSuperStar ? baseEnergy * 10 : baseEnergy;
+            cursorEnergy = Math.min(MAX_ENERGY, cursorEnergy + energyGain);
             p.alpha *= 0.2;
             
-            // Audio & Haptic: Collect Sound (throttled, every ~10%)
-            if (Math.floor(cursorEnergy * 10) > Math.floor(prevEnergy * 10)) {
+            // Audio & Haptic: Super star has special sound, normal stars throttled
+            if (p.isSuperStar) {
+              AudioSystem.playSuperStarCollect();
+              HapticManager.levelUp(); // Stronger haptic for super star
+            } else if (Math.floor(cursorEnergy * 25) > Math.floor(prevEnergy * 25)) {
               AudioSystem.playCollect(Math.floor(cursorEnergy * 5));
               HapticManager.collect();
             }
@@ -887,10 +901,30 @@
             alpha = twinkleAlpha * (1 + (1 - dist / gravityRadius) * 0.5);
           }
           
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size * (p.absorbed ? 0.3 : 1), 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, alpha)})`;
-          ctx.fill();
+          // Super stars: slightly brighter with faster twinkle
+          if (p.isSuperStar && !p.absorbed) {
+            // Faster, more intense twinkle for sparkle effect
+            const sparkle = 0.85 + Math.sin(p.twinkle * 3) * 0.15;
+            const superAlpha = Math.min(1, alpha * 1.25 * sparkle);
+            
+            // Subtle soft glow (not voluminous)
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * 1.4, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${superAlpha * 0.25})`;
+            ctx.fill();
+            
+            // Bright core
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${superAlpha})`;
+            ctx.fill();
+          } else {
+            // Normal star
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * (p.absorbed ? 0.3 : 1), 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, alpha)})`;
+            ctx.fill();
+          }
         }
       }
       
@@ -1131,8 +1165,10 @@
           chamberSpawnPhase = 0;
         }
         
-        // Check ob 5 Partikel gesammelt - Logo ready for discharge
-        if (chamberParticles.length >= CHAMBER_THRESHOLD && !logoReadyForDischarge) {
+        // Check ob 5 Partikel gesammelt UND alle Ringe voll - Logo ready for discharge
+        // Discharge ist NUR möglich wenn BEIDE Bedingungen erfüllt sind
+        const allRingsFull = cursorEnergy >= MAX_ENERGY;
+        if (chamberParticles.length >= CHAMBER_THRESHOLD && allRingsFull && !logoReadyForDischarge) {
           logoReadyForDischarge = true;
           logoVibrationTime = Date.now();
           // Audio feedback: Collection complete
@@ -1846,12 +1882,24 @@
           hue: 0
         });
         
-        // CHAMBER DISCHARGE: Only when ALL rings have been emitted
+        // CHAMBER DISCHARGE: Only when ALL rings are FULL and ALL previous rings have been emitted
         const allRingsEmitted = ringsExpanded >= ringsMax;
-        if (gamePhase !== GAME_PHASE_TUTORIAL &&
-            dist < logoRadius && logoReadyForDischarge && chamberParticles.length >= CHAMBER_THRESHOLD && allRingsEmitted) {
-          spawnMiniBridge();
-          return;
+        const ringsFullForDischarge = cursorEnergy >= MAX_ENERGY;
+        const chamberFull = chamberParticles.length >= CHAMBER_THRESHOLD;
+        
+        if (gamePhase !== GAME_PHASE_TUTORIAL && dist < logoRadius) {
+          // Check if all conditions met for discharge
+          if (logoReadyForDischarge && chamberFull && allRingsEmitted && ringsFullForDischarge) {
+            spawnMiniBridge();
+            return;
+          }
+          
+          // Rejected: clicked logo but requirements not met
+          // Only play reject sound if chamber has particles (user is trying to discharge)
+          if (chamberParticles.length > 0 && (!ringsFullForDischarge || !chamberFull)) {
+            AudioSystem.playRejectDischarge();
+            return;
+          }
         }
 
         // TUTORIAL DISCHARGE: Click logo at threshold to progress tutorial
