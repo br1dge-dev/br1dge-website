@@ -1098,14 +1098,17 @@
         // === APPLY GRAVITY TO STARS ===
         applySpiralgravityToStars(spiralEnemy.x, spiralEnemy.y, spiralEnemy.radius, spiralEnemy.rotation, spiralEnemy.arms);
         
-        // === DRAW ORANGE CORE STAR ===
+        // === DRAW BUBBLE BODY ===
         drawSpiralCore(spiralEnemy.x, spiralEnemy.y, spiralEnemy.rotation, spiralEnemy.dying ? 1 - spiralEnemy.deathProgress : 1);
+        
+        // === ORBIT STARS ===
+        updateSpiralOrbit();
         
         // Play continuous suction sound
         AudioSystem.setSpiralSuction(Math.min(1, spiralEnemy.radius / 100));
       }
       
-      // Draw green pulsating bubble blob - 2-4 connected bubbles
+      // Draw plain white pulsating bubble blob - 2-4 connected bubbles
       function drawSpiralCore(x, y, rotation, intensity) {
         if (intensity <= 0) return;
         
@@ -1114,51 +1117,83 @@
         
         ctx.save();
         ctx.translate(x, y);
+        ctx.rotate(rotation * 0.3);  // Rotate the whole blob
         
-        // Green color
-        const green = [80, 220, 100];
-        
-        // Generate 2-4 connected bubbles based on rotation (deterministic)
+        // Generate 2-4 connected bubbles
         const bubbleCount = 2 + Math.floor((rotation % 3));
         const baseSize = 8 * intensity * pulse;
         
+        // Plain white, no glow, no contours
+        ctx.fillStyle = `rgba(255, 255, 255, ${intensity})`;
+        
         // Draw bubbles as connected blobs
         for (let i = 0; i < bubbleCount; i++) {
-          const angle = (i / bubbleCount) * Math.PI * 2 + rotation * 0.2;
+          const angle = (i / bubbleCount) * Math.PI * 2;
           const dist = baseSize * 0.6;
           const bx = Math.cos(angle) * dist;
           const by = Math.sin(angle) * dist;
           const bubbleSize = baseSize * (0.6 + Math.sin(time * 4 + i) * 0.2);
           
-          // Bubble glow
-          const glow = ctx.createRadialGradient(bx, by, 0, bx, by, bubbleSize * 1.5);
-          glow.addColorStop(0, `rgba(${green[0]}, ${green[1]}, ${green[2]}, ${0.3 * intensity})`);
-          glow.addColorStop(1, `rgba(${green[0]}, ${green[1]}, ${green[2]}, 0)`);
-          ctx.fillStyle = glow;
-          ctx.beginPath();
-          ctx.arc(bx, by, bubbleSize * 1.5, 0, Math.PI * 2);
-          ctx.fill();
-          
-          // Bubble body
+          // Plain white bubble - filled, no stroke
           ctx.beginPath();
           ctx.arc(bx, by, bubbleSize, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${green[0]}, ${green[1]}, ${green[2]}, ${0.7 * intensity})`;
-          ctx.fill();
-          
-          // Bubble highlight
-          ctx.beginPath();
-          ctx.arc(bx - bubbleSize * 0.3, by - bubbleSize * 0.3, bubbleSize * 0.25, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(200, 255, 200, ${0.5 * intensity})`;
           ctx.fill();
         }
         
-        // Central connection blob
+        // Central connection blob - plain white
         ctx.beginPath();
         ctx.arc(0, 0, baseSize * 0.5, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${green[0]}, ${green[1]}, ${green[2]}, ${0.8 * intensity})`;
         ctx.fill();
         
         ctx.restore();
+      }
+      
+      // Orbit captured stars around the spiral enemy
+      let spiralOrbitStars = [];
+      
+      function updateSpiralOrbit() {
+        if (!spiralEnemy.active) {
+          spiralOrbitStars = [];
+          return;
+        }
+        
+        // Capture nearby absorbed stars into orbit
+        for (const p of ambientParticles) {
+          if (p.absorbed && !p.inOrbit) {
+            const dx = spiralEnemy.x - p.x;
+            const dy = spiralEnemy.y - p.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < 30) {
+              p.inOrbit = true;
+              p.orbitAngle = Math.atan2(dy, dx);
+              p.orbitDist = 20 + Math.random() * 15;
+              spiralOrbitStars.push(p);
+            }
+          }
+        }
+        
+        // Update and draw orbit stars
+        for (let i = spiralOrbitStars.length - 1; i >= 0; i--) {
+          const p = spiralOrbitStars[i];
+          
+          // Rotate around spiral
+          p.orbitAngle += 0.08;
+          p.x = spiralEnemy.x + Math.cos(p.orbitAngle) * p.orbitDist;
+          p.y = spiralEnemy.y + Math.sin(p.orbitAngle) * p.orbitDist;
+          
+          // Draw orbiting star
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * 0.8, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha * 0.7})`;
+          ctx.fill();
+          
+          // Fade out slowly
+          p.alpha *= 0.995;
+          if (p.alpha < 0.1) {
+            spiralOrbitStars.splice(i, 1);
+          }
+        }
       }
       
       // Anime-style explosion state
@@ -1196,35 +1231,35 @@
         const phase = animeExplosion.phase;
         
         if (phase < 1) {
-          // Phase 1: FAST EXPAND - circle grows rapidly
+          // Phase 1: FAST EXPAND - circle grows rapidly (PURE WHITE)
           const expand = phase;
           const radius = expand * 80;
           const alpha = 0.8 - expand * 0.3;
           const lineWidth = 4 - expand * 2;
           
-          // Expanding ring
+          // Expanding ring - pure white
           ctx.beginPath();
           ctx.arc(0, 0, radius, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(100, 220, 120, ${alpha})`;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
           ctx.lineWidth = Math.max(1, lineWidth);
           ctx.stroke();
           
-          // Inner fill fading
+          // Inner fill fading - pure white
           ctx.beginPath();
           ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(150, 255, 150, ${alpha * 0.3})`;
+          ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.3})`;
           ctx.fill();
           
         } else if (phase < 2) {
-          // Phase 2: COLLAPSE - ring shrinks back quickly
+          // Phase 2: COLLAPSE - ring shrinks back quickly (PURE WHITE)
           const collapse = phase - 1;
           const radius = 80 * (1 - collapse * 0.7);
           const alpha = 0.5 + collapse * 0.3;
           
-          // Collapsing ring gets thicker
+          // Collapsing ring gets thicker - pure white
           ctx.beginPath();
           ctx.arc(0, 0, radius, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(100, 220, 120, ${alpha})`;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
           ctx.lineWidth = 2 + collapse * 4;
           ctx.stroke();
           
@@ -1234,10 +1269,10 @@
           const finalRadius = 24 * (1 - implode);
           const alpha = 1 - implode * 0.5;
           
-          // Imploding ring - thick and bright
+          // Imploding ring - thick and bright (PURE WHITE)
           ctx.beginPath();
           ctx.arc(0, 0, finalRadius, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(150, 255, 150, ${alpha})`;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
           ctx.lineWidth = 6 * (1 - implode);
           ctx.stroke();
           
@@ -2353,27 +2388,19 @@
           return;
         }
 
-        // Nur wenn auf Logo geklickt UND Threshold erreicht UND nicht in Chamber-Phase
-        if (dist < logoRadius && cursorEnergy >= ENERGY_THRESHOLD && upgradeLevel < 10 && coloredBridgePhaseComplete) {
-          let levelsToAdd = 1;
-          let isMaxStack = false;
+        // Nur wenn auf Logo geklickt UND Ringe voll UND nicht in Chamber-Phase
+        // Im Inverted Mode: Discharge bei vollen Ringen, egal wie viele hearts (1-6)
+        const canDischargeInverted = isInverted && cursorEnergy >= MAX_ENERGY && redStackCount > 0;
+        const canDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD;
+        
+        if (dist < logoRadius && (canDischargeInverted || canDischargeNormal) && upgradeLevel < 10 && coloredBridgePhaseComplete) {
           const prevLevel = upgradeLevel;
           
-          // Bei max red stack (6): Sofort Level 10!
-          if (redStackCount >= MAX_RED_STACK) {
-            isMaxStack = true;
-            upgradeLevel = 10;
-            logoBaseScale = 1 + 0.18 * 10; // Volles Upgrade
-          } else if (isInverted) {
-            // Bei Inversion: +3 Levels pro gestacktem red particle
-            levelsToAdd = 3 * redStackCount;
-            upgradeLevel = Math.min(10, upgradeLevel + levelsToAdd);
-            logoBaseScale += 0.18 * levelsToAdd;
-          } else {
-            // Normal: +1 Level
-            upgradeLevel = Math.min(10, upgradeLevel + 1);
-            logoBaseScale += 0.18;
-          }
+          // SIMPLIFIED: 1 red particle = 1 level, always
+          // No special rules, no max stack bonus
+          const levelsToAdd = isInverted ? redStackCount : 1;
+          upgradeLevel = Math.min(10, upgradeLevel + levelsToAdd);
+          logoBaseScale += 0.18 * levelsToAdd;
           
           // Audio & Haptic: Discharge - epischer Moment!
           AudioSystem.playDischarge(upgradeLevel);
@@ -2389,49 +2416,49 @@
             }, 150);
           }
           
-           // Reset nach Discharge - IMMER redStackCount zurücksetzen da der Bonus jetzt verwendet wurde
-           if (isMaxStack || isInverted || redStackCount > 0) {
+           // Reset nach Discharge - always reset if inverted or had red particles
+           if (isInverted || redStackCount > 0) {
              redStackCount = 0;
              isInverted = false;
              canvas.style.filter = '';
-             // Audio: Zurück zum normalen epischen Sound
+             // Audio: Zurück zum normalen Sound
              AudioSystem.setInvertedMode(false);
            }
 
            // Nach Discharge: Red Particles wieder aktivieren wenn Level < 10
            if (upgradeLevel < 10) {
              redParticleActive = true;
-             redParticleSpawnTime = Date.now() + 3000; // 3s warten vor nächstem Red Particle
+             redParticleSpawnTime = Date.now() + 3000;
            }
           
-           // Start background music on first discharge (earlier than before)
+           // Start background music on first discharge
            if (!AudioSystem.bgMusicStarted) {
              AudioSystem.startBgMusic();
            }
            
            const intensity = cursorEnergy;
-           const releaseHue = isMaxStack ? 45 : (upgradeLevel * 40) % 360; // Gold bei max stack
+           const releaseHue = (upgradeLevel * 40) % 360;
            
-           // Set max rings for this discharge - can only discharge again when all are emitted
-           ringsMax = isMaxStack ? 30 : (5 + upgradeLevel * 2);
-           ringsExpanded = 0;  // Reset counter
+           // Set max rings for this discharge
+           ringsMax = 5 + upgradeLevel * 2;
+           ringsExpanded = 0;
            
-           // Mehr Ringe bei höheren Levels / max stack
+           // Ring count based on level
            const ringCount = ringsMax;
            for (let o = 0; o < ringCount; o++) {
              setTimeout(() => {
                logoOutlines.push({
                  alpha: 1,
                  radius: 10 + o * 6,
-                 hue: isMaxStack ? (45 + o * 5) % 60 : (releaseHue + o * 15) % 360
+                 hue: (releaseHue + o * 15) % 360
                });
-               ringsExpanded++;  // Track emitted rings
-             }, o * (isMaxStack ? 10 : 20));
+               ringsExpanded++;
+             }, o * 20);
            }
           
-          // Scale punch - stärker bei höheren Levels / max stack
-          logoTargetScale = isMaxStack ? 1.5 : (1.2 + upgradeLevel * 0.05);
-          setTimeout(() => { logoTargetScale = 1; }, isMaxStack ? 300 : 150);
+          // Scale punch based on level
+          logoTargetScale = 1.2 + upgradeLevel * 0.05;
+          setTimeout(() => { logoTargetScale = 1; }, 150);
           
           // Level 10 erreicht - Modal zeigen (4s delay)
           if (upgradeLevel >= 10) {
@@ -2524,26 +2551,17 @@
             hue: 0
           });
           
-          if (dist < logoRadius && cursorEnergy >= ENERGY_THRESHOLD && upgradeLevel < 10) {
-            let levelsToAdd = 1;
-            let isMaxStack = false;
+          // Touch discharge: same logic as mouse
+          const canTouchDischargeInverted = isInverted && cursorEnergy >= MAX_ENERGY && redStackCount > 0;
+          const canTouchDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD;
+          
+          if (dist < logoRadius && (canTouchDischargeInverted || canTouchDischargeNormal) && upgradeLevel < 10) {
             const prevLevel = upgradeLevel;
             
-            // Bei max red stack (6): Sofort Level 10!
-            if (redStackCount >= MAX_RED_STACK) {
-              isMaxStack = true;
-              upgradeLevel = 10;
-              logoBaseScale = 1 + 0.18 * 10;
-            } else if (isInverted) {
-              // Bei Inversion: +3 Levels pro gestacktem red particle
-              levelsToAdd = 3 * redStackCount;
-              upgradeLevel = Math.min(10, upgradeLevel + levelsToAdd);
-              logoBaseScale += 0.18 * levelsToAdd;
-            } else {
-              // Normal: +1 Level
-              upgradeLevel = Math.min(10, upgradeLevel + 1);
-              logoBaseScale += 0.18;
-            }
+            // SIMPLIFIED: 1 red particle = 1 level, always
+            const levelsToAdd = isInverted ? redStackCount : 1;
+            upgradeLevel = Math.min(10, upgradeLevel + levelsToAdd);
+            logoBaseScale += 0.18 * levelsToAdd;
             
             // Audio & Haptic: Discharge
             AudioSystem.playDischarge(upgradeLevel);
@@ -2557,11 +2575,10 @@
               }, 150);
             }
             
-            // Inversion und Stack zurücksetzen nach Discharge
-            if (isInverted) {
+            // Reset inverted mode and stack
+            if (isInverted || redStackCount > 0) {
               isInverted = false;
               canvas.style.filter = '';
-              // Audio: Zurück zum normalen epischen Sound
               AudioSystem.setInvertedMode(false);
             }
             redStackCount = 0;
@@ -2572,21 +2589,21 @@
             }
             
             const intensity = cursorEnergy;
-            const releaseHue = isMaxStack ? 45 : (upgradeLevel * 50) % 360;
+            const releaseHue = (upgradeLevel * 50) % 360;
             
-            const ringCount = isMaxStack ? 30 : (5 + upgradeLevel * 2);
+            const ringCount = 5 + upgradeLevel * 2;
             for (let o = 0; o < ringCount; o++) {
               setTimeout(() => {
                 logoOutlines.push({
                   alpha: 1,
                   radius: 15 + o * 8,
-                  hue: isMaxStack ? (45 + o * 5) % 60 : (releaseHue + o * 20) % 360
+                  hue: (releaseHue + o * 20) % 360
                 });
-              }, o * (isMaxStack ? 10 : 25));
+              }, o * 25);
             }
             
-            logoTargetScale = isMaxStack ? 1.5 : 1.25;
-            setTimeout(() => { logoTargetScale = 1; }, isMaxStack ? 300 : 120);
+            logoTargetScale = 1.25;
+            setTimeout(() => { logoTargetScale = 1; }, 120);
             
             // Level 10 Modal (4s delay)
             if (upgradeLevel >= 10) {
