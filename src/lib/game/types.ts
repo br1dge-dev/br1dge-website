@@ -14,9 +14,9 @@ export const MAX_ENERGY = 1.0;
 export const ENERGY_THRESHOLD = 0.2;
 
 // Chamber system
-export const CHAMBER_THRESHOLD = 8;  // Braucht mehr Partikel zum Füllen
+export const CHAMBER_THRESHOLD = 5;
 export const CHAMBER_RADIUS = 12;
-export const MAX_RED_STACK = 10;  // Mehr Herzen für Max-Stack
+export const MAX_RED_STACK = 6;
 
 // Tutorial phases
 export const TUTORIAL_RINGS_PHASE0 = 2;
@@ -28,8 +28,8 @@ export const TUTORIAL_VIBRATE_INTENSITY = 1.5;
 // Rings per colored phase
 export const RINGS_PER_PHASE = [3, 4, 5] as const;
 
-// Idle timeout (1.5s ohne Bewegung = idle)
-export const IDLE_TIMEOUT = 1500;
+// Idle timeout (5s ohne Bewegung = idle)
+export const IDLE_TIMEOUT = 5000;
 
 // Chamber colors sequence: Orange -> Sand -> Neongreen
 export const CHAMBER_COLORS_SEQUENCE = [
