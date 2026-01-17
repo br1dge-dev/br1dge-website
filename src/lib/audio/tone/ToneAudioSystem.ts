@@ -12,6 +12,7 @@ import type { ToneAudioState } from './types';
 class ToneAudioSystemClass {
   initialized = false;
   muted = false;
+  private unlocking = false;  // Prevent concurrent unlock attempts
   
   // Track soundscape state - exposed as bgMusicStarted for API compatibility
   private soundscapeStartedInternal = false;
@@ -31,56 +32,39 @@ class ToneAudioSystemClass {
    * This is the most reliable way to unlock audio on mobile
    */
   private async unlockAudio(): Promise<void> {
-    console.log('unlockAudio: attempting to unlock, context state:', Tone.context.state);
+    // Prevent concurrent unlock attempts (causes polyphony issues)
+    if (this.unlocking) return;
+    this.unlocking = true;
     
     // Helper: wrap any promise with a timeout
-    const withTimeout = <T>(promise: Promise<T>, ms: number, name: string): Promise<T | null> => {
+    const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> => {
       return Promise.race([
         promise,
-        new Promise<null>((resolve) => {
-          setTimeout(() => {
-            console.warn(`unlockAudio: ${name} timed out after ${ms}ms`);
-            resolve(null);
-          }, ms);
-        })
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))
       ]);
     };
     
     // Method 1: Tone.start() with timeout
     try {
-      console.log('unlockAudio: calling Tone.start()...');
-      await withTimeout(Tone.start(), 2000, 'Tone.start()');
-      console.log('unlockAudio: after Tone.start(), context state:', Tone.context.state);
-    } catch (e) {
-      console.warn('unlockAudio: Tone.start() failed:', e);
-    }
+      await withTimeout(Tone.start(), 2000);
+    } catch (e) { /* ignore */ }
     
     // Method 2: If still suspended, try Tone.context.resume with timeout
     if (Tone.context.state === 'suspended') {
-      console.log('unlockAudio: context still suspended, trying Tone.context.resume()');
       try {
-        await withTimeout(Tone.context.resume(), 2000, 'Tone.context.resume()');
-        console.log('unlockAudio: after Tone.context.resume(), state:', Tone.context.state);
-      } catch (e) {
-        console.warn('unlockAudio: Tone.context.resume() failed:', e);
-      }
+        await withTimeout(Tone.context.resume(), 2000);
+      } catch (e) { /* ignore */ }
     }
     
     // Method 3: Try raw AudioContext resume with timeout
     if (Tone.context.state !== 'running') {
-      console.log('unlockAudio: trying rawContext.resume()');
       try {
         const rawContext = Tone.context.rawContext as AudioContext;
-        await withTimeout(rawContext.resume(), 2000, 'rawContext.resume()');
-        console.log('unlockAudio: after rawContext.resume(), rawState:', rawContext.state);
-      } catch (e) {
-        console.warn('unlockAudio: rawContext.resume() failed:', e);
-      }
+        await withTimeout(rawContext.resume(), 2000);
+      } catch (e) { /* ignore */ }
     }
     
     // Method 4: Play a silent buffer to force unlock (iOS workaround)
-    // Do this regardless of state - it's the most reliable iOS unlock method
-    console.log('unlockAudio: playing silent buffer (iOS unlock)');
     try {
       const rawContext = Tone.context.rawContext as AudioContext;
       const silentBuffer = rawContext.createBuffer(1, 1, 22050);
@@ -89,12 +73,9 @@ class ToneAudioSystemClass {
       source.connect(rawContext.destination);
       source.start(0);
       await new Promise(resolve => setTimeout(resolve, 50));
-      console.log('unlockAudio: after silent buffer, rawState:', rawContext.state);
-    } catch (e) {
-      console.warn('unlockAudio: silent buffer failed:', e);
-    }
+    } catch (e) { /* ignore */ }
     
-    console.log('unlockAudio: FINAL context state:', Tone.context.state);
+    this.unlocking = false;
   }
   
   /**
@@ -102,55 +83,28 @@ class ToneAudioSystemClass {
    * Must be called after user interaction (click/touch)
    */
   async init(): Promise<void> {
-    if (this.initialized) {
-      console.log('ToneAudioSystem.init(): already initialized');
-      return;
-    }
+    if (this.initialized) return;
     
     // Helper: wrap any promise with a timeout
-    const withTimeout = <T>(promise: Promise<T>, ms: number, name: string): Promise<T | null> => {
+    const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> => {
       return Promise.race([
         promise,
-        new Promise<null>((resolve) => {
-          setTimeout(() => {
-            console.warn(`ToneAudioSystem.init(): ${name} timed out after ${ms}ms`);
-            resolve(null);
-          }, ms);
-        })
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))
       ]);
     };
     
     try {
-      console.log('ToneAudioSystem.init() starting...');
-      
-      // CRITICAL: Unlock audio first using multiple methods
+      // Unlock audio first using multiple methods
       await this.unlockAudio();
       
-      // Verify context is running
-      if (Tone.context.state !== 'running') {
-        console.warn('ToneAudioSystem.init(): context not running after unlock:', Tone.context.state);
-        // Continue anyway - some browsers report 'suspended' but still work
-      }
-      
-      // Initialize effect chain with timeout
-      console.log('ToneAudioSystem.init(): initializing EffectChain...');
-      await withTimeout(EffectChain.init(), 5000, 'EffectChain.init()');
-      console.log('ToneAudioSystem.init(): EffectChain done');
-      
-      // Initialize soundscape with timeout
-      console.log('ToneAudioSystem.init(): initializing AmbientSoundscape...');
-      await withTimeout(AmbientSoundscape.init(), 5000, 'AmbientSoundscape.init()');
-      console.log('ToneAudioSystem.init(): AmbientSoundscape done');
-      
-      // Initialize SFX engine with timeout
-      console.log('ToneAudioSystem.init(): initializing SFXEngine...');
-      await withTimeout(SFXEngine.init(), 5000, 'SFXEngine.init()');
-      console.log('ToneAudioSystem.init(): SFXEngine done');
+      // Initialize components with timeouts
+      await withTimeout(EffectChain.init(), 5000);
+      await withTimeout(AmbientSoundscape.init(), 5000);
+      await withTimeout(SFXEngine.init(), 5000);
       
       this.initialized = true;
-      console.log('ToneAudioSystem FULLY INITIALIZED, context state:', Tone.context.state);
     } catch (e) {
-      console.error('ToneAudioSystem.init() FAILED:', e);
+      console.error('ToneAudioSystem.init() failed:', e);
     }
   }
   
@@ -159,12 +113,9 @@ class ToneAudioSystemClass {
    * Call this on every user interaction to ensure audio is unlocked
    */
   async resume(): Promise<void> {
-    console.log('ToneAudioSystem.resume() called, context state:', Tone.context.state);
     try {
       await this.unlockAudio();
-    } catch (e) {
-      console.warn('ToneAudioSystem.resume() failed:', e);
-    }
+    } catch (e) { /* ignore */ }
   }
   
   /**
@@ -206,26 +157,8 @@ class ToneAudioSystemClass {
    * Play particle collection sound
    */
   playCollect(pitch = 0): void {
-    console.log('playCollect called, initialized:', this.initialized, 'muted:', this.muted);
     if (!this.initialized || this.muted) return;
     SFXEngine.playCollect({ pitch });
-  }
-  
-  /**
-   * Play a simple test beep directly to output (debugging)
-   */
-  async playTestBeep(): Promise<void> {
-    console.log('playTestBeep called, context state:', Tone.context.state);
-    try {
-      // Create a simple oscillator directly connected to destination
-      const osc = new Tone.Oscillator(440, 'sine').toDestination();
-      osc.volume.value = -6;
-      osc.start();
-      osc.stop('+0.2');
-      console.log('playTestBeep: beep started');
-    } catch (e) {
-      console.error('playTestBeep failed:', e);
-    }
   }
   
   /**

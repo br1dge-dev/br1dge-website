@@ -122,44 +122,6 @@
   </head>
   <body>
     <canvas id="canvas"></canvas>
-    <!-- Debug Console Toggle -->
-    <button id="debug-toggle" aria-label="Toggle debug console" style="
-      position: fixed;
-      bottom: 1.2rem;
-      right: 4rem;
-      z-index: 100;
-      background: transparent;
-      border: none;
-      padding: 0.5rem;
-      cursor: none;
-      opacity: 0.3;
-      font-size: 16px;
-    ">
-      <span style="color: #0f0; font-family: monospace;">[D]</span>
-    </button>
-    <!-- Debug Console Overlay -->
-    <div id="debug-console" style="
-      display: none;
-      position: fixed;
-      bottom: 4rem;
-      right: 1rem;
-      width: 320px;
-      max-height: 300px;
-      background: rgba(0,0,0,0.9);
-      border: 1px solid #0f0;
-      border-radius: 4px;
-      font-family: monospace;
-      font-size: 10px;
-      color: #0f0;
-      z-index: 1000;
-      pointer-events: auto;
-    ">
-      <div style="display:flex; gap:4px; padding:4px; border-bottom:1px solid #0f0;">
-        <button id="debug-copy" style="background:#0f0;color:#000;border:none;padding:2px 8px;font-family:monospace;font-size:10px;cursor:pointer;border-radius:2px;">COPY</button>
-        <button id="debug-clear" style="background:#f00;color:#fff;border:none;padding:2px 8px;font-family:monospace;font-size:10px;cursor:pointer;border-radius:2px;">CLEAR</button>
-      </div>
-      <div id="debug-logs" style="padding:8px;max-height:260px;overflow-y:auto;"></div>
-    </div>
     <button id="sound-toggle" aria-label="Toggle sound">
       <svg viewBox="0 0 24 24" class="sound-on">
         <path d="M11 5L6 9H2v6h4l5 4V5z"/>
@@ -194,99 +156,6 @@
       
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
-      
-      // ========================================
-      // DEBUG CONSOLE - Visual log overlay for mobile debugging
-      // ========================================
-      const debugConsole = document.getElementById('debug-console');
-      const debugLogsContainer = document.getElementById('debug-logs');
-      const debugToggle = document.getElementById('debug-toggle');
-      let debugVisible = false;
-      const debugLogs: string[] = [];
-      const MAX_DEBUG_LOGS = 100;
-      
-      // Override console.log to capture logs
-      const originalLog = console.log;
-      const originalWarn = console.warn;
-      const originalError = console.error;
-      
-      function addDebugLog(type: string, ...args: any[]) {
-        const timestamp = new Date().toLocaleTimeString('de-DE', { hour12: false });
-        const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
-        const prefix = type === 'log' ? '' : type === 'warn' ? '[W] ' : '[E] ';
-        const color = type === 'log' ? '#0f0' : type === 'warn' ? '#ff0' : '#f00';
-        debugLogs.push(`<span style="color:${color}">${timestamp} ${prefix}${message}</span>`);
-        if (debugLogs.length > MAX_DEBUG_LOGS) debugLogs.shift();
-        if (debugLogsContainer && debugVisible) {
-          debugLogsContainer.innerHTML = debugLogs.join('<br>');
-          debugLogsContainer.scrollTop = debugLogsContainer.scrollHeight;
-        }
-      }
-      
-      console.log = (...args) => { originalLog.apply(console, args); addDebugLog('log', ...args); };
-      console.warn = (...args) => { originalWarn.apply(console, args); addDebugLog('warn', ...args); };
-      console.error = (...args) => { originalError.apply(console, args); addDebugLog('error', ...args); };
-      
-      function toggleDebugConsole() {
-        debugVisible = !debugVisible;
-        if (debugConsole) {
-          debugConsole.style.display = debugVisible ? 'block' : 'none';
-        }
-        if (debugLogsContainer && debugVisible) {
-          debugLogsContainer.innerHTML = debugLogs.join('<br>');
-          debugLogsContainer.scrollTop = debugLogsContainer.scrollHeight;
-        }
-      }
-      
-      debugToggle?.addEventListener('click', (e) => { e.stopPropagation(); toggleDebugConsole(); });
-      debugToggle?.addEventListener('touchend', (e) => { e.stopPropagation(); e.preventDefault(); toggleDebugConsole(); });
-      
-      // Copy button - copies plain text logs to clipboard
-      const debugCopyBtn = document.getElementById('debug-copy');
-      const debugClearBtn = document.getElementById('debug-clear');
-      
-      function copyLogsToClipboard() {
-        // Strip HTML tags for plain text
-        const plainLogs = debugLogs.map(log => log.replace(/<[^>]*>/g, '')).join('\n');
-        navigator.clipboard.writeText(plainLogs).then(() => {
-          if (debugCopyBtn) {
-            debugCopyBtn.textContent = 'COPIED!';
-            setTimeout(() => { debugCopyBtn.textContent = 'COPY'; }, 1500);
-          }
-        }).catch(err => {
-          console.warn('Copy failed:', err);
-          // Fallback: select text
-          if (debugConsole) {
-            const range = document.createRange();
-            range.selectNodeContents(debugConsole);
-            const selection = window.getSelection();
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-          }
-        });
-      }
-      
-      debugCopyBtn?.addEventListener('click', (e) => { e.stopPropagation(); copyLogsToClipboard(); });
-      debugCopyBtn?.addEventListener('touchend', (e) => { e.stopPropagation(); e.preventDefault(); copyLogsToClipboard(); });
-      
-      debugClearBtn?.addEventListener('click', (e) => { 
-        e.stopPropagation(); 
-        debugLogs.length = 0; 
-        if (debugLogsContainer) debugLogsContainer.innerHTML = ''; 
-      });
-      debugClearBtn?.addEventListener('touchend', (e) => { 
-        e.stopPropagation(); 
-        e.preventDefault(); 
-        debugLogs.length = 0; 
-        if (debugLogsContainer) debugLogsContainer.innerHTML = ''; 
-      });
-      
-      console.log('Debug console initialized, isMobile detection pending...');
-
-      // ========================================
-      // INIT AUDIO ON FIRST INTERACTION
-      // ========================================
-      
       // ========================================
       // INIT AUDIO ON FIRST INTERACTION
       // ========================================
@@ -306,17 +175,12 @@
         }
         
         audioInitializing = true;
-        console.log('initAudioOnInteraction: starting audio initialization');
         
         try {
           await AudioSystem.init();
           await AudioSystem.resume();
           audioInitialized = true;
-          console.log('initAudioOnInteraction: audio initialized successfully');
-          // Play a test beep to verify audio is actually working
-          await AudioSystem.playTestBeep();
         } catch (e) {
-          console.warn('initAudioOnInteraction: failed', e);
           audioInitializing = false;  // Allow retry
         }
       }
@@ -354,8 +218,6 @@
       const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
       const MOBILE_CURSOR_OFFSET_Y = -70;  // Cursor appears above finger for visibility
       let isTouching = false;  // Track if user is currently touching
-      
-      console.log(`Device: isMobile=${isMobile}, maxTouchPoints=${navigator.maxTouchPoints}, offset=${MOBILE_CURSOR_OFFSET_Y}`);
       
       // Logo state
       let logoScale = 1;
@@ -647,21 +509,22 @@
           opacity: 0; transition: opacity 2.5s ease; cursor: none;
         `;
         modal.innerHTML = `
-          <button id="close-btn" style="position: absolute; top: 2rem; right: 2rem; background: transparent; border: none; color: #000; font-size: 1.5rem; cursor: none; padding: 0.5rem; opacity: 0.4; transition: opacity 0.3s;">✕</button>
+          <button id="close-btn" style="position: absolute; top: 1rem; right: 1rem; background: transparent; border: none; color: #000; font-size: 1.5rem; cursor: none; padding: 0.5rem; opacity: 0.4; transition: opacity 0.3s;">✕</button>
           
-          <div style="font-size: 7rem; font-weight: 100; margin-bottom: 0.5rem; letter-spacing: -0.05em;">∩</div>
-          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
-            <h1 style="font-size: 2rem; font-weight: 200; letter-spacing: 0.3em; text-transform: uppercase; margin: 0;">Congratulations</h1>
-            <button id="restart-btn" style="background: transparent; border: none; color: rgba(0,0,0,0.3); font-size: 0.9rem; cursor: none; transition: all 0.3s; font-family: inherit;" title="Restart">↻</button>
-          </div>
-          <p style="font-size: 0.9rem; margin-bottom: 2rem; opacity: 0.5; font-weight: 300;">You made it this far, we're basically friends now. Drop a follow and share your experience.</p>
-          
-          <div style="display: flex; gap: 1.2rem; margin-bottom: 1.5rem;">
-            <a href="https://x.com/br1dge_eth" target="_blank" class="modal-link" style="color: #000; text-decoration: none; font-size: 0.9rem; padding: 0.7rem 1.8rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">X / TWITTER</a>
-            <a href="https://farcaster.xyz/br1dge" target="_blank" class="modal-link" style="color: #000; text-decoration: none; font-size: 0.9rem; padding: 0.7rem 1.8rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">FARCASTER</a>
-          </div>
-          
-          <details id="projects-details" style="width: 100%; max-width: 320px; margin-bottom: 2rem;">
+          <div style="padding: 1rem; width: 100%; max-width: 400px; box-sizing: border-box; text-align: center;">
+            <div style="font-size: clamp(4rem, 15vw, 7rem); font-weight: 100; margin-bottom: 0.5rem; letter-spacing: -0.05em;">∩</div>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+              <h1 style="font-size: clamp(1.2rem, 5vw, 2rem); font-weight: 200; letter-spacing: 0.2em; text-transform: uppercase; margin: 0;">Congratulations</h1>
+              <button id="restart-btn" style="background: transparent; border: none; color: rgba(0,0,0,0.3); font-size: 0.9rem; cursor: none; transition: all 0.3s; font-family: inherit;" title="Restart">↻</button>
+            </div>
+            <p style="font-size: clamp(0.75rem, 3vw, 0.9rem); margin-bottom: 1.5rem; opacity: 0.5; font-weight: 300; padding: 0 0.5rem;">You made it this far, we're basically friends now. Drop a follow and share your experience.</p>
+            
+            <div style="display: flex; gap: 0.8rem; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center;">
+              <a href="https://x.com/br1dge_eth" target="_blank" class="modal-link" style="color: #000; text-decoration: none; font-size: clamp(0.75rem, 2.5vw, 0.9rem); padding: 0.6rem 1.2rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">X / TWITTER</a>
+              <a href="https://farcaster.xyz/br1dge" target="_blank" class="modal-link" style="color: #000; text-decoration: none; font-size: clamp(0.75rem, 2.5vw, 0.9rem); padding: 0.6rem 1.2rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">FARCASTER</a>
+            </div>
+            
+            <details id="projects-details" style="width: 100%; max-width: 320px; margin: 0 auto 1.5rem;">
             <summary style="font-size: 0.7rem; font-weight: 400; letter-spacing: 0.2em; opacity: 0.5; text-transform: uppercase; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
               <span>Projects</span>
               <span class="arrow" style="transition: transform 0.2s;">▼</span>
@@ -685,6 +548,8 @@
             </div>
           </details>
            
+          </div>
+          
           <div id="modal-cursor" style="position: fixed; pointer-events: none; z-index: 1001;">
             <div style="width: 6px; height: 6px; background: #000; border-radius: 50%;"></div>
             <div style="position: absolute; top: -9px; left: -9px; width: 24px; height: 24px; border: 1px solid rgba(0,0,0,0.3); border-radius: 50%;"></div>
@@ -2705,9 +2570,7 @@
         const cursorTargetX = mouseX;  // X hat keinen Offset
         const cursorTargetY = mouseY + (isMobile ? MOBILE_CURSOR_OFFSET_Y : 0);
         
-        console.log(`touchend: finger=(${Math.round(mouseX)},${Math.round(mouseY)}), cursorTarget=(${Math.round(cursorTargetX)},${Math.round(cursorTargetY)}), cursorActual=(${Math.round(cursorX)},${Math.round(cursorY)})`);
-        
-        isTouching = false;  // Jetzt erst zurücksetzen
+        isTouching = false;
         
         if (e.changedTouches.length > 0) {
           const touch = e.changedTouches[0];
@@ -2765,12 +2628,8 @@
           // Prüfe ob Cursor über Logo ist
           const cursorOverLogo = cursorDistToLogo < logoRadius * 1.5;  // Etwas toleranter für Touch
           
-          console.log(`touchend: phase=${gamePhase}, logoReady=${logoReadyForDischarge}, energy=${cursorEnergy.toFixed(2)}`);
-          console.log(`touchend check: dist=${Math.round(cursorDistToLogo)}, radius=${Math.round(logoRadius)}, overLogo=${cursorOverLogo}`);
-          
           if (cursorOverLogo) {
             // Simuliere Click an Cursor-Position (dispatcht das gleiche Event wie Desktop)
-            console.log('Touch over logo - simulating click at cursor position');
             const clickEvent = new MouseEvent('click', {
               bubbles: true,
               cancelable: true,
