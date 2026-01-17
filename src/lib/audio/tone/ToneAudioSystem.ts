@@ -34,7 +34,13 @@ class ToneAudioSystemClass {
     if (this.initialized) return;
     
     try {
-      // Initialize effect chain first
+      // CRITICAL: Tone.start() MUST be called first, synchronously within user gesture
+      // This is the only way to unlock audio on iOS/Safari
+      console.log('ToneAudioSystem.init() - starting Tone.js, context state:', Tone.context.state);
+      await Tone.start();
+      console.log('ToneAudioSystem.init() - Tone started, context state:', Tone.context.state);
+      
+      // Initialize effect chain
       await EffectChain.init();
       
       // Initialize soundscape
@@ -44,7 +50,7 @@ class ToneAudioSystemClass {
       await SFXEngine.init();
       
       this.initialized = true;
-      console.log('ToneAudioSystem initialized');
+      console.log('ToneAudioSystem initialized successfully');
     } catch (e) {
       console.warn('Failed to initialize ToneAudioSystem:', e);
     }
@@ -52,12 +58,16 @@ class ToneAudioSystemClass {
   
   /**
    * Resume audio context (required by browsers)
+   * Call this on every user interaction to ensure audio is unlocked
    */
   async resume(): Promise<void> {
     console.log('ToneAudioSystem.resume() called, context state:', Tone.context.state);
-    if (Tone.context.state === 'suspended') {
+    try {
+      // Always try to start/resume - this is safe to call multiple times
       await Tone.start();
-      console.log('Tone.js audio context resumed, new state:', Tone.context.state);
+      console.log('ToneAudioSystem.resume() - Tone started/resumed, context state:', Tone.context.state);
+    } catch (e) {
+      console.warn('ToneAudioSystem.resume() failed:', e);
     }
   }
   
