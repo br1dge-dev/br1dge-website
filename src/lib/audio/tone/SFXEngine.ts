@@ -562,7 +562,7 @@ class SFXEngineClass {
      const now = Tone.now();
 
      // Timing protection
-     if ((now - (this as any).__lastBridgeTime || 0) < 0.5) return;
+     if ((now - (this as any).__lastBridgeTime || 0) < 0.8) return;
      (this as any).__lastBridgeTime = now;
 
      // Sub impact - safely retrigger MonoSynth
