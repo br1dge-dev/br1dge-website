@@ -151,11 +151,15 @@
       font-family: monospace;
       font-size: 10px;
       color: #0f0;
-      overflow-y: auto;
       z-index: 1000;
-      padding: 8px;
       pointer-events: auto;
-    "></div>
+    ">
+      <div style="display:flex; gap:4px; padding:4px; border-bottom:1px solid #0f0;">
+        <button id="debug-copy" style="background:#0f0;color:#000;border:none;padding:2px 8px;font-family:monospace;font-size:10px;cursor:pointer;border-radius:2px;">COPY</button>
+        <button id="debug-clear" style="background:#f00;color:#fff;border:none;padding:2px 8px;font-family:monospace;font-size:10px;cursor:pointer;border-radius:2px;">CLEAR</button>
+      </div>
+      <div id="debug-logs" style="padding:8px;max-height:260px;overflow-y:auto;"></div>
+    </div>
     <button id="sound-toggle" aria-label="Toggle sound">
       <svg viewBox="0 0 24 24" class="sound-on">
         <path d="M11 5L6 9H2v6h4l5 4V5z"/>
@@ -195,10 +199,11 @@
       // DEBUG CONSOLE - Visual log overlay for mobile debugging
       // ========================================
       const debugConsole = document.getElementById('debug-console');
+      const debugLogsContainer = document.getElementById('debug-logs');
       const debugToggle = document.getElementById('debug-toggle');
       let debugVisible = false;
       const debugLogs: string[] = [];
-      const MAX_DEBUG_LOGS = 50;
+      const MAX_DEBUG_LOGS = 100;
       
       // Override console.log to capture logs
       const originalLog = console.log;
@@ -212,9 +217,9 @@
         const color = type === 'log' ? '#0f0' : type === 'warn' ? '#ff0' : '#f00';
         debugLogs.push(`<span style="color:${color}">${timestamp} ${prefix}${message}</span>`);
         if (debugLogs.length > MAX_DEBUG_LOGS) debugLogs.shift();
-        if (debugConsole && debugVisible) {
-          debugConsole.innerHTML = debugLogs.join('<br>');
-          debugConsole.scrollTop = debugConsole.scrollHeight;
+        if (debugLogsContainer && debugVisible) {
+          debugLogsContainer.innerHTML = debugLogs.join('<br>');
+          debugLogsContainer.scrollTop = debugLogsContainer.scrollHeight;
         }
       }
       
@@ -222,29 +227,58 @@
       console.warn = (...args) => { originalWarn.apply(console, args); addDebugLog('warn', ...args); };
       console.error = (...args) => { originalError.apply(console, args); addDebugLog('error', ...args); };
       
-      debugToggle?.addEventListener('click', (e) => {
-        e.stopPropagation();
+      function toggleDebugConsole() {
         debugVisible = !debugVisible;
         if (debugConsole) {
           debugConsole.style.display = debugVisible ? 'block' : 'none';
-          if (debugVisible) {
-            debugConsole.innerHTML = debugLogs.join('<br>');
-            debugConsole.scrollTop = debugConsole.scrollHeight;
-          }
         }
-      });
+        if (debugLogsContainer && debugVisible) {
+          debugLogsContainer.innerHTML = debugLogs.join('<br>');
+          debugLogsContainer.scrollTop = debugLogsContainer.scrollHeight;
+        }
+      }
       
-      debugToggle?.addEventListener('touchend', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        debugVisible = !debugVisible;
-        if (debugConsole) {
-          debugConsole.style.display = debugVisible ? 'block' : 'none';
-          if (debugVisible) {
-            debugConsole.innerHTML = debugLogs.join('<br>');
-            debugConsole.scrollTop = debugConsole.scrollHeight;
+      debugToggle?.addEventListener('click', (e) => { e.stopPropagation(); toggleDebugConsole(); });
+      debugToggle?.addEventListener('touchend', (e) => { e.stopPropagation(); e.preventDefault(); toggleDebugConsole(); });
+      
+      // Copy button - copies plain text logs to clipboard
+      const debugCopyBtn = document.getElementById('debug-copy');
+      const debugClearBtn = document.getElementById('debug-clear');
+      
+      function copyLogsToClipboard() {
+        // Strip HTML tags for plain text
+        const plainLogs = debugLogs.map(log => log.replace(/<[^>]*>/g, '')).join('\n');
+        navigator.clipboard.writeText(plainLogs).then(() => {
+          if (debugCopyBtn) {
+            debugCopyBtn.textContent = 'COPIED!';
+            setTimeout(() => { debugCopyBtn.textContent = 'COPY'; }, 1500);
           }
-        }
+        }).catch(err => {
+          console.warn('Copy failed:', err);
+          // Fallback: select text
+          if (debugConsole) {
+            const range = document.createRange();
+            range.selectNodeContents(debugConsole);
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          }
+        });
+      }
+      
+      debugCopyBtn?.addEventListener('click', (e) => { e.stopPropagation(); copyLogsToClipboard(); });
+      debugCopyBtn?.addEventListener('touchend', (e) => { e.stopPropagation(); e.preventDefault(); copyLogsToClipboard(); });
+      
+      debugClearBtn?.addEventListener('click', (e) => { 
+        e.stopPropagation(); 
+        debugLogs.length = 0; 
+        if (debugLogsContainer) debugLogsContainer.innerHTML = ''; 
+      });
+      debugClearBtn?.addEventListener('touchend', (e) => { 
+        e.stopPropagation(); 
+        e.preventDefault(); 
+        debugLogs.length = 0; 
+        if (debugLogsContainer) debugLogsContainer.innerHTML = ''; 
       });
       
       console.log('Debug console initialized, isMobile detection pending...');
