@@ -202,6 +202,13 @@
       let mouseX = 0, mouseY = 0;
       let cursorX = 0, cursorY = 0;
       
+      // Mobile detection and adaptive sizing
+      const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const MOBILE_CURSOR_SCALE = 2.8;  // Cursor 2.8x larger on mobile
+      const MOBILE_CURSOR_OFFSET_Y = -80;  // Cursor appears above finger
+      let isTouching = false;  // Track if user is currently touching
+      let touchStartedOnLogo = false;  // Track if touch started on logo (for drag-release discharge)
+      
       // Logo state
       let logoScale = 1;
       let logoTargetScale = 1;
@@ -864,7 +871,8 @@
           const dx = cursorX - p.x;
           const dy = cursorY - p.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          const gravityRadius = 280; // Größere Reichweite
+          // Auf Mobile größere Gravitationsreichweite passend zum größeren Cursor
+          const gravityRadius = isMobile ? 280 * MOBILE_CURSOR_SCALE : 280;
           
           if (dist < gravityRadius && dist > 8) {
             // Gravitation: quadratisch stärker je näher
@@ -881,7 +889,9 @@
           }
           
            // Partikel wird vom Cursor absorbiert - nur wenn nicht voll, nicht idle, und nicht im Tutorial-Warte-Modus
-           if (dist < 20 && !p.absorbed && cursorEnergy < MAX_ENERGY && !isIdle && !(gamePhase === GAME_PHASE_TUTORIAL && logoReadyForDischarge)) {
+           // Auf Mobile größerer Absorptionsradius passend zum größeren Cursor
+           const absorbRadius = isMobile ? 20 * MOBILE_CURSOR_SCALE : 20;
+           if (dist < absorbRadius && !p.absorbed && cursorEnergy < MAX_ENERGY && !isIdle && !(gamePhase === GAME_PHASE_TUTORIAL && logoReadyForDischarge)) {
             p.absorbed = true;
             const prevEnergy = cursorEnergy;
             
@@ -1427,7 +1437,9 @@
 
         // Red particles can always be captured, even when chamber has colored particles
         // This allows stacking red particles up to MAX_RED_STACK (6) for instant Level 10
-        if (dist < 30) {
+        // Auf Mobile größerer Capture-Radius passend zum größeren Cursor
+        const redCaptureDist = isMobile ? 30 * MOBILE_CURSOR_SCALE : 30;
+        if (dist < redCaptureDist) {
           // CAPTURED! - Jetzt geht Red Particle in die Kammer
           redParticle.active = false;
           redParticleCatches++;
@@ -1678,13 +1690,17 @@
           const canCapture = chamberParticles.length < CHAMBER_THRESHOLD && chamberVisible;
 
           // Gravitation NUR wenn noch Platz in der Kammer ist
-          if (distCursor < 200 && distCursor > 5 && canCapture) {
-            const pullStrength = Math.pow(1 - distCursor / 200, 2) * 0.25;
+          // Auf Mobile größere Distanzen für den größeren Cursor
+          const coloredGravityDist = isMobile ? 200 * MOBILE_CURSOR_SCALE : 200;
+          const coloredCaptureDist = isMobile ? 45 * MOBILE_CURSOR_SCALE : 45;
+          
+          if (distCursor < coloredGravityDist && distCursor > 5 && canCapture) {
+            const pullStrength = Math.pow(1 - distCursor / coloredGravityDist, 2) * 0.25;
             p.vx += (dxCursor / distCursor) * pullStrength;
             p.vy += (dyCursor / distCursor) * pullStrength;
           }
 
-          if (distCursor < 45 && canCapture) {
+          if (distCursor < coloredCaptureDist && canCapture) {
             // SOFORT als captured markieren - verhindert jede weitere Verarbeitung
             p.captured = true;
 
@@ -1781,9 +1797,10 @@
         prevCursorX = cursorX;
         prevCursorY = cursorY;
         
-        // Größe
-        const baseSize = 5;
-        const energySize = cursorEnergy * 18;
+        // Größe - auf Mobile größer für bessere Sichtbarkeit
+        const mobileScale = isMobile ? MOBILE_CURSOR_SCALE : 1;
+        const baseSize = 5 * mobileScale;
+        const energySize = cursorEnergy * 18 * mobileScale;
         const cursorSize = baseSize + energySize;
         
         ctx.save();
@@ -1797,8 +1814,8 @@
         const unlockedRings = getCurrentRings();
         
         for (let layer = 0; layer < totalLayers; layer++) {
-          const ringRadius = cursorSize + 5 + layer * 5;
-          const ringWidth = 4;
+          const ringRadius = cursorSize + 5 * mobileScale + layer * 5 * mobileScale;
+          const ringWidth = 4 * mobileScale;
           
           // Check if ring is unlocked
           const isUnlocked = layer < unlockedRings;
@@ -1839,11 +1856,12 @@
          }
 
          // === CHAMBER (Gravitationsgefängnis) - auch bei red particles sichtbar ===
-         const chamberOpenThreshold = 0.2;
-         const hasParticlesInChamber = chamberParticles.length > 0;
-         if ((cursorEnergy >= chamberOpenThreshold && chamberActive) || hasParticlesInChamber) {
-           const chamberOuterRadius = cursorSize;
-           const chamberInnerRadius = cursorSize - CHAMBER_RADIUS;
+          const chamberOpenThreshold = 0.2;
+          const hasParticlesInChamber = chamberParticles.length > 0;
+          if ((cursorEnergy >= chamberOpenThreshold && chamberActive) || hasParticlesInChamber) {
+            const chamberOuterRadius = cursorSize;
+            const scaledChamberRadius = CHAMBER_RADIUS * mobileScale;
+            const chamberInnerRadius = cursorSize - scaledChamberRadius;
           
            // Donut-Shape zeichnen (Kammer-Wand)
            // Färbe cyan wenn 6 red particles gesammelt (MAX_RED_STACK)
@@ -1925,15 +1943,16 @@
               }
             }
             
-            // Partikel zeichnen
+            // Partikel zeichnen - auf Mobile größer
+            const particleSize = p.size * mobileScale;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.arc(p.x * mobileScale, p.y * mobileScale, particleSize, 0, Math.PI * 2);
             ctx.fillStyle = p.color;
             ctx.fill();
             
             // Subtiler Glow
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size * 1.5, 0, Math.PI * 2);
+            ctx.arc(p.x * mobileScale, p.y * mobileScale, particleSize * 1.5, 0, Math.PI * 2);
             ctx.fillStyle = hexToRgba(p.color, 0.3);
             ctx.fill();
            }
@@ -2239,8 +2258,10 @@
           }
         }
         
+        // Mobile: Cursor erscheint ÜBER dem Finger für bessere Sichtbarkeit
+        const mobileOffsetY = (isMobile && isTouching) ? MOBILE_CURSOR_OFFSET_Y : 0;
         const targetX = mouseX + pullX;
-        const targetY = mouseY + pullY;
+        const targetY = mouseY + pullY + mobileOffsetY;
         cursorX += (targetX - cursorX) * 0.25;
         cursorY += (targetY - cursorY) * 0.25;
         
@@ -2528,6 +2549,12 @@
         mouseY = touch.clientY;
         lastMouseMoveTime = Date.now();
         isIdle = false;
+        isTouching = true;
+        
+        // Check if touch started on/near logo (for drag-release discharge)
+        const logoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
+        const dist = distFromLogo(touch.clientX, touch.clientY);
+        touchStartedOnLogo = dist < logoRadius * 1.5;  // Etwas größerer Bereich für Touch
       });
       
       document.addEventListener('touchmove', (e) => {
@@ -2539,8 +2566,10 @@
         e.preventDefault();
       }, { passive: false });
       
-      // Touch tap = ENERGIE EXPLOSION (nur wenn Threshold erreicht)
+      // Touch release = ENERGIE EXPLOSION (drag-and-release mechanic)
       document.addEventListener('touchend', (e) => {
+        isTouching = false;  // Reset touch state
+        
         if (e.changedTouches.length > 0) {
           const touch = e.changedTouches[0];
           const touchX = touch.clientX;
@@ -2568,6 +2597,7 @@
               // Audio
               AudioSystem.playCollect(4);
               
+              touchStartedOnLogo = false;
               return; // Keine weitere Verarbeitung
             }
           }
@@ -2585,12 +2615,21 @@
             hue: 0
           });
           
-          // Touch discharge: same logic as mouse
-          // Inverted: discharge ANYTIME with hearts
+          // DRAG-RELEASE DISCHARGE: Löst aus wenn man irgendwo loslässt,
+          // solange man auf/nahe dem Logo gestartet hat UND genug Energie hat
+          // Das macht das Gameplay intuitiver auf Mobile
           const canTouchDischargeInverted = isInverted && redStackCount > 0;
           const canTouchDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD && coloredBridgePhaseComplete;
+          const canDischarge = canTouchDischargeInverted || canTouchDischargeNormal;
           
-          if (dist < logoRadius && (canTouchDischargeInverted || canTouchDischargeNormal) && upgradeLevel < 10) {
+          // Discharge wenn: (nahe Logo ODER vom Logo aus gestartet) UND discharge möglich
+          const releaseNearLogo = dist < logoRadius * 1.2;  // Etwas toleranter für Release
+          const shouldDischarge = (releaseNearLogo || touchStartedOnLogo) && canDischarge && upgradeLevel < 10;
+          
+          // Reset touchStartedOnLogo für nächsten Touch
+          touchStartedOnLogo = false;
+          
+          if (shouldDischarge) {
             const prevLevel = upgradeLevel;
             
             // SIMPLIFIED: 1 red particle = 1 level, always
@@ -2725,8 +2764,9 @@
         soundToggleBtn?.classList.toggle('muted', muted);
       }
       
-      function enableSound() {
-        initAudioOnInteraction();
+      async function enableSound() {
+        await initAudioOnInteraction();
+        // Nach der Initialisierung sicherstellen, dass Sound an ist
         if (AudioSystem.muted) {
           AudioSystem.toggleMute();
         }
@@ -2747,8 +2787,8 @@
         enableSound();
       });
       
-      function toggleSound() {
-        initAudioOnInteraction();
+      async function toggleSound() {
+        await initAudioOnInteraction();
         const muted = AudioSystem.toggleMute();
         updateSoundIcons(muted);
         
