@@ -2,13 +2,13 @@
  * Haptic feedback manager using Vibration API
  * Syncs with AudioSystem muted state
  */
-import { AudioSystem } from '../audio/AudioSystem';
+import { ToneAudioSystem } from '../audio/tone';
 
 export const HapticManager = {
   supported: typeof navigator !== 'undefined' && 'vibrate' in navigator,
 
   vibrate(pattern: number | number[]): void {
-    if (this.supported && !AudioSystem.muted) {
+    if (this.supported && !ToneAudioSystem.muted) {
       navigator.vibrate(pattern);
     }
   },

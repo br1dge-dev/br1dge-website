@@ -1,3 +1,2 @@
-export { AudioSystem } from './AudioSystem';
-export * from './constants';
-export * from './sfx';
+// Re-export Tone.js audio system
+export { ToneAudioSystem } from './tone';
