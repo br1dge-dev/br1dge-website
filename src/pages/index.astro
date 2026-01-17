@@ -122,6 +122,40 @@
   </head>
   <body>
     <canvas id="canvas"></canvas>
+    <!-- Debug Console Toggle -->
+    <button id="debug-toggle" aria-label="Toggle debug console" style="
+      position: fixed;
+      bottom: 1.2rem;
+      right: 4rem;
+      z-index: 100;
+      background: transparent;
+      border: none;
+      padding: 0.5rem;
+      cursor: none;
+      opacity: 0.3;
+      font-size: 16px;
+    ">
+      <span style="color: #0f0; font-family: monospace;">[D]</span>
+    </button>
+    <!-- Debug Console Overlay -->
+    <div id="debug-console" style="
+      display: none;
+      position: fixed;
+      bottom: 4rem;
+      right: 1rem;
+      width: 320px;
+      max-height: 300px;
+      background: rgba(0,0,0,0.9);
+      border: 1px solid #0f0;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 10px;
+      color: #0f0;
+      overflow-y: auto;
+      z-index: 1000;
+      padding: 8px;
+      pointer-events: auto;
+    "></div>
     <button id="sound-toggle" aria-label="Toggle sound">
       <svg viewBox="0 0 24 24" class="sound-on">
         <path d="M11 5L6 9H2v6h4l5 4V5z"/>
@@ -157,9 +191,63 @@
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
       
-      // AudioSystem imported from ../lib/audio/AudioSystem.ts (~370 lines)
-      // HapticManager imported from ../lib/haptics/HapticManager.ts (~26 lines)
+      // ========================================
+      // DEBUG CONSOLE - Visual log overlay for mobile debugging
+      // ========================================
+      const debugConsole = document.getElementById('debug-console');
+      const debugToggle = document.getElementById('debug-toggle');
+      let debugVisible = false;
+      const debugLogs: string[] = [];
+      const MAX_DEBUG_LOGS = 50;
       
+      // Override console.log to capture logs
+      const originalLog = console.log;
+      const originalWarn = console.warn;
+      const originalError = console.error;
+      
+      function addDebugLog(type: string, ...args: any[]) {
+        const timestamp = new Date().toLocaleTimeString('de-DE', { hour12: false });
+        const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+        const prefix = type === 'log' ? '' : type === 'warn' ? '[W] ' : '[E] ';
+        const color = type === 'log' ? '#0f0' : type === 'warn' ? '#ff0' : '#f00';
+        debugLogs.push(`<span style="color:${color}">${timestamp} ${prefix}${message}</span>`);
+        if (debugLogs.length > MAX_DEBUG_LOGS) debugLogs.shift();
+        if (debugConsole && debugVisible) {
+          debugConsole.innerHTML = debugLogs.join('<br>');
+          debugConsole.scrollTop = debugConsole.scrollHeight;
+        }
+      }
+      
+      console.log = (...args) => { originalLog.apply(console, args); addDebugLog('log', ...args); };
+      console.warn = (...args) => { originalWarn.apply(console, args); addDebugLog('warn', ...args); };
+      console.error = (...args) => { originalError.apply(console, args); addDebugLog('error', ...args); };
+      
+      debugToggle?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        debugVisible = !debugVisible;
+        if (debugConsole) {
+          debugConsole.style.display = debugVisible ? 'block' : 'none';
+          if (debugVisible) {
+            debugConsole.innerHTML = debugLogs.join('<br>');
+            debugConsole.scrollTop = debugConsole.scrollHeight;
+          }
+        }
+      });
+      
+      debugToggle?.addEventListener('touchend', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        debugVisible = !debugVisible;
+        if (debugConsole) {
+          debugConsole.style.display = debugVisible ? 'block' : 'none';
+          if (debugVisible) {
+            debugConsole.innerHTML = debugLogs.join('<br>');
+            debugConsole.scrollTop = debugConsole.scrollHeight;
+          }
+        }
+      });
+      
+      console.log('Debug console initialized, isMobile detection pending...');
 
       // ========================================
       // INIT AUDIO ON FIRST INTERACTION
@@ -230,6 +318,8 @@
       const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
       const MOBILE_CURSOR_OFFSET_Y = -70;  // Cursor appears above finger for visibility
       let isTouching = false;  // Track if user is currently touching
+      
+      console.log(`Device: isMobile=${isMobile}, maxTouchPoints=${navigator.maxTouchPoints}, offset=${MOBILE_CURSOR_OFFSET_Y}`);
       
       // Logo state
       let logoScale = 1;
@@ -2579,6 +2669,8 @@
         const cursorPosXAtRelease = cursorX;  // X hat keinen Offset
         const cursorPosYAtRelease = cursorY;  // Y hat bereits den Offset aus dem letzten Frame
         
+        console.log(`touchend: cursor=(${Math.round(cursorPosXAtRelease)},${Math.round(cursorPosYAtRelease)}), isTouching was=${isTouching}`);
+        
         isTouching = false;  // Jetzt erst zurücksetzen
         
         if (e.changedTouches.length > 0) {
@@ -2637,7 +2729,10 @@
           const cursorOverLogo = cursorDistToLogo < logoRadius * 1.5;  // Großzügiger für Touch
           const shouldDischarge = cursorOverLogo && canDischarge && upgradeLevel < 10;
           
+          console.log(`touchend check: dist=${Math.round(cursorDistToLogo)}, radius=${Math.round(logoRadius)}, overLogo=${cursorOverLogo}, canDischarge=${canDischarge}, energy=${cursorEnergy.toFixed(2)}, shouldDischarge=${shouldDischarge}`);
+          
           if (shouldDischarge) {
+            console.log('DISCHARGE TRIGGERED!');
             const prevLevel = upgradeLevel;
             
             // SIMPLIFIED: 1 red particle = 1 level, always
