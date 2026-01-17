@@ -219,16 +219,16 @@
         }
       });
       
-      let W, H, centerX, centerY;
-      let mouseX = 0, mouseY = 0;
-      let cursorX = 0, cursorY = 0;
-      
-      // Mobile detection
-      const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-      const MOBILE_CURSOR_OFFSET_Y = -70;  // Cursor appears above finger for visibility
-      let isTouching = false;  // Track if user is currently touching
-      
-      // Logo state
+       let W, H, centerX, centerY;
+       let mouseX = 0, mouseY = 0;
+       let cursorX = 0, cursorY = 0;
+
+       // Mobile detection - global for access in callbacks
+       let isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+       const MOBILE_CURSOR_OFFSET_Y = -70;  // Cursor appears above finger for visibility
+       let isTouching = false;  // Track if user is currently touching
+
+       // Logo state
       let logoScale = 1;
       let logoTargetScale = 1;
       let logoBaseScale = 1; // Wächst permanent mit jedem Upgrade
@@ -2741,14 +2741,15 @@
             ringsMax = 4;
             ringsExpanded = 4;  // Allow immediate discharge
 
-            // Transition to colored particles after short delay
+            // Transition to colored particles after short delay (longer on mobile)
+            const transitionDelay = isMobile ? 1200 : 500;
             setTimeout(() => {
               gamePhase = GAME_PHASE_COLORED;
               currentColorPhase = 0;
               chamberActive = true;
               // Play transition sound
               AudioSystem.playBridgeSpawn();
-            }, 500);
+            }, transitionDelay);
           }
           return;
         }
