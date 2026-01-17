@@ -342,10 +342,13 @@
       // Phase tracking: colored bridges first, then red particles
       let coloredBridgePhaseComplete = false;
       
-      // Game complete state (für Restart-Button nach Modal)
-      let gameCompleted = false;
-      
-      // Particles
+       // Game complete state (für Restart-Button nach Modal)
+       let gameCompleted = false;
+
+       // You Died state
+       let youDiedActive = false;
+
+       // Particles
       const particles = [];
       
       // Ripples
@@ -354,23 +357,24 @@
       // Ambient floating particles
       const ambientParticles = [];
       
-      // === SPIRAL ENEMY ===
-      // Invisible spiral that sucks in stars, moves toward logo
-      // Only visible through gravitational effect on stars
-      let spiralEnemy = {
-        active: false,
-        x: 0,
-        y: 0,
-        vx: 0,
-        vy: 0,
-        rotation: 0,
-        arms: 3,  // 3-5 arms, varies per spawn
-        radius: 80,  // gravitational influence radius
-        dying: false,
-        deathTime: 0,
-        deathProgress: 0,
-        consumedEnergy: 0  // Tracks how much energy/particles consumed -> increases speed
-      };
+       // === SPIRAL ENEMY ===
+       // Invisible spiral that sucks in stars, moves toward logo
+       // Only visible through gravitational effect on stars
+       let spiralEnemy = {
+         active: false,
+         x: 0,
+         y: 0,
+         vx: 0,
+         vy: 0,
+         rotation: 0,
+         arms: 3,  // 3-5 arms, varies per spawn
+         radius: 80,  // gravitational influence radius
+         dying: false,
+         deathTime: 0,
+         deathProgress: 0,
+         consumedEnergy: 0,  // Tracks how much energy/particles consumed -> increases speed
+         speedModifier: 1  // 1X, 2X, 4X, or 8X based on random roll
+       };
       let lastSpiralSpawnTime = 0;
       const SPIRAL_SPAWN_INTERVAL = 15000;  // 15 seconds
       const SPIRAL_BASE_SPEED = 0.4;  // Base movement speed
@@ -650,8 +654,49 @@
         });
       }
       
-      // 2026 Minimal Background - Clean, Dark, Sophisticated
-      function drawGrid() {
+       // 2026 Minimal Background - Clean, Dark, Sophisticated
+
+       // Trigger YOU DIED screen
+       function triggerYouDied() {
+         youDiedActive = true;
+         spiralEnemy.active = false;
+         spiralEnemy.dying = false;
+
+         // Stop ambient music and play melancholic chord
+         AudioSystem.stopBgMusic();
+         AudioSystem.playYouDied();
+       }
+
+       // Reset from YOU DIED
+        function resetFromYouDied() {
+          youDiedActive = false;
+
+          // Reset to post-tutorial state at level 2
+          upgradeLevel = 2;
+          logoBaseScale = 1.2;
+         cursorEnergy = 0;
+         redParticleActive = false;
+         redParticleCatches = 0;
+         redStackCount = 0;
+         redParticle.active = false;
+         isInverted = false;
+         logoBreathPhase = 0;
+         gameCompleted = false;
+
+         // Chamber system reset
+         chamberParticles.length = 0;
+         chamberActive = false;
+         coloredParticles.length = 0;
+         floatingBridges.length = 0;
+         coloredBridgePhaseComplete = false;
+         currentColorPhase = 0;
+         logoReadyForDischarge = false;
+
+         // Restart ambient
+         AudioSystem.startBgMusic();
+       }
+
+       function drawGrid() {
         const time = Date.now() / 1000;
         
         // Pure black with subtle depth
@@ -783,12 +828,34 @@
           // Red flash when hit by enemy
           const flashIntensity = 1 - (timeSinceHit / hitFlashDuration);
           ctx.fillStyle = `rgb(255, ${Math.floor(255 * (1 - flashIntensity))}, ${Math.floor(255 * (1 - flashIntensity))})`;
-        } else {
-          ctx.fillStyle = '#ffffff';
-        }
-        ctx.fillText('∩', 0, 0);
-        
-        ctx.restore();
+         } else {
+           ctx.fillStyle = '#ffffff';
+         }
+         ctx.fillText('∩', 0, 0);
+
+         ctx.restore();  // Ende Logo-Transform
+
+         // Römische Ziffer über dem Logo (mit Vibration wenn Logo vibriert)
+         ctx.save();
+         const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+         const levelIdx = Math.max(0, Math.min(9, upgradeLevel));
+         const romanLevel = romanNumerals[levelIdx];
+
+         // Größe proportional zum baseLogoSize (nicht zur skalierten Größe)
+         const levelDisplaySize = baseLogoSize * 0.10;
+         // Position: W/2, H/2 ist Zentrum. Abstand = 10% der baseLogoSize über dem Logo-Zentrum
+         // Logo geht von Zentrum bis ca. 0.5 * baseLogoSize nach oben
+         // Also: levelY = centerY - (halbe Logo-Höhe) - (10% Abstand)
+         const levelX = (W / 2) + vibrationX;
+         const levelY = (H / 2) - (baseLogoSize * 0.55) + vibrationY; // 0.5 = halbe Höhe, 0.05 = Margin
+
+         // Filigran, dünn, dezent - wie Modal-Style
+         ctx.font = `200 ${levelDisplaySize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
+         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+         ctx.textAlign = 'center';
+         ctx.textBaseline = 'middle';
+         ctx.fillText(romanLevel, levelX, levelY);
+         ctx.restore();
         
         // Expanding Rings bei Entladung - mit Farbe (immer zentriert)
         for (let i = logoOutlines.length - 1; i >= 0; i--) {
@@ -1053,8 +1120,21 @@
           spiralEnemy.arms = 3 + Math.floor(Math.random() * 3);  // 3-5 arms
           spiralEnemy.rotation = Math.random() * Math.PI * 2;
           spiralEnemy.radius = 100 + Math.random() * 40;  // Larger radius for more visible gravity (100-140)
+
+          // Speed modifier: 50% 2X, 25% 4X, 12.5% 8X, 12.5% 1X
+          const roll = Math.random();
+          if (roll < 0.5) {
+            spiralEnemy.speedModifier = 2;
+          } else if (roll < 0.75) {
+            spiralEnemy.speedModifier = 4;
+          } else if (roll < 0.875) {
+            spiralEnemy.speedModifier = 8;
+          } else {
+            spiralEnemy.speedModifier = 1;
+          }
+
           lastSpiralSpawnTime = now;
-          
+
           // Play ominous spawn sound
           AudioSystem.playSpiralSpawn();
         }
@@ -1091,11 +1171,13 @@
           return;
         }
         
-        // === MOVEMENT LOGIC ===
+         // === MOVEMENT LOGIC ===
         // Speed increases with consumed energy (faster the more it eats)
+        // Apply random speed modifier (1X, 2X, 4X, 8X)
         const energySpeedBonus = spiralEnemy.consumedEnergy * 2;  // Each consumed star adds speed
-        const currentSpeed = Math.min(SPIRAL_MAX_SPEED, SPIRAL_BASE_SPEED + energySpeedBonus);
-        
+        const baseSpeed = Math.min(SPIRAL_MAX_SPEED, SPIRAL_BASE_SPEED + energySpeedBonus);
+        const currentSpeed = baseSpeed * spiralEnemy.speedModifier;
+
         // Move directly toward logo (no flutter)
         let moveX = (dxLogo / distToLogo) * currentSpeed;
         let moveY = (dyLogo / distToLogo) * currentSpeed;
@@ -1144,21 +1226,28 @@
           // Trigger shockwave from logo center - pushes all particles away
           spawnShockwave(centerX, centerY, 2.5);
 
-          // Logo flashes red - "hit registered"
-          logoHitFlashTime = now;
+           // Logo flashes red - "hit registered"
+           logoHitFlashTime = now;
 
-          logoVibrationTime = now;
-          logoReadyForDischarge = false;
+           logoVibrationTime = now;
+           logoReadyForDischarge = false;
 
-          // Downgrade 2 levels (lose 40% energy = 2 rings)
-          cursorEnergy = Math.max(0, cursorEnergy - 0.4);
+           // Downgrade 1 level
+           const wasLevel = upgradeLevel;
+           upgradeLevel = Math.max(0, upgradeLevel - 1);
+           logoBaseScale = Math.max(1, logoBaseScale - 0.18); // Schrumpfen (wie beim Wachsen +0.18)
 
-          AudioSystem.playSpiralDamage();
-          HapticManager.levelUp();
+           // Check for death
+           if (upgradeLevel === 0) {
+             triggerYouDied();
+           }
 
-          spiralEnemy.active = false;
-          return;
-        }
+           AudioSystem.playSpiralDamage();
+           HapticManager.levelUp();
+
+           spiralEnemy.active = false;
+           return;
+         }
         
         // === APPLY GRAVITY TO STARS ===
         applySpiralgravityToStars(spiralEnemy.x, spiralEnemy.y, spiralEnemy.radius, spiralEnemy.rotation, spiralEnemy.arms);
@@ -2312,9 +2401,47 @@
           }
         }
       }
-      
+
+      // Draw YOU DIED screen
+      function drawYouDied() {
+        // Fade in
+        const fadeProgress = Math.min(1, (Date.now() - (window as any).__youDiedStartTime || Date.now()) / 1200);
+        const alpha = fadeProgress * 0.9;
+
+        // Dark overlay
+        ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+        ctx.fillRect(0, 0, W, H);
+
+        // YOU DIED - wie "Congratulations" im Modal, nur rot
+        const fontSize = Math.min(W, H) * 0.07;
+        ctx.font = `200 ${fontSize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = `rgba(180, 50, 60, ${fadeProgress})`;
+        ctx.fillText('YOU DIED', W / 2, H / 2);
+
+        // Restart button (↻) unterhalb - weiß auf schwarz
+        const restartSize = fontSize * 0.5;
+        ctx.font = `300 ${restartSize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${fadeProgress * 0.6})`;
+        ctx.fillText('↻', W / 2, H / 2 + fontSize * 0.8);
+
+        // Minimalistischer Cursor (Level 1 Style)
+        ctx.beginPath();
+        ctx.arc(cursorX, cursorY, 4, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${fadeProgress * 0.8})`;
+        ctx.fill();
+      }
+
       // Main render
       function render() {
+        // If YOU DIED is active, show it and skip normal render
+        if (youDiedActive) {
+          drawYouDied();
+          requestAnimationFrame(render);
+          return;
+        }
+
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, W, H);
         
@@ -2394,9 +2521,15 @@
         isIdle = false;
       });
       
-      // Click auf Logo = ENERGIE EXPLOSION (nur wenn Threshold erreicht)
-      document.addEventListener('click', (e) => {
-        const clickX = e.clientX;
+       // Click auf Logo = ENERGIE EXPLOSION (nur wenn Threshold erreicht)
+       document.addEventListener('click', (e) => {
+         // If YOU DIED is active, click resets to level 2
+         if (youDiedActive) {
+           resetFromYouDied();
+           return;
+         }
+
+         const clickX = e.clientX;
         const clickY = e.clientY;
         
         // ZUERST: Check ob ein Floating Bridge angeklickt wurde
@@ -2520,13 +2653,13 @@
         const canDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD && coloredBridgePhaseComplete;
         
         if (dist < logoRadius && (canDischargeInverted || canDischargeNormal) && upgradeLevel < 10) {
-          const prevLevel = upgradeLevel;
-          
-          // SIMPLIFIED: 1 red particle = 1 level, always
-          // No special rules, no max stack bonus
-          const levelsToAdd = isInverted ? redStackCount : 1;
-          upgradeLevel = Math.min(10, upgradeLevel + levelsToAdd);
-          logoBaseScale += 0.18 * levelsToAdd;
+           const prevLevel = upgradeLevel;
+           
+           // SIMPLIFIED: 1 red particle = 1 level, always
+           // No special rules, no max stack bonus
+           const levelsToAdd = isInverted ? redStackCount : 1;
+           upgradeLevel = Math.min(10, upgradeLevel + levelsToAdd);
+           logoBaseScale += 0.18 * levelsToAdd;
           
           // Audio & Haptic: Discharge - epischer Moment!
           AudioSystem.playDischarge(upgradeLevel);
@@ -2586,13 +2719,13 @@
           logoTargetScale = 1.2 + upgradeLevel * 0.05;
           setTimeout(() => { logoTargetScale = 1; }, 150);
           
-          // Level 10 erreicht - Modal zeigen (4s delay)
-          if (upgradeLevel >= 10) {
-            gameCompleted = true;
-            setTimeout(() => {
-              showModal();
-            }, 4000); // 4 Sekunden warten
-          }
+           // Level 10 erreicht - Modal zeigen (nur einmal!)
+           if (upgradeLevel >= 10 && !gameCompleted) {
+             gameCompleted = true;
+             setTimeout(() => {
+               showModal();
+             }, 4000); // 4 Sekunden warten
+           }
           
           // DRUCKWELLE - alle ambient particles wegstoßen
           for (let ap of ambientParticles) {
