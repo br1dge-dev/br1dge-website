@@ -205,6 +205,7 @@ class SFXEngineClass {
    * Quieter and more atmospheric to not overwhelm during rapid collection
    */
   playCollect(params: SFXParams = {}): void {
+    console.log('SFXEngine.playCollect - initialized:', this.initialized, 'melodicSynth:', !!this.melodicSynth);
     if (!this.initialized || !this.melodicSynth) return;
     
     const now = Tone.now();
