@@ -249,17 +249,26 @@ class ToneAudioSystemClass {
     SFXEngine.playCollectionComplete();
   }
   
-  /**
-   * Play red heart capture - special ethereal sound for inverted mode
-   */
-  playRedHeartCapture(): void {
-    if (!this.initialized || this.muted) return;
-    SFXEngine.playRedHeartCapture();
-  }
-  
-  // ============================================
-  // Spiral Enemy Sounds
-  // ============================================
+   /**
+    * Play red heart capture - special ethereal sound for inverted mode
+    */
+   playRedHeartCapture(): void {
+     if (!this.initialized || this.muted) return;
+     SFXEngine.playRedHeartCapture();
+   }
+
+   /**
+    * Play thanks sound - positive, short, punchy confirmation
+    * Played when user enables sound via speaker icon or sound-hint
+    */
+   playThanks(): void {
+     if (!this.initialized || this.muted) return;
+     SFXEngine.playThanks();
+   }
+
+   // ============================================
+   // Spiral Enemy Sounds
+   // ============================================
   
   /**
    * Spiral spawn sound - ominous arrival
