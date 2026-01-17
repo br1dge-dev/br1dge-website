@@ -54,9 +54,10 @@ class ToneAudioSystemClass {
    * Resume audio context (required by browsers)
    */
   async resume(): Promise<void> {
+    console.log('ToneAudioSystem.resume() called, context state:', Tone.context.state);
     if (Tone.context.state === 'suspended') {
       await Tone.start();
-      console.log('Tone.js audio context resumed');
+      console.log('Tone.js audio context resumed, new state:', Tone.context.state);
     }
   }
   
@@ -99,6 +100,7 @@ class ToneAudioSystemClass {
    * Play particle collection sound
    */
   playCollect(pitch = 0): void {
+    console.log('playCollect called, initialized:', this.initialized, 'muted:', this.muted);
     if (!this.initialized || this.muted) return;
     SFXEngine.playCollect({ pitch });
   }
