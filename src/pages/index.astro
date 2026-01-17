@@ -135,6 +135,14 @@
         <line x1="17" y1="9" x2="23" y2="15"/>
       </svg>
     </button>
+    <div id="crown-indicator" style="position: fixed; bottom: 1.2rem; right: 3.8rem; z-index: 100; opacity: 0; transition: opacity 0.5s; pointer-events: none;">
+      <svg viewBox="0 0 24 24" style="width: 28px; height: 28px; fill: none; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
+        <path d="M2 20h20l-2-8-4 4-4-8-4 8-4-4-2 8z"/>
+        <circle cx="12" cy="4" r="1"/>
+        <circle cx="4" cy="10" r="1"/>
+        <circle cx="20" cy="10" r="1"/>
+      </svg>
+    </div>
     <div id="sound-hint">
       <span>P</span><span>L</span><span>E</span><span>A</span><span>S</span><span>E</span><span>&nbsp;</span><span>E</span><span>N</span><span>A</span><span>B</span><span>L</span><span>E</span><span>&nbsp;</span><span>S</span><span>O</span><span>U</span><span>N</span><span>D</span><span class="speaker"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
     </div>
@@ -412,6 +420,9 @@
         // Activate post-credits mode when closing first completion modal
         if (gameCompleted && !postCreditsMode) {
           postCreditsMode = true;
+          // Show crown indicator
+          const crown = document.getElementById('crown-indicator');
+          if (crown) crown.style.opacity = '0.5';
         }
 
         modal.style.opacity = '0';
@@ -885,17 +896,15 @@
 
          // Römische Ziffer über dem Logo (mit Vibration wenn Logo vibriert)
          ctx.save();
-         const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-         const levelIdx = Math.max(0, Math.min(9, upgradeLevel));
+         const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+         const levelIdx = Math.max(0, Math.min(19, upgradeLevel));
          const romanLevel = romanNumerals[levelIdx];
 
          // Größe proportional zum baseLogoSize (nicht zur skalierten Größe)
          const levelDisplaySize = baseLogoSize * 0.10;
-         // Position: W/2, H/2 ist Zentrum. Abstand = 10% der baseLogoSize über dem Logo-Zentrum
-         // Logo geht von Zentrum bis ca. 0.5 * baseLogoSize nach oben
-         // Also: levelY = centerY - (halbe Logo-Höhe) - (10% Abstand)
+         // Position: fester Abstand über dem Logo (unabhängig von logoBaseScale)
          const levelX = (W / 2) + vibrationX;
-         const levelY = (H / 2) - (baseLogoSize * 0.55) + vibrationY; // 0.5 = halbe Höhe, 0.05 = Margin
+         const levelY = (H / 2) - (baseLogoSize * 0.55) + vibrationY;
 
          // Filigran, dünn, dezent - wie Modal-Style
          ctx.font = `200 ${levelDisplaySize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
@@ -2764,7 +2773,8 @@
            // No special rules, no max stack bonus
            const levelsToAdd = isInverted ? redStackCount : 1;
            upgradeLevel = Math.min(currentLevelCap, upgradeLevel + levelsToAdd);
-           logoBaseScale += 0.18 * levelsToAdd;
+           // Logo wächst, aber max 2.8 (damit Ziffer sichtbar bleibt)
+           logoBaseScale = Math.min(2.8, logoBaseScale + 0.18 * levelsToAdd);
           
           // Audio & Haptic: Discharge - epischer Moment!
           AudioSystem.playDischarge(upgradeLevel);
@@ -2824,7 +2834,7 @@
            logoTargetScale = 1.2 + upgradeLevel * 0.05;
            setTimeout(() => { logoTargetScale = 1; }, 150);
 
-            // Level check for modals
+            // Level check for modals - trigger immediately when cap reached
             const levelCap = postCreditsMode ? 20 : 10;
             if (upgradeLevel >= levelCap && !gameCompleted) {
               gameCompleted = true;
@@ -2834,7 +2844,7 @@
                 } else {
                   showModal();
                 }
-              }, 4000); // 4 Sekunden warten
+              }, 4000);
             }
           
           // DRUCKWELLE - alle ambient particles wegstoßen
