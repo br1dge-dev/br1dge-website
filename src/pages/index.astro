@@ -417,24 +417,13 @@
         // Audio: Modal close
         AudioSystem.playModalClose();
 
-        // Activate post-credits mode when closing first completion modal
-        if (gameCompleted && !postCreditsMode) {
-          postCreditsMode = true;
-          // Reset gameCompleted so Super Success Modal can trigger at Level 20
-          gameCompleted = false;
-          // Show crown indicator
-          const crown = document.getElementById('crown-indicator');
-          if (crown) crown.style.opacity = '0.5';
-        }
+        // Reset gameCompleted so next modal can trigger
+        gameCompleted = false;
 
         modal.style.opacity = '0';
         setTimeout(() => {
           modal.remove();
           modalShown = false;
-          // Restart-Button unter Logo anzeigen (nur bei Level 10, nicht im Post-Credits)
-          if (gameCompleted && !postCreditsMode) {
-            showRestartButton();
-          }
         }, 800);
       }
       
@@ -2785,8 +2774,14 @@
            // Modal check - direkt nach Level-Increment
            if (upgradeLevel >= currentLevelCap && !gameCompleted) {
              gameCompleted = true;
+             // Activate post-credits mode immediately when Level 10 reached
+             if (!postCreditsMode && currentLevelCap === 10) {
+               postCreditsMode = true;
+               const crown = document.getElementById('crown-indicator');
+               if (crown) crown.style.opacity = '0.5';
+             }
              setTimeout(() => {
-               if (postCreditsMode) {
+               if (currentLevelCap === 20) {
                  showSuperSuccessModal();
                } else {
                  showModal();
