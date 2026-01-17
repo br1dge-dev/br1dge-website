@@ -25,10 +25,17 @@ class AmbientSoundscapeClass {
   // 4. Filter für langsame Bewegung
   private padFilter: Tone.Filter | null = null;
   
-  // 5. Subtiler Chorus
-  private chorus: Tone.Chorus | null = null;
-  
-  // === INVERTED MODE LAYERS (separate from normal) ===
+   // 5. Subtiler Chorus
+   private chorus: Tone.Chorus | null = null;
+
+   // 6. Subtle stereo delay for space and depth
+   private delay: Tone.PingPongDelay | null = null;
+   private delayGain: Tone.Gain | null = null;
+
+   // 7. LFO-driven filter sweep for organic movement (trance-y feeling)
+   private padFilterLFO: Tone.LFO | null = null;
+
+   // === INVERTED MODE LAYERS (separate from normal) ===
   private invertedPulse: Tone.Oscillator | null = null;
   private invertedPulseGain: Tone.Gain | null = null;
   private invertedDrone: Tone.PolySynth | null = null;
@@ -75,15 +82,25 @@ class AmbientSoundscapeClass {
       rolloff: -12,
       Q: 0.5,
     });
-    this.padFilter.connect(mainInput);
-    this.padFilter.connect(reverbSend);
-    this.padFilter.connect(delaySend);
-    
-    // === CHORUS für Breite ===
+     this.padFilter.connect(mainInput);
+     this.padFilter.connect(reverbSend);
+     this.padFilter.connect(delaySend);
+
+     // === FILTER LFO for organic movement - trance-like breathing ===
+     this.padFilterLFO = new Tone.LFO({
+       frequency: 0.05,  // Very slow - ~20 seconds per cycle
+       min: 600,         // Low end of filter sweep
+       max: 1400,        // High end - more open
+       type: 'sine',
+     });
+     this.padFilterLFO?.connect(this.padFilter.frequency);
+     this.padFilterLFO?.start();
+
+     // === CHORUS für Breite - more depth for spacier feel ===
     this.chorus = new Tone.Chorus({
-      frequency: 0.1,
-      depth: 0.3,
-      wet: 0.25,
+      frequency: 0.08,  // Slower for dreamier movement
+      depth: 0.4,       // More depth for wider stereo
+      wet: 0.35,        // More wet signal for ethereal sound
     }).start();
     this.chorus.connect(this.padFilter);
     
@@ -111,11 +128,23 @@ class AmbientSoundscapeClass {
         release: 6,
       },
     });
-    this.harmonicGain = new Tone.Gain(0);
-    this.harmonicSynth.connect(this.harmonicGain);
-    this.harmonicGain.connect(this.padFilter);
-    
-    // === INVERTED MODE: Dreamy, ethereal, underwater ===
+     this.harmonicGain = new Tone.Gain(0);
+     this.harmonicSynth.connect(this.harmonicGain);
+     this.harmonicGain.connect(this.padFilter);
+
+     // === SUBTLE STEREO DELAY for space/depth - trance-like atmosphere ===
+     this.delay = new Tone.PingPongDelay({
+       delayTime: '8n',  // Eighth notes for rhythmic movement
+       feedback: 0.2,    // Subtle repeat for depth without washing out
+       wet: 0.15,        // Mix amount - 15% wet for subtle space
+     });
+     this.delayGain = new Tone.Gain(0.12);
+     this.padGain?.connect(this.delay);
+     this.delay?.connect(this.delayGain);
+     this.delayGain?.connect(mainInput);
+     this.delayGain?.connect(reverbSend);
+
+     // === INVERTED MODE: Dreamy, ethereal, underwater ===
     // Warm filter for inverted sounds
     this.invertedFilter = new Tone.Filter({
       frequency: 800,
@@ -169,17 +198,17 @@ class AmbientSoundscapeClass {
     
     const now = Tone.now();
     
-    // Sub starten
+    // Sub starten - slightly quieter
     this.subOsc?.start(now);
-    this.subGain?.gain.linearRampTo(0.08, 4);
-    
+    this.subGain?.gain.linearRampTo(0.06, 4);
+
     // Main Pad
     this.padSynth?.triggerAttack(['G2', 'D3', 'G3'], now);
-    this.padGain?.gain.linearRampTo(0.1, 5);
-    
-    // Harmonic Layer (leiser)
+    this.padGain?.gain.linearRampTo(0.08, 5);
+
+    // Harmonic Layer (leiser) - reduced gain
     this.harmonicSynth?.triggerAttack(['D4', 'A4', 'D5'], now);
-    this.harmonicGain?.gain.linearRampTo(0.05, 6);
+    this.harmonicGain?.gain.linearRampTo(0.035, 6);
     
     // Filter öffnen
     this.padFilter?.frequency.linearRampTo(1200, 8);
@@ -218,10 +247,11 @@ class AmbientSoundscapeClass {
     this.intensity = Math.max(0.3, Math.min(1, value));
     
     if (!this.initialized || !this._active || this.invertedMode) return;
-    
-    const padLevel = 0.08 + (this.intensity - 0.5) * 0.06;
-    const harmLevel = 0.04 + (this.intensity - 0.5) * 0.03;
-    const subLevel = 0.06 + (this.intensity - 0.5) * 0.02;
+
+     // Reduced base levels for softer, milder ambient sound
+     const padLevel = 0.06 + (this.intensity - 0.5) * 0.05;
+     const harmLevel = 0.025 + (this.intensity - 0.5) * 0.025;
+     const subLevel = 0.05 + (this.intensity - 0.5) * 0.015;
     
     this.padGain?.gain.linearRampTo(padLevel, 3);
     this.harmonicGain?.gain.linearRampTo(harmLevel, 3);
@@ -314,19 +344,24 @@ class AmbientSoundscapeClass {
     }, duration * 400);
   }
   
-  dispose(): void {
-    this.stop();
-    
-    this.subOsc?.dispose();
-    this.subGain?.dispose();
-    this.padSynth?.dispose();
-    this.padGain?.dispose();
-    this.harmonicSynth?.dispose();
-    this.harmonicGain?.dispose();
-    this.padFilter?.dispose();
-    this.chorus?.dispose();
-    
-    // Inverted mode cleanup
+   dispose(): void {
+     this.stop();
+
+     this.subOsc?.dispose();
+     this.subGain?.dispose();
+     this.padSynth?.dispose();
+     this.padGain?.dispose();
+     this.harmonicSynth?.dispose();
+     this.harmonicGain?.dispose();
+     this.padFilter?.dispose();
+     this.chorus?.dispose();
+
+     // New components cleanup
+     this.delay?.dispose();
+     this.delayGain?.dispose();
+     this.padFilterLFO?.dispose();
+
+     // Inverted mode cleanup
     this.invertedPulse?.dispose();
     this.invertedPulseGain?.dispose();
     this.invertedDrone?.dispose();

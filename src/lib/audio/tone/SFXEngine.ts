@@ -219,14 +219,14 @@ class SFXEngineClass {
     this.lastCollectTime = currentTime;
     
     const pitch = params.pitch ?? 0;
-    // Much quieter base velocity for ambient feel
-    const baseVelocity = params.velocity ?? 0.25;
+    // Much quieter base velocity for ambient feel - softer, milder
+    const baseVelocity = params.velocity ?? 0.2;
     
     // Gentler combo boost - subtle crescendo
     const comboBoost = 1 + this.collectCombo * 0.05;
-    const velocity = Math.min(0.5, baseVelocity * comboBoost);
-    
-    // Note selection - higher pitch with combo
+     const velocity = Math.min(0.4, baseVelocity * comboBoost);
+
+     // Note selection - higher pitch with combo
     const noteIndex = Math.min(pitch + Math.floor(this.collectCombo / 3), NOTES.collectScale.length - 1);
     const note = NOTES.collectScale[noteIndex];
     
@@ -245,25 +245,52 @@ class SFXEngineClass {
     }
   }
   
-  /**
-   * Super Star Collect - Celestial stardust chime, like catching a shooting star
-   * Inspired by orchestral celesta/glockenspiel with string harmonics
-   */
-  playSuperStarCollect(): void {
-    if (!this.initialized || !this.melodicSynth) return;
-    
-    const now = Tone.now();
-    
-    // Perfect fifth interval - the most pleasing harmonic relationship
-    // Like a tiny music box or distant wind chimes
-    this.melodicSynth.triggerAttackRelease('G5', '8n', now, 0.28);
-    this.melodicSynth.triggerAttackRelease('D5', '8n', now + 0.015, 0.22);
-    
-    // Ethereal octave shimmer - like string harmonics
-    if (this.harmonicSynth) {
-      this.harmonicSynth.triggerAttackRelease('G6', '4n', now + 0.04, 0.12);
-    }
-  }
+   /**
+    * Super Star Collect - Celestial stardust chime, like catching a shooting star
+    * Inspired by orchestral celesta/glockenspiel with string harmonics
+    */
+   playSuperStarCollect(): void {
+     if (!this.initialized || !this.melodicSynth) return;
+
+     const now = Tone.now();
+
+     // Perfect fifth interval - the most pleasing harmonic relationship
+     // Like a tiny music box or distant wind chimes
+     // Softer gains for milder sound
+     this.melodicSynth.triggerAttackRelease('G5', '8n', now, 0.22);
+     this.melodicSynth.triggerAttackRelease('D5', '8n', now + 0.015, 0.18);
+
+     // Ethereal octave shimmer - like string harmonics
+     if (this.harmonicSynth) {
+       this.harmonicSynth.triggerAttackRelease('G6', '4n', now + 0.04, 0.1);
+     }
+   }
+
+   /**
+    * Thanks Sound - Positive, short, punchy confirmation sound
+    * Like a friendly "thank you" - bright, warm, satisfying
+    * Inspired by positive UI feedback sounds
+    */
+   playThanks(): void {
+     if (!this.initialized || !this.melodicSynth) return;
+
+     const now = Tone.now();
+
+     // Bright, positive major 2nd interval - friendly and uplifting
+     // Quick attack, short decay - punchy but not harsh
+     this.melodicSynth.triggerAttackRelease('G5', '16n', now, 0.35);
+     this.melodicSynth.triggerAttackRelease('A5', '16n', now + 0.03, 0.28);
+
+     // Subtle harmonic shimmer - warm, not piercing
+     if (this.harmonicSynth) {
+       this.harmonicSynth.triggerAttackRelease('E6', '32n', now + 0.05, 0.12);
+     }
+
+     // Very subtle sub for weight
+     if (this.subSynth) {
+       this.subSynth.triggerAttackRelease('G2', '32n', now + 0.02, 0.12);
+     }
+   }
   
   /**
    * Rejected Discharge - Soft, muted denial when requirements not met
@@ -624,30 +651,36 @@ class SFXEngineClass {
     this.harmonicSynth?.triggerAttackRelease('G5', '2n', now + 0.2, 0.25);
   }
   
-  /**
-   * Spiral Damage - When spiral hits logo, destructive impact
-   */
-  playSpiralDamage(): void {
-    if (!this.initialized) return;
-    
-    const now = Tone.now();
-    
-    // Heavy impact
-    if (this.subSynth) {
-      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
-      this.subSynth.triggerAttackRelease('A1', '4n', now + 0.05, 0.8);
-    }
-    
-    // Harsh dissonant crash
-    this.melodicSynth?.triggerAttackRelease(['A2', 'Bb2', 'E3'], '8n', now + 0.08, 0.6);
-    
-    // Noise impact
-    if (this.noiseFilter && this.noiseSynth) {
-      this.noiseFilter.frequency.setValueAtTime(1500, now + 0.05);
-      this.noiseFilter.frequency.exponentialRampTo(80, 0.4);
-      this.noiseSynth.triggerAttackRelease('8n', now + 0.05);
-    }
-  }
+   /**
+    * Spiral Damage - When spiral hits logo, destructive impact
+    * Enhanced with more negative, impactful sound
+    */
+   playSpiralDamage(): void {
+     if (!this.initialized) return;
+
+     const now = Tone.now();
+
+     // Deeper, heavier impact - drop to A0 for more destructive feel
+     if (this.subSynth) {
+       try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+       this.subSynth.triggerAttackRelease('A0', '4n', now + 0.03, 0.95); // Louder, deeper
+     }
+
+     // Harsh dissonant crash - more jarring interval (minor 2nd + tritone)
+     this.melodicSynth?.triggerAttackRelease(['A2', 'Bb2', 'D#3', 'E3'], '8n', now + 0.06, 0.7);
+
+     // Aggressive noise sweep - more destructive
+     if (this.noiseFilter && this.noiseSynth) {
+       this.noiseFilter.frequency.setValueAtTime(2000, now + 0.04);
+       this.noiseFilter.frequency.exponentialRampTo(50, 0.5); // Wider sweep
+       this.noiseSynth.triggerAttackRelease('8n', now + 0.04);
+     }
+
+     // Subtle sub震荡 for more weight
+     if (this.harmonicSynth) {
+       this.harmonicSynth.triggerAttackRelease('A1', '8n', now + 0.1, 0.35);
+     }
+   }
   
   // Spiral suction state
   private spiralSuctionActive = false;
@@ -709,8 +742,9 @@ class SFXEngineClass {
     
     // Intensity based on particle count (1-5)
     const intensity = Math.min(1, count / 5);
-    const volume = 0.03 + intensity * 0.06; // Subtle but present
-    const lfoFreq = 8 + intensity * 15; // Faster crackling with more particles
+    // Softer, milder crackling - less gain, less noise
+    const volume = 0.02 + intensity * 0.04; // Reduced from 0.03+0.06 to 0.02+0.04
+    const lfoFreq = 6 + intensity * 12; // Slightly slower LFO for smoother sound
     
     if (!this.crackleActive) {
       // Start crackling
@@ -749,9 +783,9 @@ class SFXEngineClass {
       return;
     }
     
-    // Deep tectonic rumble - quiet, background
-    const volume = 0.02 + strength * 0.04; // Very quiet
-    const vibratoSpeed = 0.3 + strength * 0.4;
+    // Deep tectonic rumble - quiet, background - softer overall
+    const volume = 0.015 + strength * 0.025; // Even quieter than before
+    const vibratoSpeed = 0.3 + strength * 0.3; // Slightly slower vibrato for smoother sound
     const filterFreq = 80 + strength * 100;
     
     if (!this.attractActive) {
