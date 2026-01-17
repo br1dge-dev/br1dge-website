@@ -27,6 +27,44 @@ class ToneAudioSystemClass {
   }
   
   /**
+   * Unlock audio on iOS/Safari by playing a silent buffer
+   * This is the most reliable way to unlock audio on mobile
+   */
+  private async unlockAudio(): Promise<void> {
+    console.log('unlockAudio: attempting to unlock, context state:', Tone.context.state);
+    
+    // Method 1: Tone.start()
+    await Tone.start();
+    console.log('unlockAudio: after Tone.start(), context state:', Tone.context.state);
+    
+    // Method 2: If still suspended, try to resume the raw context
+    if (Tone.context.state === 'suspended') {
+      console.log('unlockAudio: context still suspended, trying raw resume');
+      await Tone.context.resume();
+      console.log('unlockAudio: after raw resume, context state:', Tone.context.state);
+    }
+    
+    // Method 3: Play a silent buffer to force unlock (iOS workaround)
+    if (Tone.context.state !== 'running') {
+      console.log('unlockAudio: playing silent buffer as last resort');
+      try {
+        // Access the raw AudioContext
+        const rawContext = Tone.context.rawContext as AudioContext;
+        const silentBuffer = rawContext.createBuffer(1, 1, 22050);
+        const source = rawContext.createBufferSource();
+        source.buffer = silentBuffer;
+        source.connect(rawContext.destination);
+        source.start(0);
+        // Wait a tiny bit for the buffer to play
+        await new Promise(resolve => setTimeout(resolve, 50));
+        console.log('unlockAudio: after silent buffer, context state:', Tone.context.state);
+      } catch (e) {
+        console.warn('unlockAudio: silent buffer failed:', e);
+      }
+    }
+  }
+  
+  /**
    * Initialize the entire audio system
    * Must be called after user interaction (click/touch)
    */
@@ -34,11 +72,15 @@ class ToneAudioSystemClass {
     if (this.initialized) return;
     
     try {
-      // CRITICAL: Tone.start() MUST be called first, synchronously within user gesture
-      // This is the only way to unlock audio on iOS/Safari
-      console.log('ToneAudioSystem.init() - starting Tone.js, context state:', Tone.context.state);
-      await Tone.start();
-      console.log('ToneAudioSystem.init() - Tone started, context state:', Tone.context.state);
+      console.log('ToneAudioSystem.init() starting...');
+      
+      // CRITICAL: Unlock audio first using multiple methods
+      await this.unlockAudio();
+      
+      // Verify context is running
+      if (Tone.context.state !== 'running') {
+        console.warn('ToneAudioSystem.init(): context not running after unlock attempt:', Tone.context.state);
+      }
       
       // Initialize effect chain
       await EffectChain.init();
@@ -50,7 +92,7 @@ class ToneAudioSystemClass {
       await SFXEngine.init();
       
       this.initialized = true;
-      console.log('ToneAudioSystem initialized successfully');
+      console.log('ToneAudioSystem initialized successfully, context state:', Tone.context.state);
     } catch (e) {
       console.warn('Failed to initialize ToneAudioSystem:', e);
     }
@@ -63,9 +105,7 @@ class ToneAudioSystemClass {
   async resume(): Promise<void> {
     console.log('ToneAudioSystem.resume() called, context state:', Tone.context.state);
     try {
-      // Always try to start/resume - this is safe to call multiple times
-      await Tone.start();
-      console.log('ToneAudioSystem.resume() - Tone started/resumed, context state:', Tone.context.state);
+      await this.unlockAudio();
     } catch (e) {
       console.warn('ToneAudioSystem.resume() failed:', e);
     }

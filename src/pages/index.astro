@@ -2573,7 +2573,13 @@
       
       // Touch release = ENERGIE EXPLOSION (drag-and-release auf Mobile)
       document.addEventListener('touchend', (e) => {
-        isTouching = false;  // Reset touch state
+        // WICHTIG: Berechne Cursor-Position MIT Offset BEVOR wir isTouching zurücksetzen!
+        // Die cursorX/cursorY Variablen werden im render-loop interpoliert und hängen von isTouching ab.
+        // Also müssen wir hier die "wo wäre der Cursor jetzt" Position selbst berechnen.
+        const cursorPosXAtRelease = cursorX;  // X hat keinen Offset
+        const cursorPosYAtRelease = cursorY;  // Y hat bereits den Offset aus dem letzten Frame
+        
+        isTouching = false;  // Jetzt erst zurücksetzen
         
         if (e.changedTouches.length > 0) {
           const touch = e.changedTouches[0];
@@ -2606,14 +2612,12 @@
             }
           }
           
-          // DRAG-AND-RELEASE: Use the ACTUAL cursor position (cursorX, cursorY)
-          // which already includes the mobile offset and smooth interpolation!
-          // This is the position the user SEES, not where their finger is.
+          // DRAG-AND-RELEASE: Berechne wo der Cursor WAR (mit Offset) beim Loslassen
           const logoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
           const exactCenterX = W / 2;
           const exactCenterY = H / 2;
-          const dxLogo = cursorX - exactCenterX;
-          const dyLogo = cursorY - exactCenterY;
+          const dxLogo = cursorPosXAtRelease - exactCenterX;
+          const dyLogo = cursorPosYAtRelease - exactCenterY;
           const cursorDistToLogo = Math.sqrt(dxLogo * dxLogo + dyLogo * dyLogo);
           
           ripples.push({
@@ -2625,12 +2629,12 @@
           });
           
           // DRAG-AND-RELEASE: Discharge wenn der CURSOR (nicht Finger!) über dem Logo ist
-          // Der Cursor ist bereits 70px über dem Finger positioniert, also:
+          // Der Cursor ist 70px über dem Finger positioniert, also:
           // User bewegt Finger so dass Cursor über Logo ist, dann loslassen = Discharge
           const canTouchDischargeInverted = isInverted && redStackCount > 0;
           const canTouchDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD && coloredBridgePhaseComplete;
           const canDischarge = canTouchDischargeInverted || canTouchDischargeNormal;
-          const cursorOverLogo = cursorDistToLogo < logoRadius * 1.3;  // Etwas toleranter für Touch
+          const cursorOverLogo = cursorDistToLogo < logoRadius * 1.5;  // Großzügiger für Touch
           const shouldDischarge = cursorOverLogo && canDischarge && upgradeLevel < 10;
           
           if (shouldDischarge) {
