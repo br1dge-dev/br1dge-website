@@ -2663,13 +2663,13 @@
       
       // Touch release = ENERGIE EXPLOSION (drag-and-release auf Mobile)
       document.addEventListener('touchend', (e) => {
-        // WICHTIG: Berechne Cursor-Position MIT Offset BEVOR wir isTouching zurücksetzen!
-        // Die cursorX/cursorY Variablen werden im render-loop interpoliert und hängen von isTouching ab.
-        // Also müssen wir hier die "wo wäre der Cursor jetzt" Position selbst berechnen.
-        const cursorPosXAtRelease = cursorX;  // X hat keinen Offset
-        const cursorPosYAtRelease = cursorY;  // Y hat bereits den Offset aus dem letzten Frame
+        // WICHTIG: Der Cursor verwendet Interpolation (0.25) und "hinkt" der Zielposition hinterher.
+        // Wir müssen die ZIEL-Position berechnen, nicht die interpolierte aktuelle Position!
+        // Die Zielposition ist: mouseX/mouseY + offset (wenn mobile)
+        const cursorTargetX = mouseX;  // X hat keinen Offset
+        const cursorTargetY = mouseY + (isMobile ? MOBILE_CURSOR_OFFSET_Y : 0);
         
-        console.log(`touchend: cursor=(${Math.round(cursorPosXAtRelease)},${Math.round(cursorPosYAtRelease)}), isTouching was=${isTouching}`);
+        console.log(`touchend: finger=(${Math.round(mouseX)},${Math.round(mouseY)}), cursorTarget=(${Math.round(cursorTargetX)},${Math.round(cursorTargetY)}), cursorActual=(${Math.round(cursorX)},${Math.round(cursorY)})`);
         
         isTouching = false;  // Jetzt erst zurücksetzen
         
@@ -2704,12 +2704,13 @@
             }
           }
           
-          // DRAG-AND-RELEASE: Berechne wo der Cursor WAR (mit Offset) beim Loslassen
+          // DRAG-AND-RELEASE: Berechne wo der Cursor SEIN SOLLTE (mit Offset) beim Loslassen
+          // Wir nutzen die ZIEL-Position, nicht die interpolierte aktuelle Position!
           const logoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
           const exactCenterX = W / 2;
           const exactCenterY = H / 2;
-          const dxLogo = cursorPosXAtRelease - exactCenterX;
-          const dyLogo = cursorPosYAtRelease - exactCenterY;
+          const dxLogo = cursorTargetX - exactCenterX;
+          const dyLogo = cursorTargetY - exactCenterY;
           const cursorDistToLogo = Math.sqrt(dxLogo * dxLogo + dyLogo * dyLogo);
           
           ripples.push({
