@@ -553,19 +553,23 @@ class SFXEngineClass {
     }
   }
   
-  /**
-   * Bridge Spawn - Heroic, impactful
-   */
-  playBridgeSpawn(): void {
-    if (!this.initialized) return;
-    
-    const now = Tone.now();
-    
-    // Sub impact - safely retrigger MonoSynth
-    if (this.subSynth) {
-      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
-      this.subSynth.triggerAttackRelease('G2', '4n', now + 0.01, 0.8);
-    }
+   /**
+    * Bridge Spawn - Heroic, impactful
+    */
+   playBridgeSpawn(): void {
+     if (!this.initialized) return;
+
+     const now = Tone.now();
+
+     // Timing protection
+     if ((now - (this as any).__lastBridgeTime || 0) < 0.5) return;
+     (this as any).__lastBridgeTime = now;
+
+     // Sub impact - safely retrigger MonoSynth
+     if (this.subSynth) {
+       try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+       this.subSynth.triggerAttackRelease('G2', '4n', now + 0.01, 0.8);
+     }
     
     // Heroic chord
     NOTES.bridgeChord.forEach((note, i) => {
@@ -660,6 +664,10 @@ class SFXEngineClass {
 
      const now = Tone.now();
 
+     // Timing protection - prevent overlapping calls
+     if ((now - (this as any).__lastDamageTime || 0) < 0.3) return;
+     (this as any).__lastDamageTime = now;
+
      // Deeper, heavier impact - drop to A0 for more destructive feel
      if (this.subSynth) {
        try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
@@ -680,6 +688,35 @@ class SFXEngineClass {
      if (this.harmonicSynth) {
        this.harmonicSynth.triggerAttackRelease('A1', '8n', now + 0.1, 0.35);
      }
+   }
+
+   /**
+    * You Died - Melancholic, dark chord
+    * Like a final farewell - minor, slow, haunting
+    */
+   playYouDied(): void {
+     if (!this.initialized || !this.melodicSynth) return;
+
+     const now = Tone.now();
+
+     // Slow, descending minor chord - melancholic
+     this.melodicSynth.triggerAttackRelease('A3', '2n', now, 0.5);
+     this.melodicSynth.triggerAttackRelease('C4', '2n', now + 0.1, 0.45);
+     this.melodicSynth.triggerAttackRelease('E4', '2n', now + 0.2, 0.4);
+     this.melodicSynth.triggerAttackRelease('G4', '2n', now + 0.3, 0.35);
+
+     // Deep sub for weight
+     if (this.subSynth) {
+       this.subSynth.triggerAttackRelease('A1', '2n', now + 0.05, 0.6);
+     }
+
+     // Ethereal shimmer - haunting
+     if (this.harmonicSynth) {
+       this.harmonicSynth.triggerAttackRelease('A5', '1n', now + 0.4, 0.2);
+     }
+
+     // Stop ambient swell
+     AmbientSoundscape.stop();
    }
   
   // Spiral suction state

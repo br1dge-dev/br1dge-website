@@ -286,16 +286,24 @@ class ToneAudioSystemClass {
     SFXEngine.playSpiralDefeat();
   }
   
-  /**
-   * Spiral damage sound - when it hits the logo
-   */
-  playSpiralDamage(): void {
-    if (!this.initialized || this.muted) return;
-    SFXEngine.playSpiralDamage();
-  }
-  
-  /**
-   * Spiral suction - continuous dark sucking sound
+   /**
+    * Spiral damage sound - when it hits the logo
+    */
+   playSpiralDamage(): void {
+     if (!this.initialized || this.muted) return;
+     SFXEngine.playSpiralDamage();
+   }
+
+   /**
+    * You died - melancholic dark chord
+    */
+   playYouDied(): void {
+     if (!this.initialized || this.muted) return;
+     SFXEngine.playYouDied();
+   }
+
+   /**
+    * Spiral suction - continuous dark sucking sound
    * @param intensity 0-1 (0 to stop)
    */
   setSpiralSuction(intensity: number): void {
