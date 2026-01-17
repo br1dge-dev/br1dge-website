@@ -420,6 +420,8 @@
         // Activate post-credits mode when closing first completion modal
         if (gameCompleted && !postCreditsMode) {
           postCreditsMode = true;
+          // Reset gameCompleted so Super Success Modal can trigger at Level 20
+          gameCompleted = false;
           // Show crown indicator
           const crown = document.getElementById('crown-indicator');
           if (crown) crown.style.opacity = '0.5';
@@ -429,8 +431,8 @@
         setTimeout(() => {
           modal.remove();
           modalShown = false;
-          // Restart-Button unter Logo anzeigen (nur bei Level 10)
-          if (gameCompleted) {
+          // Restart-Button unter Logo anzeigen (nur bei Level 10, nicht im Post-Credits)
+          if (gameCompleted && !postCreditsMode) {
             showRestartButton();
           }
         }, 800);
@@ -896,22 +898,26 @@
 
          // Römische Ziffer über dem Logo (mit Vibration wenn Logo vibriert)
          ctx.save();
-         const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
-         const levelIdx = Math.max(0, Math.min(19, upgradeLevel));
+         // Array: Index 1 = "I" (Level 1), Index 10 = "X" (Level 10), etc.
+         const romanNumerals = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+         const levelIdx = Math.max(0, Math.min(20, upgradeLevel));
          const romanLevel = romanNumerals[levelIdx];
 
-         // Größe proportional zum baseLogoSize (nicht zur skalierten Größe)
-         const levelDisplaySize = baseLogoSize * 0.10;
-         // Position: fester Abstand über dem Logo (unabhängig von logoBaseScale)
-         const levelX = (W / 2) + vibrationX;
-         const levelY = (H / 2) - (baseLogoSize * 0.55) + vibrationY;
+         // Nur zeichnen wenn Level > 0
+         if (upgradeLevel > 0) {
+           // Größe proportional zum baseLogoSize (nicht zur skalierten Größe)
+           const levelDisplaySize = baseLogoSize * 0.10;
+           // Position: fester Abstand über dem Logo (unabhängig von logoBaseScale)
+           const levelX = (W / 2) + vibrationX;
+           const levelY = (H / 2) - (baseLogoSize * 0.55) + vibrationY;
 
-         // Filigran, dünn, dezent - wie Modal-Style
-         ctx.font = `200 ${levelDisplaySize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
-         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-         ctx.textAlign = 'center';
-         ctx.textBaseline = 'middle';
-         ctx.fillText(romanLevel, levelX, levelY);
+           // Filigran, dünn, dezent - wie Modal-Style
+           ctx.font = `200 ${levelDisplaySize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
+           ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+           ctx.textAlign = 'center';
+           ctx.textBaseline = 'middle';
+           ctx.fillText(romanLevel, levelX, levelY);
+         }
          ctx.restore();
         
         // Expanding Rings bei Entladung - mit Farbe (immer zentriert)
@@ -2799,8 +2805,8 @@
              AudioSystem.setInvertedMode(false);
            }
 
-           // Nach Discharge: Red Particles wieder aktivieren wenn Level < 10
-           if (upgradeLevel < 10) {
+           // Nach Discharge: Red Particles wieder aktivieren wenn Level unter Cap
+           if (upgradeLevel < currentLevelCap) {
              redParticleActive = true;
              redParticleSpawnTime = Date.now() + 3000;
            }
@@ -3078,7 +3084,7 @@
         e.preventDefault();
         toggleSound();
       });
-      
+
       // Init
       resize();
       render();
