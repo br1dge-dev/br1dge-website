@@ -2526,12 +2526,16 @@
         const touch = e.touches[0];
         mouseX = touch.clientX;
         mouseY = touch.clientY;
+        lastMouseMoveTime = Date.now();
+        isIdle = false;
       });
       
       document.addEventListener('touchmove', (e) => {
         const touch = e.touches[0];
         mouseX = touch.clientX;
         mouseY = touch.clientY;
+        lastMouseMoveTime = Date.now();
+        isIdle = false;
         e.preventDefault();
       }, { passive: false });
       
@@ -2539,14 +2543,43 @@
       document.addEventListener('touchend', (e) => {
         if (e.changedTouches.length > 0) {
           const touch = e.changedTouches[0];
-          const dist = distFromLogo(touch.clientX, touch.clientY);
+          const touchX = touch.clientX;
+          const touchY = touch.clientY;
+          
+          // ZUERST: Check ob ein Floating Bridge getippt wurde
+          for (const bridge of floatingBridges) {
+            const dx = touchX - bridge.x;
+            const dy = touchY - bridge.y;
+            const bridgeDist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (bridgeDist < (bridge.hitRadius || 30) && bridge.url) {
+              // Bridge getippt! Öffne URL
+              window.open(bridge.url, '_blank');
+              
+              // Visuelles Feedback
+              ripples.push({
+                x: bridge.x,
+                y: bridge.y,
+                size: 10,
+                alpha: 1,
+                hue: colorToHue(bridge.color)
+              });
+              
+              // Audio
+              AudioSystem.playCollect(4);
+              
+              return; // Keine weitere Verarbeitung
+            }
+          }
+          
+          const dist = distFromLogo(touchX, touchY);
           const logoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
           const exactCenterX = W / 2;
           const exactCenterY = H / 2;
           
           ripples.push({
-            x: touch.clientX,
-            y: touch.clientY,
+            x: touchX,
+            y: touchY,
             size: 5,
             alpha: 0.5,
             hue: 0
@@ -2707,8 +2740,14 @@
         enableSound();
       });
       
-      soundToggleBtn?.addEventListener('click', (e) => {
+      // Touch support for sound hint (mobile)
+      soundHint?.addEventListener('touchend', (e) => {
         e.stopPropagation();
+        e.preventDefault();
+        enableSound();
+      });
+      
+      function toggleSound() {
         initAudioOnInteraction();
         const muted = AudioSystem.toggleMute();
         updateSoundIcons(muted);
@@ -2724,6 +2763,18 @@
         } else if (AudioSystem.bgMusic && !AudioSystem.bgMusicStarted) {
           AudioSystem.startBgMusic();
         }
+      }
+      
+      soundToggleBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleSound();
+      });
+      
+      // Touch support for sound toggle button (mobile)
+      soundToggleBtn?.addEventListener('touchend', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        toggleSound();
       });
       
       // Init
