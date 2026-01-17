@@ -2757,128 +2757,27 @@
             hue: 0
           });
           
-          // DRAG-AND-RELEASE: Discharge wenn der CURSOR (nicht Finger!) über dem Logo ist
-          // Der Cursor ist 70px über dem Finger positioniert, also:
-          // User bewegt Finger so dass Cursor über Logo ist, dann loslassen = Discharge
+          // MOBILE TOUCH: Simuliere einen Click an der CURSOR-Position (nicht Finger!)
+          // Der Cursor ist 70px über dem Finger positioniert
+          // Wir dispatchen ein synthetisches Click-Event an der Cursor-Position,
+          // damit die gleiche Logik wie Desktop verwendet wird.
           
-          // Tutorial phase hat eigene Discharge-Logik!
-          const inTutorial = gamePhase === GAME_PHASE_TUTORIAL;
-          const canTutorialDischarge = inTutorial && logoReadyForDischarge;
-          const canTouchDischargeInverted = isInverted && redStackCount > 0;
-          const canTouchDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD && coloredBridgePhaseComplete;
-          const canDischarge = canTutorialDischarge || canTouchDischargeInverted || canTouchDischargeNormal;
-          const cursorOverLogo = cursorDistToLogo < logoRadius * 1.5;  // Großzügiger für Touch
-          const shouldDischarge = cursorOverLogo && canDischarge && upgradeLevel < 10;
+          // Prüfe ob Cursor über Logo ist
+          const cursorOverLogo = cursorDistToLogo < logoRadius * 1.5;  // Etwas toleranter für Touch
           
-          console.log(`touchend: phase=${gamePhase}, inTutorial=${inTutorial}, logoReady=${logoReadyForDischarge}, coloredComplete=${coloredBridgePhaseComplete}`);
-          console.log(`touchend check: dist=${Math.round(cursorDistToLogo)}, radius=${Math.round(logoRadius)}, overLogo=${cursorOverLogo}, canDischarge=${canDischarge}, energy=${cursorEnergy.toFixed(2)}, shouldDischarge=${shouldDischarge}`);
+          console.log(`touchend: phase=${gamePhase}, logoReady=${logoReadyForDischarge}, energy=${cursorEnergy.toFixed(2)}`);
+          console.log(`touchend check: dist=${Math.round(cursorDistToLogo)}, radius=${Math.round(logoRadius)}, overLogo=${cursorOverLogo}`);
           
-          if (shouldDischarge) {
-            console.log('DISCHARGE TRIGGERED!');
-            const prevLevel = upgradeLevel;
-            
-            // SIMPLIFIED: 1 red particle = 1 level, always
-            const levelsToAdd = isInverted ? redStackCount : 1;
-            upgradeLevel = Math.min(10, upgradeLevel + levelsToAdd);
-            logoBaseScale += 0.18 * levelsToAdd;
-            
-            // Audio & Haptic: Discharge
-            AudioSystem.playDischarge(upgradeLevel);
-            HapticManager.discharge();
-            
-            // Audio & Haptic: Level Up
-            if (upgradeLevel > prevLevel) {
-              setTimeout(() => {
-                AudioSystem.playLevelUp(upgradeLevel);
-                HapticManager.levelUp();
-              }, 150);
-            }
-            
-            // Reset inverted mode and stack
-            if (isInverted || redStackCount > 0) {
-              isInverted = false;
-              canvas.style.filter = '';
-              AudioSystem.setInvertedMode(false);
-            }
-            redStackCount = 0;
-            
-            // Start background music on first discharge (touch)
-            if (!AudioSystem.bgMusicStarted && cursorEnergy >= ENERGY_THRESHOLD) {
-              AudioSystem.startBgMusic();
-            }
-            
-            const intensity = cursorEnergy;
-            const releaseHue = (upgradeLevel * 50) % 360;
-            
-            const ringCount = 5 + upgradeLevel * 2;
-            for (let o = 0; o < ringCount; o++) {
-              setTimeout(() => {
-                logoOutlines.push({
-                  alpha: 1,
-                  radius: 15 + o * 8,
-                  hue: (releaseHue + o * 20) % 360
-                });
-              }, o * 25);
-            }
-            
-            logoTargetScale = 1.25;
-            setTimeout(() => { logoTargetScale = 1; }, 120);
-            
-            // Level 10 Modal (4s delay)
-            if (upgradeLevel >= 10) {
-              gameCompleted = true;
-              setTimeout(() => {
-                showModal();
-              }, 4000);
-            }
-            
-            // Druckwelle
-            for (let ap of ambientParticles) {
-              const apDx = ap.x - exactCenterX;
-              const apDy = ap.y - exactCenterY;
-              const apDist = Math.sqrt(apDx * apDx + apDy * apDy);
-              if (apDist > 0 && apDist < 400) {
-                const pushStrength = (1 - apDist / 400) * 15 * intensity;
-                ap.vx += (apDx / apDist) * pushStrength;
-                ap.vy += (apDy / apDist) * pushStrength;
-              }
-            }
-            
-            const particleCount = Math.floor(50 + intensity * 80 + upgradeLevel * 12);
-            for (let i = 0; i < particleCount; i++) {
-              const angle = (i / particleCount) * Math.PI * 2;
-              const speed = 6 + Math.random() * 12 * intensity;
-              particles.push({
-                x: exactCenterX,
-                y: exactCenterY,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                life: 1,
-                hue: (releaseHue + Math.random() * 60) % 360
-              });
-            }
-            
-            for (let s = 0; s < 3; s++) {
-              setTimeout(() => {
-                ripples.push({
-                  x: exactCenterX,
-                  y: exactCenterY,
-                  size: 10 + s * 20,
-                  alpha: 1,
-                  hue: (releaseHue + s * 30) % 360
-                });
-              }, s * 40);
-            }
-            
-            cursorEnergy = 0;
-            redParticleActive = false;
-            redParticleCatches = 0;
-            redParticle.active = false;
-            
-            // Chamber reset
-            chamberParticles.length = 0;
-            chamberActive = false;
-            coloredParticles.length = 0;
+          if (cursorOverLogo) {
+            // Simuliere Click an Cursor-Position (dispatcht das gleiche Event wie Desktop)
+            console.log('Touch over logo - simulating click at cursor position');
+            const clickEvent = new MouseEvent('click', {
+              bubbles: true,
+              cancelable: true,
+              clientX: cursorTargetX,
+              clientY: cursorTargetY
+            });
+            document.dispatchEvent(clickEvent);
           }
         }
       });
