@@ -610,19 +610,23 @@ class SFXEngineClass {
   // SPIRAL ENEMY SOUNDS
   // ============================================
   
-  /**
-   * Spiral Spawn - Ominous, dark arrival
-   */
-  playSpiralSpawn(): void {
-    if (!this.initialized) return;
-    
-    const now = Tone.now();
-    
-    // Deep ominous rumble
-    if (this.subSynth) {
-      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
-      this.subSynth.triggerAttackRelease('D1', '2n', now + 0.05, 0.5);
-    }
+   /**
+    * Spiral Spawn - Ominous, dark arrival
+    */
+   playSpiralSpawn(): void {
+     if (!this.initialized) return;
+
+     const now = Tone.now();
+
+     // Timing protection
+     if ((now - (this as any).__lastSpawnTime || 0) < 0.5) return;
+     (this as any).__lastSpawnTime = now;
+
+     // Deep ominous rumble
+     if (this.subSynth) {
+       try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+       this.subSynth.triggerAttackRelease('D1', '2n', now + 0.05, 0.5);
+     }
     
     // Dissonant minor 2nd - unsettling
     this.melodicSynth?.triggerAttackRelease(['D2', 'Eb2'], '4n', now + 0.1, 0.3);
