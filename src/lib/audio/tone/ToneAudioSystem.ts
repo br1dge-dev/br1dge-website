@@ -33,35 +33,61 @@ class ToneAudioSystemClass {
   private async unlockAudio(): Promise<void> {
     console.log('unlockAudio: attempting to unlock, context state:', Tone.context.state);
     
-    // Method 1: Tone.start()
-    await Tone.start();
-    console.log('unlockAudio: after Tone.start(), context state:', Tone.context.state);
+    // Method 1: Tone.start() with timeout
+    try {
+      console.log('unlockAudio: calling Tone.start()...');
+      // Add timeout because Tone.start() can hang on iOS
+      const startPromise = Tone.start();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Tone.start() timeout')), 3000)
+      );
+      await Promise.race([startPromise, timeoutPromise]);
+      console.log('unlockAudio: after Tone.start(), context state:', Tone.context.state);
+    } catch (e) {
+      console.warn('unlockAudio: Tone.start() failed or timed out:', e);
+    }
     
     // Method 2: If still suspended, try to resume the raw context
     if (Tone.context.state === 'suspended') {
       console.log('unlockAudio: context still suspended, trying raw resume');
-      await Tone.context.resume();
-      console.log('unlockAudio: after raw resume, context state:', Tone.context.state);
+      try {
+        await Tone.context.resume();
+        console.log('unlockAudio: after raw resume, context state:', Tone.context.state);
+      } catch (e) {
+        console.warn('unlockAudio: raw resume failed:', e);
+      }
     }
     
-    // Method 3: Play a silent buffer to force unlock (iOS workaround)
+    // Method 3: Try raw AudioContext resume
+    if (Tone.context.state !== 'running') {
+      console.log('unlockAudio: trying rawContext.resume()');
+      try {
+        const rawContext = Tone.context.rawContext as AudioContext;
+        await rawContext.resume();
+        console.log('unlockAudio: after rawContext.resume(), state:', rawContext.state);
+      } catch (e) {
+        console.warn('unlockAudio: rawContext.resume() failed:', e);
+      }
+    }
+    
+    // Method 4: Play a silent buffer to force unlock (iOS workaround)
     if (Tone.context.state !== 'running') {
       console.log('unlockAudio: playing silent buffer as last resort');
       try {
-        // Access the raw AudioContext
         const rawContext = Tone.context.rawContext as AudioContext;
         const silentBuffer = rawContext.createBuffer(1, 1, 22050);
         const source = rawContext.createBufferSource();
         source.buffer = silentBuffer;
         source.connect(rawContext.destination);
         source.start(0);
-        // Wait a tiny bit for the buffer to play
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 100));
         console.log('unlockAudio: after silent buffer, context state:', Tone.context.state);
       } catch (e) {
         console.warn('unlockAudio: silent buffer failed:', e);
       }
     }
+    
+    console.log('unlockAudio: FINAL context state:', Tone.context.state);
   }
   
   /**
@@ -69,7 +95,10 @@ class ToneAudioSystemClass {
    * Must be called after user interaction (click/touch)
    */
   async init(): Promise<void> {
-    if (this.initialized) return;
+    if (this.initialized) {
+      console.log('ToneAudioSystem.init(): already initialized');
+      return;
+    }
     
     try {
       console.log('ToneAudioSystem.init() starting...');
@@ -79,22 +108,29 @@ class ToneAudioSystemClass {
       
       // Verify context is running
       if (Tone.context.state !== 'running') {
-        console.warn('ToneAudioSystem.init(): context not running after unlock attempt:', Tone.context.state);
+        console.warn('ToneAudioSystem.init(): context not running after unlock:', Tone.context.state);
+        // Continue anyway - some browsers report 'suspended' but still work
       }
       
       // Initialize effect chain
+      console.log('ToneAudioSystem.init(): initializing EffectChain...');
       await EffectChain.init();
+      console.log('ToneAudioSystem.init(): EffectChain done');
       
       // Initialize soundscape
+      console.log('ToneAudioSystem.init(): initializing AmbientSoundscape...');
       await AmbientSoundscape.init();
+      console.log('ToneAudioSystem.init(): AmbientSoundscape done');
       
       // Initialize SFX engine
+      console.log('ToneAudioSystem.init(): initializing SFXEngine...');
       await SFXEngine.init();
+      console.log('ToneAudioSystem.init(): SFXEngine done');
       
       this.initialized = true;
-      console.log('ToneAudioSystem initialized successfully, context state:', Tone.context.state);
+      console.log('ToneAudioSystem FULLY INITIALIZED, context state:', Tone.context.state);
     } catch (e) {
-      console.warn('Failed to initialize ToneAudioSystem:', e);
+      console.error('ToneAudioSystem.init() FAILED:', e);
     }
   }
   
