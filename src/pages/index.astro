@@ -313,6 +313,8 @@
           await AudioSystem.resume();
           audioInitialized = true;
           console.log('initAudioOnInteraction: audio initialized successfully');
+          // Play a test beep to verify audio is actually working
+          await AudioSystem.playTestBeep();
         } catch (e) {
           console.warn('initAudioOnInteraction: failed', e);
           audioInitializing = false;  // Allow retry
@@ -2758,12 +2760,17 @@
           // DRAG-AND-RELEASE: Discharge wenn der CURSOR (nicht Finger!) über dem Logo ist
           // Der Cursor ist 70px über dem Finger positioniert, also:
           // User bewegt Finger so dass Cursor über Logo ist, dann loslassen = Discharge
+          
+          // Tutorial phase hat eigene Discharge-Logik!
+          const inTutorial = gamePhase === GAME_PHASE_TUTORIAL;
+          const canTutorialDischarge = inTutorial && logoReadyForDischarge;
           const canTouchDischargeInverted = isInverted && redStackCount > 0;
           const canTouchDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD && coloredBridgePhaseComplete;
-          const canDischarge = canTouchDischargeInverted || canTouchDischargeNormal;
+          const canDischarge = canTutorialDischarge || canTouchDischargeInverted || canTouchDischargeNormal;
           const cursorOverLogo = cursorDistToLogo < logoRadius * 1.5;  // Großzügiger für Touch
           const shouldDischarge = cursorOverLogo && canDischarge && upgradeLevel < 10;
           
+          console.log(`touchend: phase=${gamePhase}, inTutorial=${inTutorial}, logoReady=${logoReadyForDischarge}, coloredComplete=${coloredBridgePhaseComplete}`);
           console.log(`touchend check: dist=${Math.round(cursorDistToLogo)}, radius=${Math.round(logoRadius)}, overLogo=${cursorOverLogo}, canDischarge=${canDischarge}, energy=${cursorEnergy.toFixed(2)}, shouldDischarge=${shouldDischarge}`);
           
           if (shouldDischarge) {

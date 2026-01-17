@@ -192,6 +192,23 @@ class ToneAudioSystemClass {
   }
   
   /**
+   * Play a simple test beep directly to output (debugging)
+   */
+  async playTestBeep(): Promise<void> {
+    console.log('playTestBeep called, context state:', Tone.context.state);
+    try {
+      // Create a simple oscillator directly connected to destination
+      const osc = new Tone.Oscillator(440, 'sine').toDestination();
+      osc.volume.value = -6;
+      osc.start();
+      osc.stop('+0.2');
+      console.log('playTestBeep: beep started');
+    } catch (e) {
+      console.error('playTestBeep failed:', e);
+    }
+  }
+  
+  /**
    * Play super star collection sound (bright, shimmering)
    */
   playSuperStarCollect(): void {
