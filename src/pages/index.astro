@@ -2772,15 +2772,27 @@
         const canDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD && coloredBridgePhaseComplete;
 
         const currentLevelCap = postCreditsMode ? 20 : 10;
-        if (dist < logoRadius && (canDischargeInverted || canDischargeNormal) && upgradeLevel < currentLevelCap) {
-           const prevLevel = upgradeLevel;
+         if (dist < logoRadius && (canDischargeInverted || canDischargeNormal) && upgradeLevel < currentLevelCap) {
+            const prevLevel = upgradeLevel;
 
-           // SIMPLIFIED: 1 red particle = 1 level, always
-           // No special rules, no max stack bonus
-           const levelsToAdd = isInverted ? redStackCount : 1;
-           upgradeLevel = Math.min(currentLevelCap, upgradeLevel + levelsToAdd);
-           // Logo wächst, aber max 2.8 (damit Ziffer sichtbar bleibt)
-           logoBaseScale = Math.min(2.8, logoBaseScale + 0.18 * levelsToAdd);
+            // SIMPLIFIED: 1 red particle = 1 level, always
+            // No special rules, no max stack bonus
+            const levelsToAdd = isInverted ? redStackCount : 1;
+            upgradeLevel = Math.min(currentLevelCap, upgradeLevel + levelsToAdd);
+            // Logo wächst, aber max 2.8 (damit Ziffer sichtbar bleibt)
+            logoBaseScale = Math.min(2.8, logoBaseScale + 0.18 * levelsToAdd);
+
+           // Modal check - direkt nach Level-Increment
+           if (upgradeLevel >= currentLevelCap && !gameCompleted) {
+             gameCompleted = true;
+             setTimeout(() => {
+               if (postCreditsMode) {
+                 showSuperSuccessModal();
+               } else {
+                 showModal();
+               }
+             }, 4000);
+           }
           
           // Audio & Haptic: Discharge - epischer Moment!
           AudioSystem.playDischarge(upgradeLevel);
@@ -2836,24 +2848,11 @@
              }, o * 20);
            }
           
-          // Scale punch based on level
-           logoTargetScale = 1.2 + upgradeLevel * 0.05;
-           setTimeout(() => { logoTargetScale = 1; }, 150);
-
-            // Level check for modals - trigger immediately when cap reached
-            const levelCap = postCreditsMode ? 20 : 10;
-            if (upgradeLevel >= levelCap && !gameCompleted) {
-              gameCompleted = true;
-              setTimeout(() => {
-                if (postCreditsMode) {
-                  showSuperSuccessModal();
-                } else {
-                  showModal();
-                }
-              }, 4000);
-            }
-          
-          // DRUCKWELLE - alle ambient particles wegstoßen
+           // Scale punch based on level
+            logoTargetScale = 1.2 + upgradeLevel * 0.05;
+            setTimeout(() => { logoTargetScale = 1; }, 150);
+           
+           // DRUCKWELLE - alle ambient particles wegstoßen
           for (let ap of ambientParticles) {
             const apDx = ap.x - exactCenterX;
             const apDy = ap.y - exactCenterY;
@@ -2898,14 +2897,14 @@
           redParticleCatches = 0; // Reset für nächste Ladung
           redParticle.active = false;
           
-          // Chamber reset
-          chamberParticles.length = 0;
-          chamberActive = false;
-          coloredParticles.length = 0;
-        }
-      });
-      
-      // Touch support
+           // Chamber reset
+           chamberParticles.length = 0;
+           chamberActive = false;
+           coloredParticles.length = 0;
+         }
+       });
+
+       // Touch support
       document.addEventListener('touchstart', (e) => {
         const touch = e.touches[0];
         mouseX = touch.clientX;
