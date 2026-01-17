@@ -206,6 +206,7 @@
       const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
       const MOBILE_CURSOR_OFFSET_Y = -70;  // Cursor appears above finger for visibility
       let isTouching = false;  // Track if user is currently touching
+      let touchStartedNearLogo = false;  // For drag-release discharge on mobile
       
       // Logo state
       let logoScale = 1;
@@ -2536,6 +2537,15 @@
         lastMouseMoveTime = Date.now();
         isIdle = false;
         isTouching = true;
+        
+        // Check if touch started near logo (for drag-release discharge)
+        // Use the CURSOR position (with offset), not finger position!
+        const cursorPosY = touch.clientY + MOBILE_CURSOR_OFFSET_Y;
+        const logoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
+        const dxLogo = touch.clientX - W / 2;
+        const dyLogo = cursorPosY - H / 2;
+        const distToLogo = Math.sqrt(dxLogo * dxLogo + dyLogo * dyLogo);
+        touchStartedNearLogo = distToLogo < logoRadius * 1.5;  // Etwas größerer Bereich
       });
       
       document.addEventListener('touchmove', (e) => {
@@ -2547,9 +2557,11 @@
         e.preventDefault();
       }, { passive: false });
       
-      // Touch tap = ENERGIE EXPLOSION (nur wenn Threshold erreicht)
+      // Touch release = ENERGIE EXPLOSION (drag-and-release auf Mobile)
       document.addEventListener('touchend', (e) => {
         isTouching = false;  // Reset touch state
+        const wasNearLogo = touchStartedNearLogo;
+        touchStartedNearLogo = false;  // Reset für nächsten Touch
         
         if (e.changedTouches.length > 0) {
           const touch = e.changedTouches[0];
@@ -2582,10 +2594,14 @@
             }
           }
           
-          const dist = distFromLogo(touchX, touchY);
+          // Calculate cursor position (with offset) for logo distance check
+          const cursorPosY = touchY + MOBILE_CURSOR_OFFSET_Y;
           const logoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
           const exactCenterX = W / 2;
           const exactCenterY = H / 2;
+          const dxLogo = touchX - exactCenterX;
+          const dyLogo = cursorPosY - exactCenterY;
+          const cursorDistToLogo = Math.sqrt(dxLogo * dxLogo + dyLogo * dyLogo);
           
           ripples.push({
             x: touchX,
@@ -2595,12 +2611,15 @@
             hue: 0
           });
           
-          // Touch discharge: same logic as mouse
-          // Inverted: discharge ANYTIME with hearts
+          // DRAG-AND-RELEASE: Discharge wenn Touch nahe Logo STARTETE, egal wo Release ist
+          // ODER wenn Release nahe Logo ist (normaler Tap)
           const canTouchDischargeInverted = isInverted && redStackCount > 0;
           const canTouchDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD && coloredBridgePhaseComplete;
+          const canDischarge = canTouchDischargeInverted || canTouchDischargeNormal;
+          const releaseNearLogo = cursorDistToLogo < logoRadius * 1.3;  // Etwas toleranter
+          const shouldDischarge = (wasNearLogo || releaseNearLogo) && canDischarge && upgradeLevel < 10;
           
-          if (dist < logoRadius && (canTouchDischargeInverted || canTouchDischargeNormal) && upgradeLevel < 10) {
+          if (shouldDischarge) {
             const prevLevel = upgradeLevel;
             
             // SIMPLIFIED: 1 red particle = 1 level, always
