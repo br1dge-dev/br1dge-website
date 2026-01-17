@@ -345,6 +345,9 @@
        // Game complete state (für Restart-Button nach Modal)
        let gameCompleted = false;
 
+       // Post-credits mode: after first completion, harder gameplay
+       let postCreditsMode = false;
+
        // You Died state
        let youDiedActive = false;
 
@@ -373,7 +376,8 @@
          deathTime: 0,
          deathProgress: 0,
          consumedEnergy: 0,  // Tracks how much energy/particles consumed -> increases speed
-         speedModifier: 1  // 1X, 2X, 4X, or 8X based on random roll
+         speedModifier: 1,  // 1X, 2X, 4X, or 8X based on random roll
+         isSuper: false  // Super enemies: 3x size, 2x speed, 3 dmg, chromatic abberation
        };
       let lastSpiralSpawnTime = 0;
       const SPIRAL_SPAWN_INTERVAL = 15000;  // 15 seconds
@@ -404,7 +408,12 @@
       function closeModal(modal) {
         // Audio: Modal close
         AudioSystem.playModalClose();
-        
+
+        // Activate post-credits mode when closing first completion modal
+        if (gameCompleted && !postCreditsMode) {
+          postCreditsMode = true;
+        }
+
         modal.style.opacity = '0';
         setTimeout(() => {
           modal.remove();
@@ -491,7 +500,46 @@
           btn.style.opacity = '1';
         });
       }
-      
+
+      function showSuperSuccessModal() {
+        if (modalShown) return;
+        modalShown = true;
+        AudioSystem.playModalEnter();
+        HapticManager.modalEnter();
+        canvas.style.filter = '';
+        isInverted = false;
+
+        const modal = document.createElement('div');
+        modal.id = 'super-success-modal';
+        modal.style.cssText = `
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background: #fff; color: #000; display: flex; flex-direction: column;
+          justify-content: center; align-items: center; z-index: 1000;
+          font-family: "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+          opacity: 0; transition: opacity 2.5s ease; cursor: none;
+        `;
+        modal.innerHTML = `
+          <button id="close-btn" style="position: absolute; top: 1rem; right: 1rem; background: transparent; border: none; color: #000; font-size: 1.5rem; cursor: none; padding: 0.5rem; opacity: 0.4; transition: opacity 0.3s;">✕</button>
+          <div style="padding: 1rem; width: 100%; max-width: 400px; box-sizing: border-box; text-align: center;">
+            <div style="font-size: clamp(4rem, 15vw, 7rem); font-weight: 100; margin-bottom: 0.5rem; letter-spacing: -0.05em;">∩</div>
+            <h1 style="font-size: clamp(1.2rem, 5vw, 2rem); font-weight: 200; letter-spacing: 0.2em; text-transform: uppercase; margin: 0 0 1rem;">Wow, you are something</h1>
+            <p style="font-size: clamp(0.75rem, 3vw, 0.9rem); margin-bottom: 1.5rem; opacity: 0.5; font-weight: 300;">Send me a DM and tell me secret word "Labskaus".</p>
+            <div style="display: flex; gap: 0.8rem; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center;">
+              <a href="https://x.com/br1dge_eth" target="_blank" style="color: #000; text-decoration: none; font-size: clamp(0.75rem, 2.5vw, 0.9rem); padding: 0.6rem 1.2rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">X / TWITTER</a>
+              <a href="https://farcaster.xyz/br1dge" target="_blank" style="color: #000; text-decoration: none; font-size: clamp(0.75rem, 2.5vw, 0.9rem); padding: 0.6rem 1.2rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">FARCASTER</a>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        const closeBtn = modal.querySelector('#close-btn');
+        if (closeBtn) {
+          closeBtn.addEventListener('click', () => closeModal(modal));
+        }
+
+        requestAnimationFrame(() => { modal.style.opacity = '1'; });
+      }
+
       function showModal() {
         if (modalShown) return;
         modalShown = true;
@@ -1133,6 +1181,13 @@
             spiralEnemy.speedModifier = 1;
           }
 
+          // Super enemies: only in post-credits mode, 30% chance
+          spiralEnemy.isSuper = postCreditsMode && Math.random() < 0.3;
+          if (spiralEnemy.isSuper) {
+            spiralEnemy.radius *= 3;  // 3x größer
+            spiralEnemy.speedModifier *= 2;  // 2x Basis-Speed
+          }
+
           lastSpiralSpawnTime = now;
 
           // Play ominous spawn sound
@@ -1232,10 +1287,11 @@
            logoVibrationTime = now;
            logoReadyForDischarge = false;
 
-           // Downgrade 1 level
-           const wasLevel = upgradeLevel;
-           upgradeLevel = Math.max(0, upgradeLevel - 1);
-           logoBaseScale = Math.max(1, logoBaseScale - 0.18); // Schrumpfen (wie beim Wachsen +0.18)
+           // Damage: 1 in normal mode, 2 in post-credits, 3 for super enemies
+           const baseDamage = postCreditsMode ? 2 : 1;
+           const damage = spiralEnemy.isSuper ? 3 : baseDamage;
+           upgradeLevel = Math.max(0, upgradeLevel - damage);
+           logoBaseScale = Math.max(1, logoBaseScale - 0.18 * damage);
 
            // Check for death
            if (upgradeLevel === 0) {
@@ -1265,21 +1321,50 @@
       // Draw plain white pulsating bubble blob - 2-4 connected bubbles
       function drawSpiralCore(x, y, rotation, intensity) {
         if (intensity <= 0) return;
-        
+
         const time = Date.now() / 1000;
         const pulse = 1 + Math.sin(time * 5) * 0.15;  // Pulsating
-        
+        const isSuper = spiralEnemy.isSuper;
+        const sizeMultiplier = isSuper ? 3 : 1;
+
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(rotation * 0.3);  // Rotate the whole blob
-        
+
         // Generate 2-4 connected bubbles
         const bubbleCount = 2 + Math.floor((rotation % 3));
-        const baseSize = 8 * intensity * pulse;
-        
+        const baseSize = 8 * intensity * pulse * sizeMultiplier;
+
+        // Chromatic abberation for super enemies
+        if (isSuper) {
+          const caOffset = 4;
+          ctx.fillStyle = `rgba(255, 0, 100, ${intensity * 0.4})`;
+          for (let i = 0; i < bubbleCount; i++) {
+            const angle = (i / bubbleCount) * Math.PI * 2;
+            const dist = baseSize * 0.6;
+            const bx = Math.cos(angle) * dist - caOffset;
+            const by = Math.sin(angle) * dist;
+            const bubbleSize = baseSize * (0.6 + Math.sin(time * 4 + i) * 0.2);
+            ctx.beginPath();
+            ctx.arc(bx, by, bubbleSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.fillStyle = `rgba(0, 255, 255, ${intensity * 0.4})`;
+          for (let i = 0; i < bubbleCount; i++) {
+            const angle = (i / bubbleCount) * Math.PI * 2;
+            const dist = baseSize * 0.6;
+            const bx = Math.cos(angle) * dist + caOffset;
+            const by = Math.sin(angle) * dist;
+            const bubbleSize = baseSize * (0.6 + Math.sin(time * 4 + i) * 0.2);
+            ctx.beginPath();
+            ctx.arc(bx, by, bubbleSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
         // Plain white, no glow, no contours
         ctx.fillStyle = `rgba(255, 255, 255, ${intensity})`;
-        
+
         // Draw bubbles as connected blobs
         for (let i = 0; i < bubbleCount; i++) {
           const angle = (i / bubbleCount) * Math.PI * 2;
@@ -1287,18 +1372,18 @@
           const bx = Math.cos(angle) * dist;
           const by = Math.sin(angle) * dist;
           const bubbleSize = baseSize * (0.6 + Math.sin(time * 4 + i) * 0.2);
-          
+
           // Plain white bubble - filled, no stroke
           ctx.beginPath();
           ctx.arc(bx, by, bubbleSize, 0, Math.PI * 2);
           ctx.fill();
         }
-        
+
         // Central connection blob - plain white
         ctx.beginPath();
         ctx.arc(0, 0, baseSize * 0.5, 0, Math.PI * 2);
         ctx.fill();
-        
+
         ctx.restore();
       }
       
@@ -2408,28 +2493,47 @@
         const fadeProgress = Math.min(1, (Date.now() - (window as any).__youDiedStartTime || Date.now()) / 1200);
         const alpha = fadeProgress * 0.9;
 
+        // Update cursor position smoothly
+        cursorX += (mouseX - cursorX) * 0.15;
+        cursorY += (mouseY - cursorY) * 0.15;
+
         // Dark overlay
         ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
         ctx.fillRect(0, 0, W, H);
 
-        // YOU DIED - wie "Congratulations" im Modal, nur rot
+        // YOU DIED - weiß mit chromatic abberation
         const fontSize = Math.min(W, H) * 0.07;
         ctx.font = `200 ${fontSize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = `rgba(180, 50, 60, ${fadeProgress})`;
+
+        // Chromatic abberation für YOU DIED
+        const caOffset = 2;
+        ctx.fillStyle = `rgba(255, 0, 100, ${fadeProgress * 0.3})`;
+        ctx.fillText('YOU DIED', W / 2 - caOffset, H / 2);
+        ctx.fillStyle = `rgba(0, 255, 255, ${fadeProgress * 0.3})`;
+        ctx.fillText('YOU DIED', W / 2 + caOffset, H / 2);
+        // Haupttext weiß
+        ctx.fillStyle = `rgba(255, 255, 255, ${fadeProgress})`;
         ctx.fillText('YOU DIED', W / 2, H / 2);
 
-        // Restart button (↻) unterhalb - weiß auf schwarz
+        // Restart button (↻) unterhalb - mehr Abstand, mit chromatic abberation
         const restartSize = fontSize * 0.5;
+        const restartY = H / 2 + fontSize * 1.5;
         ctx.font = `300 ${restartSize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
-        ctx.fillStyle = `rgba(255, 255, 255, ${fadeProgress * 0.6})`;
-        ctx.fillText('↻', W / 2, H / 2 + fontSize * 0.8);
 
-        // Minimalistischer Cursor (Level 1 Style)
+        // Chromatic abberation für Restart
+        ctx.fillStyle = `rgba(255, 0, 100, ${fadeProgress * 0.2})`;
+        ctx.fillText('↻', W / 2 - 1.5, restartY);
+        ctx.fillStyle = `rgba(0, 255, 255, ${fadeProgress * 0.2})`;
+        ctx.fillText('↻', W / 2 + 1.5, restartY);
+        ctx.fillStyle = `rgba(255, 255, 255, ${fadeProgress * 0.6})`;
+        ctx.fillText('↻', W / 2, restartY);
+
+        // Minimalistischer Cursor
         ctx.beginPath();
         ctx.arc(cursorX, cursorY, 4, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${fadeProgress * 0.8})`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${fadeProgress * 0.9})`;
         ctx.fill();
       }
 
@@ -2651,14 +2755,15 @@
         // Normal Mode: Discharge wenn Ringe voll UND Colored Phase abgeschlossen
         const canDischargeInverted = isInverted && redStackCount > 0;  // Jederzeit mit hearts
         const canDischargeNormal = !isInverted && cursorEnergy >= ENERGY_THRESHOLD && coloredBridgePhaseComplete;
-        
-        if (dist < logoRadius && (canDischargeInverted || canDischargeNormal) && upgradeLevel < 10) {
+
+        const currentLevelCap = postCreditsMode ? 20 : 10;
+        if (dist < logoRadius && (canDischargeInverted || canDischargeNormal) && upgradeLevel < currentLevelCap) {
            const prevLevel = upgradeLevel;
-           
+
            // SIMPLIFIED: 1 red particle = 1 level, always
            // No special rules, no max stack bonus
            const levelsToAdd = isInverted ? redStackCount : 1;
-           upgradeLevel = Math.min(10, upgradeLevel + levelsToAdd);
+           upgradeLevel = Math.min(currentLevelCap, upgradeLevel + levelsToAdd);
            logoBaseScale += 0.18 * levelsToAdd;
           
           // Audio & Haptic: Discharge - epischer Moment!
@@ -2716,16 +2821,21 @@
            }
           
           // Scale punch based on level
-          logoTargetScale = 1.2 + upgradeLevel * 0.05;
-          setTimeout(() => { logoTargetScale = 1; }, 150);
-          
-           // Level 10 erreicht - Modal zeigen (nur einmal!)
-           if (upgradeLevel >= 10 && !gameCompleted) {
-             gameCompleted = true;
-             setTimeout(() => {
-               showModal();
-             }, 4000); // 4 Sekunden warten
-           }
+           logoTargetScale = 1.2 + upgradeLevel * 0.05;
+           setTimeout(() => { logoTargetScale = 1; }, 150);
+
+            // Level check for modals
+            const levelCap = postCreditsMode ? 20 : 10;
+            if (upgradeLevel >= levelCap && !gameCompleted) {
+              gameCompleted = true;
+              setTimeout(() => {
+                if (postCreditsMode) {
+                  showSuperSuccessModal();
+                } else {
+                  showModal();
+                }
+              }, 4000); // 4 Sekunden warten
+            }
           
           // DRUCKWELLE - alle ambient particles wegstoßen
           for (let ap of ambientParticles) {
