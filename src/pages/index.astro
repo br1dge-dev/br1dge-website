@@ -762,9 +762,12 @@
          currentColorPhase = 0;
          logoReadyForDischarge = false;
 
-         // Restart ambient
-         AudioSystem.startBgMusic();
-       }
+          // Restart ambient - only after tutorial phase
+          if (gamePhase !== GAME_PHASE_TUTORIAL) {
+            AudioSystem.setGameLevel(upgradeLevel);
+            AudioSystem.startBgMusic();
+          }
+        }
 
        function drawGrid() {
         const time = Date.now() / 1000;
@@ -1311,16 +1314,22 @@
            logoVibrationTime = now;
            logoReadyForDischarge = false;
 
-           // Damage: 1 in normal mode, 2 in post-credits, 3 for super enemies
-           const baseDamage = postCreditsMode ? 2 : 1;
-           const damage = spiralEnemy.isSuper ? 3 : baseDamage;
-           upgradeLevel = Math.max(0, upgradeLevel - damage);
-           logoBaseScale = Math.max(1, logoBaseScale - 0.18 * damage);
+            // Damage: 1 in normal mode, 2 in post-credits, 3 for super enemies
+            const baseDamage = postCreditsMode ? 2 : 1;
+            const damage = spiralEnemy.isSuper ? 3 : baseDamage;
+            const prevLevel = upgradeLevel;
+            upgradeLevel = Math.max(0, upgradeLevel - damage);
+            logoBaseScale = Math.max(1, logoBaseScale - 0.18 * damage);
 
-           // Check for death
-           if (upgradeLevel === 0) {
-             triggerYouDied();
-           }
+            // Update music level if changed
+            if (upgradeLevel !== prevLevel) {
+              AudioSystem.setGameLevel(upgradeLevel);
+            }
+
+            // Check for death
+            if (upgradeLevel === 0) {
+              triggerYouDied();
+            }
 
            AudioSystem.playSpiralDamage();
            HapticManager.levelUp();
@@ -2728,10 +2737,9 @@
         ringsMax = tutorialRingsMax;
         ringsExpanded = tutorialRingsMax;  // Tutorial allows immediate discharge
         if (gamePhase === GAME_PHASE_TUTORIAL && dist < logoRadius && logoReadyForDischarge) {
-          // Start background music on first discharge
-          if (!AudioSystem.bgMusicStarted) {
-            AudioSystem.startBgMusic();
-          }
+          // Start background music AFTER tutorial completes
+          // Music only starts after colored phase begins (gamePhase != GAME_PHASE_TUTORIAL)
+          // This is handled in the discharge logic when transitioning to GAME_PHASE_COLORED
 
           // Progress tutorial
           if (tutorialSubPhase === 0) {
@@ -2767,8 +2775,11 @@
               gamePhase = GAME_PHASE_COLORED;
               currentColorPhase = 0;
               chamberActive = true;
-              // Play transition sound
+              // Play transition sound AND start music after tutorial
               AudioSystem.playBridgeSpawn();
+              // Set level BEFORE starting music to ensure correct track
+              AudioSystem.setGameLevel(upgradeLevel);
+              AudioSystem.startBgMusic();
             }, transitionDelay);
           }
           return;
@@ -2840,6 +2851,7 @@
           
            // Start background music on first discharge
            if (!AudioSystem.bgMusicStarted) {
+             AudioSystem.setGameLevel(upgradeLevel);
              AudioSystem.startBgMusic();
            }
            
@@ -3083,6 +3095,7 @@
         if (muted) {
           AudioSystem.stopBgMusic();
         } else if (AudioSystem.bgMusic && !AudioSystem.bgMusicStarted) {
+          AudioSystem.setGameLevel(upgradeLevel);
           AudioSystem.startBgMusic();
         }
       }

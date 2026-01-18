@@ -10,7 +10,7 @@
 import * as Tone from 'tone';
 import { NOTES, SYNTHS, VOLUME } from './constants';
 import { EffectChain } from './EffectChain';
-import { AmbientSoundscape } from './AmbientSoundscape';
+import { MusicLoopSystem } from './MusicLoopSystem';
 import type { SFXParams } from './types';
 
 class SFXEngineClass {
@@ -266,31 +266,30 @@ class SFXEngineClass {
      }
    }
 
-   /**
-    * Thanks Sound - Positive, short, punchy confirmation sound
-    * Like a friendly "thank you" - bright, warm, satisfying
-    * Inspired by positive UI feedback sounds
-    */
-   playThanks(): void {
-     if (!this.initialized || !this.melodicSynth) return;
+    /**
+     * Thanks Sound - Positive, short, punchy confirmation sound
+     * Like a friendly "thank you" - bright, warm, satisfying
+     * In G minor - major 2nd becomes minor 2nd (Bb) for tension
+     */
+    playThanks(): void {
+      if (!this.initialized || !this.melodicSynth) return;
 
-     const now = Tone.now();
+      const now = Tone.now();
 
-     // Bright, positive major 2nd interval - friendly and uplifting
-     // Quick attack, short decay - punchy but not harsh
-     this.melodicSynth.triggerAttackRelease('G5', '16n', now, 0.35);
-     this.melodicSynth.triggerAttackRelease('A5', '16n', now + 0.03, 0.28);
+      // Minor 2nd interval in G minor - bright but resolving
+      this.melodicSynth.triggerAttackRelease('G5', '16n', now, 0.35);
+      this.melodicSynth.triggerAttackRelease('Bb5', '16n', now + 0.03, 0.28);
 
-     // Subtle harmonic shimmer - warm, not piercing
-     if (this.harmonicSynth) {
-       this.harmonicSynth.triggerAttackRelease('E6', '32n', now + 0.05, 0.12);
-     }
+      // Harmonic shimmer - minor 6th
+      if (this.harmonicSynth) {
+        this.harmonicSynth.triggerAttackRelease('Eb6', '32n', now + 0.05, 0.12);
+      }
 
-     // Very subtle sub for weight
-     if (this.subSynth) {
-       this.subSynth.triggerAttackRelease('G2', '32n', now + 0.02, 0.12);
-     }
-   }
+      // Sub for weight
+      if (this.subSynth) {
+        this.subSynth.triggerAttackRelease('G2', '32n', now + 0.02, 0.12);
+      }
+    }
   
   /**
    * Rejected Discharge - Soft, muted denial when requirements not met
@@ -346,37 +345,37 @@ class SFXEngineClass {
       } catch (e) { /* ignore */ }
     }
     
-    // Trigger ambient swell
-    AmbientSoundscape.swell(1.5);
+     // Trigger ambient swell
+     // MusicLoopSystem doesn't have swells - effect handled by EffectChain
   }
   
   /**
    * Red Heart Capture - Magical, powerful but warm
    * Like catching a falling star - special, not scary
+   * In G minor - using G minor chord tones for harmony
    */
   playRedHeartCapture(): void {
     if (!this.initialized) return;
-    
+
     const now = Tone.now();
-    
+
     // Warm sub impact - like a deep bell
-    // Use slightly future time to avoid timing conflicts
     if (this.subSynth) {
       try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
-      this.subSynth.triggerAttackRelease('D2', '4n', now + 0.05, 0.7);
+      this.subSynth.triggerAttackRelease('G2', '4n', now + 0.05, 0.7);
     }
-    
-    // Magical chord - major with added 9th (D, F#, A, E) = dreamy, hopeful
-    this.melodicSynth?.triggerAttackRelease(['D3', 'F#3', 'A3'], '4n', now + 0.08, 0.5);
-    
-    // Shimmering high harmonics - like stardust
+
+    // Magical chord - G minor with added 9th (Bb) = dreamy, hopeful
+    this.melodicSynth?.triggerAttackRelease(['G3', 'Bb3', 'D4'], '4n', now + 0.08, 0.5);
+
+    // Shimmering high harmonics - like stardust in G minor
     if (this.harmonicSynth) {
       this.harmonicSynth.triggerAttackRelease('D5', '4n', now + 0.12, 0.35);
-      this.harmonicSynth.triggerAttackRelease('A5', '2n', now + 0.18, 0.25);
-      this.harmonicSynth.triggerAttackRelease('E6', '2n', now + 0.25, 0.15);
+      this.harmonicSynth.triggerAttackRelease('G6', '2n', now + 0.18, 0.25);
+      this.harmonicSynth.triggerAttackRelease('Bb6', '2n', now + 0.25, 0.15);
     }
-    
-    // Soft whoosh - like wind, not harsh
+
+    // Soft whoosh
     if (this.noiseFilter && this.noiseSynth) {
       this.noiseFilter.frequency.setValueAtTime(1200, now + 0.1);
       this.noiseFilter.frequency.exponentialRampTo(300, 0.5);
@@ -416,7 +415,7 @@ class SFXEngineClass {
     }
     
     // Big ambient swell
-    AmbientSoundscape.swell(2.5);
+     // MusicLoopSystem doesn't have swells - effect handled by EffectChain
   }
   
   /**
@@ -445,8 +444,8 @@ class SFXEngineClass {
     // Shimmer - unique time after sub
     this.harmonicSynth?.triggerAttackRelease(['G5', 'D6'], '1n', now + timeOffset, velocity * 0.4);
 
-    // Update ambient
-    AmbientSoundscape.setGameLevel(level);
+    // Update music level
+    MusicLoopSystem.setLevel(level);
   }
   
   /**
@@ -499,53 +498,56 @@ class SFXEngineClass {
       }
     }
     
-    // Epic swell - nur wenn Ambient aktiv (nicht inverted)
-    AmbientSoundscape.swell(4);
-    AmbientSoundscape.setGameLevel(10);
+    // Epic swell - MusicLoopSystem doesn't have swells
+    // Effect handled by EffectChain
+    // Note: Music level is NOT changed here - only SFX play
   }
   
-  /**
-   * Modal Enter - Gentle, inviting
-   */
-  playModalEnter(): void {
-    if (!this.initialized) return;
-    
-    const now = Tone.now();
-    
-    // Soft high notes
-    this.melodicSynth?.triggerAttackRelease('D5', '4n', now, 0.4);
-    this.melodicSynth?.triggerAttackRelease('G5', '4n', now + 0.08, 0.3);
-    
-    // Subtle harmonic
-    this.harmonicSynth?.triggerAttackRelease('D6', '2n', now + 0.1, 0.2);
-  }
-  
-  /**
-   * Modal Close - Soft, resolving
-   */
-  playModalClose(): void {
-    if (!this.initialized || !this.melodicSynth) return;
-    
-    const now = Tone.now();
-    
-    // Descending resolution
-    this.melodicSynth.triggerAttackRelease('D5', '8n', now, 0.3);
-    this.melodicSynth.triggerAttackRelease('G4', '8n', now + 0.1, 0.25);
-  }
-  
-  /**
-   * Chamber Capture - Crystalline, building
-   */
+   /**
+    * Modal Enter - Gentle, inviting
+    * G minor - warm open intervals
+    */
+   playModalEnter(): void {
+     if (!this.initialized || !this.melodicSynth) return;
+
+     const now = Tone.now();
+
+     // Soft high notes in G minor
+     this.melodicSynth?.triggerAttackRelease('G5', '4n', now, 0.4);
+     this.melodicSynth?.triggerAttackRelease('D5', '4n', now + 0.08, 0.3);
+
+     // Subtle harmonic
+     this.harmonicSynth?.triggerAttackRelease('G6', '2n', now + 0.1, 0.2);
+   }
+
+   /**
+    * Modal Close - Soft, resolving
+    * G minor descending
+    */
+   playModalClose(): void {
+     if (!this.initialized || !this.melodicSynth) return;
+
+     const now = Tone.now();
+
+     // Descending resolution in G minor
+     this.melodicSynth.triggerAttackRelease('G4', '8n', now, 0.3);
+     this.melodicSynth.triggerAttackRelease('D4', '8n', now + 0.1, 0.25);
+   }
+
+   /**
+    * Chamber Capture - Crystalline, building
+    * G minor crystal tones
+    */
   playChamberCapture(params: SFXParams = {}): void {
     if (!this.initialized || !this.melodicSynth) return;
-    
+
     const count = params.count ?? 1;
     const note = NOTES.chamberScale[Math.min(count - 1, NOTES.chamberScale.length - 1)];
     const velocity = 0.35 + (count / 5) * 0.25;
-    
+
     // Main tone
     this.melodicSynth.triggerAttackRelease(note, '8n', Tone.now(), velocity);
-    
+
     // Harmonic on higher counts
     if (count >= 3 && this.harmonicSynth) {
       const upperNote = note.replace(/\d/, (m) => String(Math.min(7, Number(m) + 1)));
@@ -586,7 +588,7 @@ class SFXEngineClass {
       this.noiseSynth.triggerAttackRelease('8n', now);
     }
     
-    AmbientSoundscape.swell(2);
+    // Bridge spawn swell - MusicLoopSystem doesn't have swells
   }
   
   /**
@@ -610,42 +612,44 @@ class SFXEngineClass {
   // SPIRAL ENEMY SOUNDS
   // ============================================
   
-   /**
-    * Spiral Spawn - Ominous, dark arrival
-    */
-   playSpiralSpawn(): void {
-     if (!this.initialized) return;
+  /**
+   * Spiral Spawn - Ominous arrival
+   * G minor with tension notes (F, Bb)
+   */
+  playSpiralSpawn(): void {
+    if (!this.initialized) return;
 
-     const now = Tone.now();
+    const now = Tone.now();
 
-     // Timing protection
-     if ((now - (this as any).__lastSpawnTime || 0) < 0.5) return;
-     (this as any).__lastSpawnTime = now;
+    // Timing protection
+    if ((now - (this as any).__lastSpawnTime || 0) < 0.5) return;
+    (this as any).__lastSpawnTime = now;
 
-     // Deep ominous rumble
-     if (this.subSynth) {
-       try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
-       this.subSynth.triggerAttackRelease('D1', '2n', now + 0.05, 0.5);
-     }
-    
-    // Dissonant minor 2nd - unsettling
-    this.melodicSynth?.triggerAttackRelease(['D2', 'Eb2'], '4n', now + 0.1, 0.3);
-    
+    // Deep ominous rumble in G
+    if (this.subSynth) {
+      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+      this.subSynth.triggerAttackRelease('G1', '2n', now + 0.05, 0.5);
+    }
+
+    // Tension - G and A (minor 2nd in G minor)
+    this.melodicSynth?.triggerAttackRelease(['G2', 'A2'], '4n', now + 0.1, 0.3);
+
     // Dark descending tone
     if (this.harmonicSynth) {
-      this.harmonicSynth.triggerAttackRelease('D4', '8n', now + 0.15, 0.25);
-      this.harmonicSynth.triggerAttackRelease('C4', '8n', now + 0.3, 0.2);
+      this.harmonicSynth.triggerAttackRelease('F3', '8n', now + 0.15, 0.25);
+      this.harmonicSynth.triggerAttackRelease('Eb3', '8n', now + 0.3, 0.2);
     }
   }
-  
+
   /**
-   * Spiral Defeat - Satisfying destruction when cursor hits it
+   * Spiral Defeat - Satisfying destruction
+   * G minor resolution
    */
   playSpiralDefeat(): void {
     if (!this.initialized) return;
-    
+
     const now = Tone.now();
-    
+
     // Release burst
     if (this.noiseFilter && this.noiseSynth) {
       this.noiseFilter.frequency.setValueAtTime(400, now + 0.05);
@@ -653,78 +657,78 @@ class SFXEngineClass {
       this.noiseFilter.frequency.exponentialRampTo(100, 0.5);
       this.noiseSynth.triggerAttackRelease('4n', now + 0.05);
     }
-    
-    // Rising resolution chord
+
+    // Rising resolution chord in G minor
     this.melodicSynth?.triggerAttackRelease(['G3', 'D4'], '4n', now + 0.1, 0.4);
     this.harmonicSynth?.triggerAttackRelease('G5', '2n', now + 0.2, 0.25);
   }
-  
-   /**
-    * Spiral Damage - When spiral hits logo, destructive impact
-    * Enhanced with more negative, impactful sound
-    */
-   playSpiralDamage(): void {
-     if (!this.initialized) return;
 
-     const now = Tone.now();
+  /**
+   * Spiral Damage - When spiral hits logo
+   * G minor with tension (Bb, F for dissonance)
+   */
+  playSpiralDamage(): void {
+    if (!this.initialized) return;
 
-     // Timing protection - prevent overlapping calls
-     if ((now - (this as any).__lastDamageTime || 0) < 0.3) return;
-     (this as any).__lastDamageTime = now;
+    const now = Tone.now();
 
-     // Deeper, heavier impact - drop to A0 for more destructive feel
-     if (this.subSynth) {
-       try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
-       this.subSynth.triggerAttackRelease('A0', '4n', now + 0.03, 0.95); // Louder, deeper
-     }
+    // Timing protection
+    if ((now - (this as any).__lastDamageTime || 0) < 0.3) return;
+    (this as any).__lastDamageTime = now;
 
-     // Harsh dissonant crash - more jarring interval (minor 2nd + tritone)
-     this.melodicSynth?.triggerAttackRelease(['A2', 'Bb2', 'D#3', 'E3'], '8n', now + 0.06, 0.7);
+    // Deeper, heavier impact
+    if (this.subSynth) {
+      try { this.subSynth.triggerRelease(now); } catch (e) { /* ignore */ }
+      this.subSynth.triggerAttackRelease('G0', '4n', now + 0.03, 0.95);
+    }
 
-     // Aggressive noise sweep - more destructive
-     if (this.noiseFilter && this.noiseSynth) {
-       this.noiseFilter.frequency.setValueAtTime(2000, now + 0.04);
-       this.noiseFilter.frequency.exponentialRampTo(50, 0.5); // Wider sweep
-       this.noiseSynth.triggerAttackRelease('8n', now + 0.04);
-     }
+    // Harsh dissonant crash - G minor intervals (G, Bb, F)
+    this.melodicSynth?.triggerAttackRelease(['G2', 'Bb2', 'F2', 'Bb2'], '8n', now + 0.06, 0.7);
 
-     // Subtle sub震荡 for more weight
-     if (this.harmonicSynth) {
-       this.harmonicSynth.triggerAttackRelease('A1', '8n', now + 0.1, 0.35);
-     }
+    // Aggressive noise sweep
+    if (this.noiseFilter && this.noiseSynth) {
+      this.noiseFilter.frequency.setValueAtTime(2000, now + 0.04);
+      this.noiseFilter.frequency.exponentialRampTo(50, 0.5);
+      this.noiseSynth.triggerAttackRelease('8n', now + 0.04);
+    }
+
+    // Subtle sub for weight
+    if (this.harmonicSynth) {
+      this.harmonicSynth.triggerAttackRelease('G1', '8n', now + 0.1, 0.35);
+    }
+  }
+
+  /**
+   * You Died - Melancholic dark chord
+   * G minor descending
+   */
+  playYouDied(): void {
+    if (!this.initialized || !this.melodicSynth) return;
+
+    const now = Tone.now();
+
+    // Slow, descending minor chord in G minor
+    this.melodicSynth.triggerAttackRelease('G3', '2n', now, 0.5);
+    this.melodicSynth.triggerAttackRelease('Eb4', '2n', now + 0.1, 0.45);
+    this.melodicSynth.triggerAttackRelease('C4', '2n', now + 0.2, 0.4);
+    this.melodicSynth.triggerAttackRelease('G4', '2n', now + 0.3, 0.35);
+
+    // Deep sub for weight
+    if (this.subSynth) {
+      this.subSynth.triggerAttackRelease('G1', '2n', now + 0.05, 0.6);
+    }
+
+    // Ethereal shimmer
+    if (this.harmonicSynth) {
+      this.harmonicSynth.triggerAttackRelease('G5', '1n', now + 0.4, 0.2);
+    }
+
+     // Stop music on death
+     MusicLoopSystem.stop();
    }
 
-   /**
-    * You Died - Melancholic, dark chord
-    * Like a final farewell - minor, slow, haunting
-    */
-   playYouDied(): void {
-     if (!this.initialized || !this.melodicSynth) return;
-
-     const now = Tone.now();
-
-     // Slow, descending minor chord - melancholic
-     this.melodicSynth.triggerAttackRelease('A3', '2n', now, 0.5);
-     this.melodicSynth.triggerAttackRelease('C4', '2n', now + 0.1, 0.45);
-     this.melodicSynth.triggerAttackRelease('E4', '2n', now + 0.2, 0.4);
-     this.melodicSynth.triggerAttackRelease('G4', '2n', now + 0.3, 0.35);
-
-     // Deep sub for weight
-     if (this.subSynth) {
-       this.subSynth.triggerAttackRelease('A1', '2n', now + 0.05, 0.6);
-     }
-
-     // Ethereal shimmer - haunting
-     if (this.harmonicSynth) {
-       this.harmonicSynth.triggerAttackRelease('A5', '1n', now + 0.4, 0.2);
-     }
-
-     // Stop ambient swell
-     AmbientSoundscape.stop();
-   }
-  
-  // Spiral suction state
-  private spiralSuctionActive = false;
+   // Spiral suction state
+   private spiralSuctionActive = false;
   
   /**
    * Spiral Suction - Continuous dark sucking sound
