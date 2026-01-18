@@ -143,6 +143,26 @@
         <circle cx="20" cy="10" r="1"/>
       </svg>
     </div>
+    <div id="crown-indicator" style="position: fixed; bottom: 1.2rem; right: 3.8rem; z-index: 100; opacity: 0; transition: opacity 0.5s; pointer-events: none;">
+      <svg viewBox="0 0 24 24" style="width: 28px; height: 28px; fill: none; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
+        <path d="M2 20h20l-2-8-4 4-4-8-4 8-4-4-2 8z"/>
+        <circle cx="12" cy="4" r="1"/>
+        <circle cx="4" cy="10" r="1"/>
+        <circle cx="20" cy="10" r="1"/>
+      </svg>
+    </div>
+    <button id="debug-toggle" style="position: fixed; bottom: 1.2rem; right: 6.4rem; z-index: 100; background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 0.4rem 0.6rem; cursor: pointer; font-size: 12px; opacity: 0.5; transition: opacity 0.3s;">[LOG]</button>
+    <div id="debug-panel" style="display: none; position: fixed; bottom: 3.5rem; right: 1.2rem; width: 400px; max-height: 300px; background: rgba(0,0,0,0.9); border: 1px solid rgba(255,255,255,0.2); z-index: 200; overflow: hidden; flex-direction: column; font-family: monospace; font-size: 11px; color: #0f0;">
+      <div style="display: flex; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05);">
+        <span style="color: #888;">Debug Console</span>
+        <div>
+          <button id="debug-copy" style="background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 2px 8px; cursor: pointer; margin-right: 6px;">Copy</button>
+          <button id="debug-clear" style="background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 2px 8px; cursor: pointer;">Clear</button>
+          <button id="debug-close" style="background: transparent; border: none; color: #fff; padding: 2px 6px; cursor: pointer; margin-left: 6px;">✕</button>
+        </div>
+      </div>
+      <div id="debug-output" style="flex: 1; overflow-y: auto; padding: 8px; color: #0f0; white-space: pre-wrap; word-break: break-all;"></div>
+    </div>
     <div id="sound-hint">
       <span>P</span><span>L</span><span>E</span><span>A</span><span>S</span><span>E</span><span>&nbsp;</span><span>E</span><span>N</span><span>A</span><span>B</span><span>L</span><span>E</span><span>&nbsp;</span><span>S</span><span>O</span><span>U</span><span>N</span><span>D</span><span class="speaker"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
     </div>
@@ -3073,15 +3093,96 @@
       });
       
       // Touch support for sound toggle button (mobile)
-      soundToggleBtn?.addEventListener('touchend', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        toggleSound();
-      });
+       soundToggleBtn?.addEventListener('touchend', (e) => {
+         e.stopPropagation();
+         e.preventDefault();
+         toggleSound();
+       });
 
-      // Init
-      resize();
-      render();
+       // Debug console panel
+       const debugOutput = document.getElementById('debug-output');
+       const debugPanel = document.getElementById('debug-panel');
+       const debugToggle = document.getElementById('debug-toggle');
+
+       if (debugOutput && debugPanel && debugToggle) {
+         // Capture console.log
+         const originalLog = console.log;
+         const originalWarn = console.warn;
+         const originalError = console.error;
+
+         function addDebugLine(msg: string, type = 'log') {
+           const time = new Date().toLocaleTimeString().split(' ')[0];
+           const color = type === 'error' ? '#f55' : type === 'warn' ? '#ff5' : '#0f0';
+           const line = document.createElement('div');
+           line.style.cssText = `color: ${color}; margin: 2px 0; font-size: 10px;`;
+           line.textContent = `[${time}] ${msg}`;
+           debugOutput.insertBefore(line, debugOutput.firstChild);
+           // Keep only last 100 lines
+           while (debugOutput.children.length > 100 && debugOutput.lastChild) {
+             debugOutput.removeChild(debugOutput.lastChild);
+           }
+         }
+
+         console.log = function(...args: unknown[]) {
+           originalLog.apply(console, args);
+           addDebugLine(args.map(a => String(a)).join(' '), 'log');
+         };
+         console.warn = function(...args: unknown[]) {
+           originalWarn.apply(console, args);
+           addDebugLine(args.map(a => String(a)).join(' '), 'warn');
+         };
+         console.error = function(...args: unknown[]) {
+           originalError.apply(console, args);
+           addDebugLine(args.map(a => String(a)).join(' '), 'error');
+         };
+
+         // Error handler for uncaught errors
+         window.addEventListener('error', (e: Event) => {
+           const ev = e as ErrorEvent;
+           addDebugLine(`ERROR: ${ev.message}`, 'error');
+           if (ev.error?.stack) {
+             const stack = ev.error.stack.split('\n').slice(0, 3).join('\n');
+             addDebugLine(stack, 'error');
+           }
+         });
+
+         // Toggle debug panel
+         debugToggle.addEventListener('click', () => {
+           const isVisible = debugPanel.style.display !== 'none';
+           debugPanel.style.display = isVisible ? 'none' : 'flex';
+           debugToggle.style.opacity = isVisible ? '0.5' : '1';
+         });
+         debugToggle.addEventListener('touchend', (e: Event) => {
+           e.preventDefault();
+           debugPanel.style.display = debugPanel.style.display !== 'none' ? 'none' : 'flex';
+         });
+
+         // Copy to clipboard
+         const copyBtn = document.getElementById('debug-copy');
+         copyBtn?.addEventListener('click', () => {
+           const text = debugOutput.textContent || '';
+           navigator.clipboard?.writeText(text).then(() => {
+             addDebugLine('[System] Copied to clipboard!', 'log');
+           });
+         });
+
+         // Clear
+         const clearBtn = document.getElementById('debug-clear');
+         clearBtn?.addEventListener('click', () => {
+           debugOutput.innerHTML = '';
+         });
+
+         // Close
+         const closeBtn = document.getElementById('debug-close');
+         closeBtn?.addEventListener('click', () => {
+           debugPanel.style.display = 'none';
+           debugToggle.style.opacity = '0.5';
+         });
+       }
+
+       // Init
+       resize();
+       render();
     </script>
   </body>
 </html>
