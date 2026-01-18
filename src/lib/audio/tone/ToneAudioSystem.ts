@@ -5,7 +5,7 @@
  */
 import * as Tone from 'tone';
 import { EffectChain } from './EffectChain';
-import { AmbientSoundscape } from './AmbientSoundscape';
+import { MusicLoopSystem } from './MusicLoopSystem';
 import { SFXEngine } from './SFXEngine';
 import type { ToneAudioState } from './types';
 
@@ -14,12 +14,12 @@ class ToneAudioSystemClass {
   muted = false;
   private unlocking = false;  // Prevent concurrent unlock attempts
   
-  // Track soundscape state - exposed as bgMusicStarted for API compatibility
-  private soundscapeStartedInternal = false;
-  
+  // Track loop state - exposed as bgMusicStarted for API compatibility
+  private loopStartedInternal = false;
+
   // API compatibility properties (read-only getters)
   get bgMusicStarted(): boolean {
-    return this.soundscapeStartedInternal;
+    return this.loopStartedInternal;
   }
   
   // bgMusic is always "loaded" since we use synthesizers
@@ -99,7 +99,7 @@ class ToneAudioSystemClass {
       
       // Initialize components with timeouts
       await withTimeout(EffectChain.init(), 5000);
-      await withTimeout(AmbientSoundscape.init(), 5000);
+      await withTimeout(MusicLoopSystem.init(), 5000);
       await withTimeout(SFXEngine.init(), 5000);
       
       this.initialized = true;
@@ -126,11 +126,11 @@ class ToneAudioSystemClass {
     EffectChain.setMuted(this.muted);
     
     if (this.muted) {
-      // Stop soundscape when muted
-      AmbientSoundscape.stop();
-    } else if (this.soundscapeStartedInternal) {
-      // Resume soundscape if it was playing
-      AmbientSoundscape.start();
+      // Stop loops when muted
+      MusicLoopSystem.stop();
+    } else if (this.loopStartedInternal) {
+      // Resume loops if it was playing
+      MusicLoopSystem.start();
     }
     
     return this.muted;
@@ -143,7 +143,7 @@ class ToneAudioSystemClass {
     return {
       initialized: this.initialized,
       muted: this.muted,
-      soundscapeActive: AmbientSoundscape.active,
+      soundscapeActive: MusicLoopSystem.active,
       masterVolume: -6,
       currentBPM: Tone.Transport.bpm.value,
     };
@@ -346,71 +346,72 @@ class ToneAudioSystemClass {
   // Background Music / Soundscape Methods
   // ============================================
   
+   /**
+    * Start loop-based music (replaces bg-music.mp3)
+    * Call this after tutorial phase ends
+    */
+   async startBgMusic(): Promise<void> {
+     if (!this.initialized || this.muted || this.loopStartedInternal) return;
+
+     this.loopStartedInternal = true;
+     await MusicLoopSystem.start();
+   }
+
   /**
-   * Start ambient soundscape (replaces bg-music.mp3)
-   * Call this on first meaningful interaction (like first discharge)
-   */
-  async startBgMusic(): Promise<void> {
-    if (!this.initialized || this.muted || this.soundscapeStartedInternal) return;
-    
-    this.soundscapeStartedInternal = true;
-    AmbientSoundscape.start();
-  }
-  
-  /**
-   * Stop ambient soundscape
+   * Stop loop-based music
    */
   stopBgMusic(): void {
-    if (!this.soundscapeStartedInternal) return;
-    
-    AmbientSoundscape.stop();
-    this.soundscapeStartedInternal = false;
+    if (!this.loopStartedInternal) return;
+
+    MusicLoopSystem.stop();
+    this.loopStartedInternal = false;
   }
-  
+
   /**
-   * Update soundscape intensity based on game progress
-   */
-  setIntensity(value: number): void {
-    AmbientSoundscape.setIntensity(value);
-  }
-  
-  /**
-   * Update soundscape based on game level
+   * Update music based on game level
+   * Controls which tracks are active based on upgradeLevel
    */
   setGameLevel(level: number): void {
-    AmbientSoundscape.setGameLevel(level);
+    MusicLoopSystem.setLevel(level);
   }
-  
+
   /**
-   * Trigger a momentary swell in the soundscape
+   * Set music intensity (no-op for loop system, kept for API compatibility)
+   */
+  setIntensity(value: number): void {
+    // MusicLoopSystem doesn't have intensity - tracks are level-based
+  }
+
+  /**
+   * Trigger a momentary swell in the music
    */
   triggerSwell(duration = 2): void {
-    AmbientSoundscape.swell(duration);
+    // Music loops don't have swells, but we keep this for API compatibility
   }
-  
+
   /**
    * Inverted/Underwater mode - muffled with driving pulse
    * Call when red particle captured, disable on discharge
    */
   setInvertedMode(active: boolean): void {
     if (!this.initialized || this.muted) return;
-    
+
     // Apply underwater filter to entire mix
     EffectChain.setUnderwaterMode(active);
-    
-    // Switch ambient to pulse mode
-    AmbientSoundscape.setInvertedMode(active);
+
+    // Note: MusicLoopSystem doesn't have inverted mode
+    // The EffectChain underwater filter handles the audio processing
   }
-  
+
   /**
    * Cleanup all audio resources
    */
   dispose(): void {
     SFXEngine.dispose();
-    AmbientSoundscape.dispose();
+    MusicLoopSystem.dispose();
     EffectChain.dispose();
     this.initialized = false;
-    this.soundscapeStartedInternal = false;
+    this.loopStartedInternal = false;
   }
 }
 
