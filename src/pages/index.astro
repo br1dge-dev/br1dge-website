@@ -3098,10 +3098,10 @@
           hideSoundHint();
         }
 
-        // Stop/start background music
+        // Stop/start background music (only if tutorial is complete)
         if (muted) {
           AudioSystem.stopBgMusic();
-        } else if (AudioSystem.bgMusic && !AudioSystem.bgMusicStarted) {
+        } else if (AudioSystem.bgMusic && !AudioSystem.bgMusicStarted && gamePhase !== GAME_PHASE_TUTORIAL) {
           AudioSystem.setGameLevel(upgradeLevel);
           AudioSystem.startBgMusic();
         }
