@@ -1,192 +1,131 @@
 /**
- * Tone.js Audio Constants
- * Cinematic Interstellar-inspired space ambient soundscape
+ * br1dge Audio Constants - Well-Being Sound Design
  * 
- * Hans Zimmer's Interstellar uses:
- * - Massive organ-like pads with long sustain
- * - Deep sub-bass drones
- * - Wide stereo field with modulation
- * - Tension through dissonance and resolution
- * - Minimalist melodic motifs
+ * Design Philosophy:
+ * - Warm, harmonious sounds in G-minor
+ * - Soft attacks, natural decays
+ * - Cohesive sonic identity matching the game's aesthetic
  */
 
-// Root key: G minor - dark, emotional, cinematic
-export const SCALE = {
-  root: 'G',
-  // G natural minor / Aeolian
-  notes: ['G', 'A', 'Bb', 'C', 'D', 'Eb', 'F'],
-  // Pentatonic for melodic elements
-  pentatonic: ['G', 'Bb', 'C', 'D', 'F'],
-};
+import * as Tone from 'tone';
 
-// Cinematic note collections - G Minor (G, A, Bb, C, D, Eb, F)
+// G-minor scale (natural)
+export const G_MINOR = ['G2', 'A2', 'Bb2', 'C3', 'D3', 'Eb3', 'F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'Eb4', 'F4', 'G4'];
+export const G_MINOR_LOW = ['G1', 'A1', 'Bb1', 'C2', 'D2', 'Eb2', 'F2', 'G2'];
+export const G_MINOR_HIGH = ['G3', 'A3', 'Bb3', 'C4', 'D4', 'Eb4', 'F4', 'G4', 'A4', 'Bb4', 'C5'];
+
+// Pentatonic for happier moments
+export const G_MINOR_PENT = ['G2', 'Bb2', 'C3', 'D3', 'F3', 'G3', 'Bb3', 'C4', 'D4', 'F4'];
+
+// Chord tones
+export const CHORD_IM = ['G2', 'Bb2', 'D3', 'G3'];
+export const CHORD_VM = ['D2', 'A2', 'D3', 'A3'];
+export const CHORD_IVM = ['C2', 'Eb2', 'G2', 'C3'];
+
+// Note collections
 export const NOTES = {
-  // Organ-like bass foundation
-  subBass: ['G0', 'G1'],
-
-  // Main drone notes - perfect 5ths for power
-  droneFifths: ['G1', 'D2', 'G2', 'D3'],
-
-  // Pad voicings - open, cinematic
-  padOpen: ['G2', 'D3', 'G3', 'D4', 'G4'],
-
-  // Tension pads - add the minor 3rd for emotion
-  padTension: ['G2', 'Bb2', 'D3', 'F3', 'G3'],
-
-  // Resolution pads - pure power chord
-  padResolution: ['G2', 'D3', 'G3', 'D4'],
-
-  // High celestial layer
-  celestial: ['G5', 'D6', 'G6', 'D7'],
-
-  // SFX - Collect sounds (ascending G minor pentatonic)
-  collectScale: ['G4', 'Bb4', 'C5', 'D5', 'F5', 'G5'],
-
-  // Level up - triumphant open voicing in G minor
-  levelUpChord: ['G3', 'D4', 'G4', 'Bb4', 'D5', 'G5'],
-
-  // Max stack - massive cinematic chord in G minor
-  maxStackChord: ['G2', 'D3', 'Bb3', 'F3', 'D4', 'G4', 'D5'],
-
-  // Chamber capture - crystalline G minor
-  chamberScale: ['G5', 'D6', 'G6', 'D7', 'G7'],
-
-  // Bridge spawn - heroic motif in G minor
-  bridgeChord: ['G3', 'D4', 'G4', 'Bb4', 'D5'],
-
-  // Collection complete - resolution in G minor
-  completeArpeggio: ['G4', 'Bb4', 'D5', 'G5'],
-
-  // Red heart capture - ethereal high G minor
-  redHeartScale: ['D6', 'G6', 'Bb6', 'D7', 'G7'],
-
-  // Spiral spawn - ominous G minor
-  spiralSpawnNotes: ['G2', 'Bb2', 'D3', 'F3'],
-
-  // Spiral damage - tension
-  spiralDamageNotes: ['F3', 'Bb3', 'D4', 'F4'],
-
-  // Spiral defeat - release
-  spiralDefeatNotes: ['G3', 'D4', 'G4'],
+  collectScale: ['G2', 'Bb2', 'C3', 'D3', 'F3', 'G3'],
+  levelUpChord: ['G2', 'D3', 'G3', 'Bb3', 'D4'],
+  maxStackChord: ['G1', 'D2', 'G2', 'Bb2', 'D3', 'G3'],
+  chamberScale: ['G3', 'D4', 'G4', 'D5'],
+  bridgeChord: ['G2', 'D3', 'G3', 'Bb3'],
+  completeArpeggio: ['G2', 'D3', 'G3'],
+  redHeartScale: ['D3', 'G3', 'Bb3', 'D4'],
+  spiralSpawnNotes: ['G1', 'Bb1', 'D2', 'F2'],
+  spiralDamageNotes: ['F2', 'Bb2', 'D3'],
+  spiralDefeatNotes: ['G2', 'D3', 'G3'],
+  celestial: ['G4', 'D5', 'G5'],
 };
 
-// Volume levels (dB) - Cinematic dynamic range
-export const VOLUME = {
-  master: -3,      // Loud but headroom for peaks
-  subBass: -12,    // Felt, not overwhelming
-  drone: -9,       // Foundation
-  pad: -12,        // Harmonic bed
-  celestial: -24,  // Subtle shimmer
-  sfx: -9,         // Clear and present
-};
-
-// Timing - Slow, breathing, cinematic
-export const TIMING = {
-  // Very long envelopes for organ-like swells
-  droneAttack: 8,
-  droneRelease: 12,
-  padAttack: 4,
-  padRelease: 8,
-  celestialAttack: 2,
-  celestialRelease: 6,
-};
-
-// Effect presets - Massive, cathedral-like
-export const EFFECTS = {
-  // Cathedral reverb
-  cathedralReverb: {
-    decay: 12,      // Very long tail
-    wet: 0.6,
-    preDelay: 0.08,
-  },
-  
-  // Cosmic delay - dotted rhythms for movement
-  cosmicDelay: {
-    delayTime: '4n.',  // Dotted quarter
-    feedback: 0.35,
-    wet: 0.25,
-  },
-  
-  // Slow chorus for width and movement
-  widthChorus: {
-    frequency: 0.1,   // Very slow
-    depth: 0.5,
-    wet: 0.4,
-  },
-  
-  // Warm filter - remove harshness
-  warmFilter: {
-    frequency: 3000,
-    type: 'lowpass' as BiquadFilterType,
-    Q: 0.7,
-  },
-};
-
-// Synth presets - Organ-like, cinematic
+// Synth presets - warm, harmonious sounds
 export const SYNTHS = {
-  // Sub bass - pure sine for weight
+  melodic: {
+    oscillator: { type: 'triangle' as const, spread: 10 },
+    envelope: { attack: 0.02, decay: 0.3, sustain: 0.4, release: 0.8 },
+  },
   subBass: {
     oscillator: { type: 'sine' as const },
-    envelope: {
-      attack: 4,
-      decay: 0,
-      sustain: 1,
-      release: 8,
-    },
+    envelope: { attack: 0.08, decay: 0.3, sustain: 0.6, release: 1 },
   },
-  
-  // Main drone - layered for richness
-  drone: {
-    oscillator: { type: 'sine' as const },
-    envelope: {
-      attack: 8,
-      decay: 2,
-      sustain: 0.9,
-      release: 12,
-    },
+  harmonic: {
+    oscillator: { type: 'sine' as const, spread: 30 },
+    envelope: { attack: 0.1, decay: 0.5, sustain: 0.3, release: 1.5 },
   },
-  
-  // Pad - organ-like with harmonics
   pad: {
-    oscillator: {
-      type: 'fatsine' as const,
-      spread: 20,
-      count: 3,
-    },
-    envelope: {
-      attack: 4,
-      decay: 2,
-      sustain: 0.7,
-      release: 8,
-    },
-  },
-  
-  // Celestial - pure, ethereal
-  celestial: {
-    oscillator: { type: 'sine' as const },
-    envelope: {
-      attack: 2,
-      decay: 1,
-      sustain: 0.4,
-      release: 6,
-    },
-  },
-  
-  // SFX - Clean, musical
-  sfx: {
-    oscillator: { type: 'sine' as const },
-    envelope: {
-      attack: 0.02,
-      decay: 0.3,
-      sustain: 0.2,
-      release: 0.8,
-    },
+    oscillator: { type: 'fatsine' as const, spread: 30, count: 3 },
+    envelope: { attack: 0.4, decay: 0.8, sustain: 0.5, release: 2 },
   },
 };
 
-// LFO rates for organic movement
-export const LFO = {
-  glacial: 0.02,      // Hz - barely perceptible drift
-  breathing: 0.08,    // Hz - like slow breathing
-  pulse: 0.25,        // Hz - subtle pulse
+// Effect configurations
+export const EFFECTS = {
+  reverb: {
+    decay: 3,
+    wet: 0.35,
+    preDelay: 0.03,
+  },
+  delay: {
+    delayTime: '8n.',
+    feedback: 0.3,
+    wet: 0.25,
+  },
+  filter: {
+    frequency: 2500,
+    type: 'lowpass',
+    Q: 0.8,
+  },
 };
+
+// Volume levels
+export const VOLUME = {
+  master: -6,
+  sfx: -12,
+  ambient: -18,
+  ui: -24,
+};
+
+// Timing
+export const TIMING = {
+  attack: 0.05,
+  decay: 0.3,
+  sustain: 0.4,
+  release: 0.8,
+};
+
+// Helper functions
+export function getNote(index: number, octaveOffset: number = 0): string {
+  const idx = Math.abs(index) % G_MINOR.length;
+  const oct = Math.floor(Math.abs(index) / G_MINOR.length) + octaveOffset;
+  const note = G_MINOR[idx];
+  const noteName = note.slice(0, -1);
+  const noteOctave = parseInt(note.slice(-1)) + oct;
+  return `${noteName}${noteOctave}`;
+}
+
+export function getChordTone(chord: 'IM' | 'VM' | 'IVM', index: number): string {
+  const chords: Record<string, string[]> = {
+    'IM': CHORD_IM,
+    'VM': CHORD_VM,
+    'IVM': CHORD_IVM
+  };
+  return chords[chord][index % chords[chord].length];
+}
+
+export function midiToFreq(midi: number): number {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+export function noteToMidi(note: string): number {
+  const notes: Record<string, number> = {
+    'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3,
+    'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8,
+    'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
+  };
+  const match = note.match(/([A-G]#?)(-?\d)/);
+  if (!match) return 60;
+  return notes[match[1]] + 12 * (parseInt(match[2]) + 1);
+}
+
+export function noteToFreq(note: string): number {
+  return midiToFreq(noteToMidi(note));
+}
