@@ -12,10 +12,9 @@ import type { ToneAudioState } from './types';
 class ToneAudioSystemClass {
   initialized = false;
   muted = false;
-  private unlocking = false;  // Prevent concurrent unlock attempts
-  
-  // Track loop state - exposed as bgMusicStarted for API compatibility
+  private unlocking = false;
   private loopStartedInternal = false;
+  private currentLevel = 0; // Track current level for startBgMusic()
 
   // API compatibility properties (read-only getters)
   get bgMusicStarted(): boolean {
@@ -209,25 +208,25 @@ class ToneAudioSystemClass {
     SFXEngine.playMaxStack();
   }
   
-  /**
-   * Play modal enter sound
-   */
-  playModalEnter(): void {
-    if (!this.initialized || this.muted) return;
-    SFXEngine.playModalEnter();
-  }
-  
-  /**
-   * Play modal close sound
-   */
-  playModalClose(): void {
-    if (!this.initialized || this.muted) return;
-    SFXEngine.playModalClose();
-  }
-  
-  /**
-   * Play chamber capture sound
-   */
+   /**
+    * Play modal enter sound
+    */
+   playModalEnter(): void {
+     if (!this.initialized || this.muted) return;
+     SFXEngine.playModalEnter();
+   }
+
+   /**
+    * Play modal close sound
+    */
+   playModalClose(): void {
+     if (!this.initialized || this.muted) return;
+     SFXEngine.playModalClose();
+   }
+
+   /**
+    * Play chamber capture sound
+    */
   playChamberCapture(count = 1): void {
     if (!this.initialized || this.muted) return;
     SFXEngine.playChamberCapture({ count });
@@ -304,9 +303,9 @@ class ToneAudioSystemClass {
 
    /**
     * Spiral suction - continuous dark sucking sound
-   * @param intensity 0-1 (0 to stop)
-   */
-  setSpiralSuction(intensity: number): void {
+    * @param intensity 0-1 (0 to stop)
+    */
+   setSpiralSuction(intensity: number): void {
     if (!this.initialized || this.muted) {
       SFXEngine.setSpiralSuction(0);
       return;
@@ -344,8 +343,8 @@ class ToneAudioSystemClass {
   
   // ============================================
   // Background Music / Soundscape Methods
-  // ============================================
-  
+   // ============================================
+   
    /**
     * Start loop-based music (replaces bg-music.mp3)
     * Call this after tutorial phase ends
@@ -353,8 +352,28 @@ class ToneAudioSystemClass {
    async startBgMusic(): Promise<void> {
      if (!this.initialized || this.muted || this.loopStartedInternal) return;
 
+     // Unlock audio context first
+     try {
+       await Tone.start();
+     } catch (e) {
+       console.warn('Audio start failed:', e);
+     }
+
      this.loopStartedInternal = true;
+     
+     // FIX: If currentLevel is 0, default to 1 since music should never start muted
+     // This happens when startBgMusic() is called after tutorial but before first discharge
+     // The base track (level 1-2) should always play when music starts
+     const effectiveLevel = this.currentLevel > 0 ? this.currentLevel : 1;
+     
+     // Set level BEFORE start so MusicLoopSystem knows which track to unmute
+     MusicLoopSystem.setLevel(effectiveLevel);
      await MusicLoopSystem.start();
+     
+     // Also update our internal tracking to match
+     if (this.currentLevel === 0) {
+       this.currentLevel = 1;
+     }
    }
 
   /**
@@ -372,6 +391,10 @@ class ToneAudioSystemClass {
    * Controls which tracks are active based on upgradeLevel
    */
   setGameLevel(level: number): void {
+    // Don't reset to level 0 - preserve the last valid level
+    if (level > 0) {
+      this.currentLevel = level;
+    }
     MusicLoopSystem.setLevel(level);
   }
 

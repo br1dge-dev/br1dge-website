@@ -126,54 +126,50 @@ class MusicLoopSystemClass {
     }
   }
 
-  /**
-   * Start all loops simultaneously
-   */
-  async start(): Promise<void> {
-    if (!this._initialized || !this.audioContext) return;
-    if (this._started) return;
+   /**
+    * Start all loops simultaneously
+    */
+   async start(): Promise<void> {
+     if (!this._initialized || !this.audioContext) return;
+     if (this._started) return;
 
-    const now = this.audioContext.currentTime;
-    const startTime = now + 0.1;
-    this.startTime = startTime;
+     const now = this.audioContext.currentTime;
+     const startTime = now + 0.05;
+     this.startTime = startTime;
 
-    // Start ALL tracks at the same time
-    for (const [name, track] of this.tracks) {
-      if (!track.buffer || !track.gain) continue;
+     // Start ALL tracks at the same time
+     for (const [name, track] of this.tracks) {
+       if (!track.buffer || !track.gain) continue;
 
-      const source = this.audioContext.createBufferSource();
-      source.buffer = track.buffer;
-      source.loop = true;
-      source.loopStart = 0;
-      source.loopEnd = LOOP_DURATION;
-      source.connect(track.gain);
-      source.start(startTime);
+       const source = this.audioContext.createBufferSource();
+       source.buffer = track.buffer;
+       source.loop = true;
+       source.loopStart = 0;
+       source.loopEnd = LOOP_DURATION;
+       source.connect(track.gain);
+       source.start(startTime);
 
-       track.source = source;
+        track.source = source;
+     }
+
+      // Check if setLevel() was already called and stored a target track
+      // If so, use that track directly
+      if (this.currentTrack && this.currentLevel >= 1) {
+        const targetTrack = getTrackForLevel(this.currentLevel);
+        if (targetTrack) {
+          this.setTrackVolume(targetTrack, 1);
+          console.log(`MusicLoopSystem: Started with ${targetTrack} (level ${this.currentLevel})`);
+        }
+      } else {
+        console.log(`MusicLoopSystem: Started muted (level ${this.currentLevel})`);
+      }
+
+      this._started = true;
     }
 
-    // Set initial track volume based on current level
-    // Music starts when roman numeral "I" appears (upgradeLevel >= 1)
-    // Use the level from setLevel() if it was called, otherwise check LEVEL_TRACK
-    const levelToUse = this.currentLevel;
-    const targetTrack = getTrackForLevel(levelToUse);
-    
-    if (targetTrack && levelToUse >= 1) {
-      this.setTrackVolume(targetTrack, 1);
-      this.currentTrack = targetTrack;
-      console.log(`MusicLoopSystem: Started with track ${targetTrack} (level ${levelToUse})`);
-    } else {
-      // Level 0: all tracks muted (no numeral visible)
-      this.currentTrack = 'base';
-      console.log(`MusicLoopSystem: Started muted (level ${levelToUse})`);
-    }
-
-    this._started = true;
-  }
-
-  /**
-   * Stop all loops
-   */
+   /**
+    * Stop all loops
+    */
   stop(): void {
     if (!this._started) return;
 
@@ -197,7 +193,8 @@ class MusicLoopSystemClass {
   }
 
   /**
-   * Set level - switch active track or mute if level < 2
+   * Set level - switch active track or mute if level 0 (tutorial)
+   * Level 1-2: base, Level 3-4: hihat, Level 5-7: saw, Level 8+: bass
    */
   setLevel(level: number): void {
     if (!this._initialized) return;
@@ -208,10 +205,11 @@ class MusicLoopSystemClass {
     if (!this._started) {
       // Store the target track for when we start
       this.currentTrack = targetTrack || 'base';
+      console.log(`MusicLoopSystem: Pre-start level ${level} -> track ${this.currentTrack}`);
       return;
     }
 
-    // If no track (level 0-1), mute everything
+    // If no track (level 0 only), mute everything
     if (!targetTrack) {
       console.log(`MusicLoopSystem: Level ${level} -> muted`);
       // Mute current track

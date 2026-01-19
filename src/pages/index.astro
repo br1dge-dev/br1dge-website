@@ -2380,6 +2380,11 @@
           AudioSystem.setGameLevel(upgradeLevel); // Ambient passt sich an
           AudioSystem.triggerSwell(2); // Epischer Swell bei Level-Up
           HapticManager.levelUp();
+          
+          // Start background music on first levelup (Roman I appears)
+          if (!AudioSystem.bgMusicStarted) {
+            AudioSystem.startBgMusic();
+          }
         }
 
         // Reset chamber state (aber NICHT red particle state - die sind unabhängig)
@@ -2775,11 +2780,10 @@
               gamePhase = GAME_PHASE_COLORED;
               currentColorPhase = 0;
               chamberActive = true;
-              // Play transition sound AND start music after tutorial
+              // Play transition sound - music starts later on first real levelup (Roman I)
               AudioSystem.playBridgeSpawn();
-              // Set level BEFORE starting music to ensure correct track
-              AudioSystem.setGameLevel(upgradeLevel);
-              AudioSystem.startBgMusic();
+              // NOTE: Music does NOT start here - it starts on first real discharge (line ~2855)
+              // when the Roman numeral I appears above the logo
             }, transitionDelay);
           }
           return;
