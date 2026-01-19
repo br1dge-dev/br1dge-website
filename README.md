@@ -36,7 +36,7 @@ src/
 │   ├── haptics/            # Gamepad vibration manager
 │   ├── input/              # Keyboard, mouse, touch handlers
 │   ├── particles/          # Particle system (ambient, effects)
-│   ├── ui/                 # UI components (sound toggle, debug panel)
+│   ├── ui/                 # UI components (sound toggle)
 │   └── utils/              # Color helpers, math utilities
 ├── pages/
 │   └── index.astro         # Main entry (1300+ lines of game loop)
@@ -61,7 +61,7 @@ src/
 ### Input
 - Mouse cursor with custom rendering (hidden system cursor)
 - Touch support with vertical offset for visibility
-- Keyboard shortcuts for debug logging
+- Keyboard shortcuts
 
 ## Commands
 
