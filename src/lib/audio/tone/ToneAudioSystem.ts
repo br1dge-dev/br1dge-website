@@ -102,8 +102,8 @@ class ToneAudioSystemClass {
       await withTimeout(SFXEngine.init(), 5000);
       
       this.initialized = true;
-    } catch (e) {
-      console.error('ToneAudioSystem.init() failed:', e);
+    } catch {
+      // Silent fail
     }
   }
   
@@ -355,8 +355,8 @@ class ToneAudioSystemClass {
      // Unlock audio context first
      try {
        await Tone.start();
-     } catch (e) {
-       console.warn('Audio start failed:', e);
+     } catch {
+       // Silent fail
      }
 
      this.loopStartedInternal = true;
