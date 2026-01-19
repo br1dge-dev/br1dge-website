@@ -539,11 +539,39 @@
               <a href="https://farcaster.xyz/br1dge" target="_blank" style="color: #000; text-decoration: none; font-size: clamp(0.75rem, 2.5vw, 0.9rem); padding: 0.6rem 1.2rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">FARCASTER</a>
             </div>
           </div>
+          <div id="modal-cursor" style="position: fixed; pointer-events: none; z-index: 1001;">
+            <div style="width: 6px; height: 6px; background: #000; border-radius: 50%;"></div>
+            <div style="position: absolute; top: -9px; left: -9px; width: 24px; height: 24px; border: 1px solid rgba(0,0,0,0.3); border-radius: 50%;"></div>
+          </div>
         `;
         document.body.appendChild(modal);
 
+        const modalCursor = document.getElementById('modal-cursor');
         const closeBtn = modal.querySelector('#close-btn');
+
+        // Modal cursor tracking
+        modal.addEventListener('mousemove', (e) => {
+          modalTargetX = e.clientX;
+          modalTargetY = e.clientY;
+        });
+
+        // Animate modal cursor
+        function animateSuperModalCursor() {
+          if (!modalShown || !document.getElementById('super-success-modal')) return;
+          modalCursorX += (modalTargetX - modalCursorX) * 0.2;
+          modalCursorY += (modalTargetY - modalCursorY) * 0.2;
+          if (modalCursor) {
+            modalCursor.style.left = (modalCursorX - 3) + 'px';
+            modalCursor.style.top = (modalCursorY - 3) + 'px';
+          }
+          requestAnimationFrame(animateSuperModalCursor);
+        }
+        animateSuperModalCursor();
+
+        // Close button
         if (closeBtn) {
+          closeBtn.addEventListener('mouseenter', () => { closeBtn.style.opacity = '1'; });
+          closeBtn.addEventListener('mouseleave', () => { closeBtn.style.opacity = '0.4'; });
           closeBtn.addEventListener('click', () => closeModal(modal));
         }
 
