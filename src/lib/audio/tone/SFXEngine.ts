@@ -112,150 +112,157 @@ class SFXEngineClass {
   // Collect - soft, pleasant
   playCollect(params: SFXParams = {}): void {
     if (!this.initialized || !this.melodicSynth) return;
+    if (Tone.context.state !== 'running') return;
 
-    const now = Tone.now();
-    const baseVelocity = params.velocity ?? 0.2;
-    const comboBoost = 1 + Math.min(10, Math.floor((Date.now() - this.lastCollectTime) < 300 ? this.collectCombo + 1 : 0) * 0.05);
-    const velocity = Math.min(0.4, baseVelocity * comboBoost);
+    try {
+      const now = Tone.now() + 0.05;
+      const baseVelocity = params.velocity ?? 0.2;
+      const comboBoost = 1 + Math.min(10, Math.floor((Date.now() - this.lastCollectTime) < 300 ? this.collectCombo + 1 : 0) * 0.05);
+      const velocity = Math.min(0.4, baseVelocity * comboBoost);
 
-    const noteIndex = Math.min(Math.floor(Math.random() * 3), NOTES.collectScale.length - 1);
-    const note = NOTES.collectScale[noteIndex];
+      const noteIndex = Math.min(Math.floor(Math.random() * 3), NOTES.collectScale.length - 1);
+      const note = NOTES.collectScale[noteIndex];
 
-    this.melodicSynth.triggerAttackRelease(note, '32n', now, velocity * 0.6);
-
-    if (this.subSynth && velocity > 0.3) {
-      this.subSynth.triggerAttackRelease('G2', '32n', now, velocity * 0.1);
+      this.melodicSynth.triggerAttackRelease(note, '32n', now, velocity * 0.6);
+    } catch (e) {
+      // Silently ignore
     }
   }
 
   // Super star - magical but warm
   playSuperStarCollect(): void {
     if (!this.initialized || !this.melodicSynth) return;
+    if (Tone.context.state !== 'running') return;
 
-    const now = Tone.now();
-    this.melodicSynth.triggerAttackRelease('G4', '8n', now, 0.22);
-    this.melodicSynth.triggerAttackRelease('D4', '8n', now + 0.015, 0.18);
+    try {
+      const now = Tone.now() + 0.05;
+      this.melodicSynth.triggerAttackRelease('G4', '8n', now, 0.22);
+      this.melodicSynth.triggerAttackRelease('D4', '8n', now + 0.02, 0.18);
 
-    if (this.harmonicSynth) {
-      this.harmonicSynth.triggerAttackRelease('G5', '4n', now + 0.04, 0.1);
+      if (this.harmonicSynth) {
+        this.harmonicSynth.triggerAttackRelease('G5', '4n', now + 0.05, 0.1);
+      }
+    } catch (e) {
+      // Silently ignore
     }
   }
 
   // Thanks - positive, soft
   playThanks(): void {
     if (!this.initialized || !this.melodicSynth) return;
+    if (Tone.context.state !== 'running') return;
 
-    const now = Tone.now();
-    this.melodicSynth.triggerAttackRelease('G4', '16n', now, 0.35);
-    this.melodicSynth.triggerAttackRelease('Bb4', '16n', now + 0.03, 0.28);
-
-    if (this.subSynth) {
-      this.subSynth.triggerAttackRelease('G2', '32n', now + 0.02, 0.12);
+    try {
+      const now = Tone.now() + 0.05;
+      this.melodicSynth.triggerAttackRelease('G4', '16n', now, 0.35);
+      this.melodicSynth.triggerAttackRelease('Bb4', '16n', now + 0.03, 0.28);
+    } catch (e) {
+      // Silently ignore
     }
   }
 
   // Reject - soft, not jarring
   playRejectDischarge(): void {
     if (!this.initialized) return;
-    const now = Tone.now();
+    if (Tone.context.state !== 'running') return;
 
-    if (this.subSynth) {
-      this.subSynth.triggerAttackRelease('D2', '8n', now, 0.35);
+    try {
+      const now = Tone.now() + 0.05;
+      this.melodicSynth?.triggerAttackRelease('G3', '16n', now, 0.25);
+    } catch (e) {
+      // Silently ignore
     }
-    this.melodicSynth?.triggerAttackRelease('G3', '16n', now + 0.02, 0.2);
   }
 
   // Capture - satisfying but warm
   playCapture(params: SFXParams = {}): void {
     if (!this.initialized) return;
-    try {
-      const now = Tone.now();
-      const velocity = params.velocity ?? 0.8;
+    if (Tone.context.state !== 'running') return;
 
-      if (this.subSynth) {
-        this.subSynth.triggerAttackRelease('G2', '4n', now + 0.02, velocity);
-      }
-      this.melodicSynth?.triggerAttackRelease(['G3', 'D4'], '4n', now + 0.04, velocity * 0.5);
+    try {
+      const now = Tone.now() + 0.05;
+      const velocity = params.velocity ?? 0.8;
+      this.melodicSynth?.triggerAttackRelease(['G3', 'D4'], '4n', now, velocity * 0.5);
     } catch (e) {
-      console.warn('SFXEngine.playCapture error:', e);
+      // Silently ignore
     }
   }
 
   // Red heart - magical mid-range
   playRedHeartCapture(): void {
     if (!this.initialized) return;
-    const now = Tone.now();
+    if (Tone.context.state !== 'running') return;
 
-    if (this.subSynth) {
-      this.subSynth.triggerAttackRelease('G2', '4n', now + 0.05, 0.7);
-    }
-    this.melodicSynth?.triggerAttackRelease(['G3', 'Bb3', 'D4'], '4n', now + 0.08, 0.5);
+    try {
+      const now = Tone.now() + 0.05;
+      this.melodicSynth?.triggerAttackRelease(['G3', 'Bb3', 'D4'], '4n', now, 0.5);
 
-    if (this.harmonicSynth) {
-      this.harmonicSynth.triggerAttackRelease('D4', '4n', now + 0.12, 0.35);
-      this.harmonicSynth.triggerAttackRelease('G5', '2n', now + 0.18, 0.25);
+      if (this.harmonicSynth) {
+        this.harmonicSynth.triggerAttackRelease('D4', '4n', now + 0.08, 0.35);
+        this.harmonicSynth.triggerAttackRelease('G5', '2n', now + 0.15, 0.25);
+      }
+    } catch (e) {
+      // Silently ignore
     }
   }
 
   // Discharge - powerful but controlled
   playDischarge(params: SFXParams = {}): void {
     if (!this.initialized) return;
+    if (Tone.context.state !== 'running') return;
+
     try {
-      const now = Tone.now();
+      const now = Tone.now() + 0.1;
       const level = params.level ?? 1;
       const velocity = 0.6 + (level / 10) * 0.4;
 
-      if (this.subSynth) {
-        this.subSynth.triggerAttackRelease('G1', '2n', now + 0.02, velocity);
-      }
-
       const notes = ['G2', 'D3', 'G3'].slice(0, 2 + Math.floor(level / 3));
-      this.melodicSynth?.triggerAttackRelease(notes, '2n', now + 0.06, velocity * 0.6);
-
-      this.harmonicSynth?.triggerAttackRelease(['G4', 'D5'], '1n', now + 0.12, velocity * 0.3);
+      this.melodicSynth?.triggerAttackRelease(notes, '2n', now, velocity * 0.6);
+      this.harmonicSynth?.triggerAttackRelease(['G4', 'D5'], '1n', now + 0.08, velocity * 0.3);
     } catch (e) {
-      console.warn('SFXEngine.playDischarge error:', e);
+      // Silently ignore
     }
   }
 
   // Level up - ascending, positive
   playLevelUp(params: SFXParams = {}): void {
     if (!this.initialized || !this.melodicSynth) return;
-    const now = Tone.now();
-    const level = params.level ?? 1;
-    const velocity = 0.5 + (level / 10) * 0.3;
+    if (Tone.context.state !== 'running') return;
 
-    let timeOffset = 0;
-    NOTES.levelUpChord.slice(0, 3 + Math.floor(level / 3)).forEach((note) => {
-      this.melodicSynth?.triggerAttackRelease(note, '1n', now + timeOffset, velocity);
-      timeOffset += 0.08;
-    });
+    try {
+      const now = Tone.now() + 0.1;
+      const level = params.level ?? 1;
+      const velocity = 0.5 + (level / 10) * 0.3;
 
-    this.subSynth?.triggerAttackRelease('G2', '1n', now + timeOffset, velocity * 0.8);
-    timeOffset += 0.15;
-    this.harmonicSynth?.triggerAttackRelease(['G4', 'D5'], '1n', now + timeOffset, velocity * 0.4);
+      let timeOffset = 0;
+      NOTES.levelUpChord.slice(0, 3 + Math.floor(level / 3)).forEach((note) => {
+        this.melodicSynth?.triggerAttackRelease(note, '1n', now + timeOffset, velocity);
+        timeOffset += 0.08;
+      });
 
-    MusicLoopSystem.setLevel(level);
+      this.harmonicSynth?.triggerAttackRelease(['G4', 'D5'], '1n', now + timeOffset + 0.1, velocity * 0.4);
+      MusicLoopSystem.setLevel(level);
+    } catch (e) {
+      // Silently ignore, but still set level
+      try { MusicLoopSystem.setLevel(params.level ?? 1); } catch {}
+    }
   }
 
   // Max stack - epic but warm
   playMaxStack(): void {
     if (!this.initialized) return;
-    try {
-      const now = Tone.now();
+    if (Tone.context.state !== 'running') return;
 
-      let timeOffset = 0.02;
+    try {
+      const now = Tone.now() + 0.1;
+
+      let timeOffset = 0;
       NOTES.maxStackChord.forEach((note) => {
         if (this.melodicSynth) {
           this.melodicSynth.triggerAttackRelease(note, '1m', now + timeOffset, 0.7);
           timeOffset += 0.06;
         }
       });
-
-      if (this.subSynth) {
-        this.subSynth.triggerAttackRelease('G1', '1m', now + timeOffset, 0.9);
-        timeOffset += 0.1;
-      }
 
       NOTES.celestial.forEach((note) => {
         if (this.harmonicSynth) {
@@ -264,128 +271,153 @@ class SFXEngineClass {
         }
       });
     } catch (e) {
-      console.warn('SFXEngine.playMaxStack error:', e);
+      // Silently ignore
     }
   }
 
   // Modal enter - gentle
   playModalEnter(): void {
     if (!this.initialized || !this.melodicSynth) return;
-    const now = Tone.now();
-    this.melodicSynth?.triggerAttackRelease('G4', '4n', now, 0.4);
-    this.melodicSynth?.triggerAttackRelease('D4', '4n', now + 0.08, 0.3);
-    this.harmonicSynth?.triggerAttackRelease('G5', '2n', now + 0.1, 0.2);
+    if (Tone.context.state !== 'running') return;
+
+    try {
+      const now = Tone.now() + 0.05;
+      this.melodicSynth?.triggerAttackRelease('G4', '4n', now, 0.4);
+      this.melodicSynth?.triggerAttackRelease('D4', '4n', now + 0.08, 0.3);
+      this.harmonicSynth?.triggerAttackRelease('G5', '2n', now + 0.12, 0.2);
+    } catch (e) {
+      // Silently ignore
+    }
   }
 
   // Modal close - resolving
   playModalClose(): void {
     if (!this.initialized || !this.melodicSynth) return;
-    const now = Tone.now();
-    this.melodicSynth.triggerAttackRelease('G3', '8n', now, 0.3);
-    this.melodicSynth.triggerAttackRelease('D3', '8n', now + 0.1, 0.25);
+    if (Tone.context.state !== 'running') return;
+
+    try {
+      const now = Tone.now() + 0.05;
+      this.melodicSynth.triggerAttackRelease('G3', '8n', now, 0.3);
+      this.melodicSynth.triggerAttackRelease('D3', '8n', now + 0.1, 0.25);
+    } catch (e) {
+      // Silently ignore
+    }
   }
 
   // Chamber capture - resonant
   playChamberCapture(params: SFXParams = {}): void {
     if (!this.initialized || !this.melodicSynth) return;
-    const count = params.count ?? 1;
-    const note = NOTES.chamberScale[Math.min(count - 1, NOTES.chamberScale.length - 1)];
-    const velocity = 0.35 + (count / 5) * 0.25;
-    this.melodicSynth.triggerAttackRelease(note, '8n', Tone.now(), velocity);
+    if (Tone.context.state !== 'running') return;
+
+    try {
+      const count = params.count ?? 1;
+      const note = NOTES.chamberScale[Math.min(count - 1, NOTES.chamberScale.length - 1)];
+      const velocity = 0.35 + (count / 5) * 0.25;
+      this.melodicSynth.triggerAttackRelease(note, '8n', Tone.now() + 0.05, velocity);
+    } catch (e) {
+      // Silently ignore
+    }
   }
 
   // Bridge spawn - heroic
   playBridgeSpawn(): void {
     if (!this.initialized) return;
-    try {
-      const now = Tone.now();
+    if (Tone.context.state !== 'running') return;
 
-      if (this.subSynth) {
-        this.subSynth.triggerAttackRelease('G2', '4n', now + 0.02, 0.8);
-      }
+    try {
+      const now = Tone.now() + 0.1;
 
       NOTES.bridgeChord.forEach((note, i) => {
-        this.melodicSynth?.triggerAttackRelease(note, '4n', now + 0.16 + i * 0.08, 0.6);
+        this.melodicSynth?.triggerAttackRelease(note, '4n', now + i * 0.08, 0.6);
       });
 
-      this.harmonicSynth?.triggerAttackRelease(['G4', 'D5'], '2n', now + 0.42, 0.35);
+      this.harmonicSynth?.triggerAttackRelease(['G4', 'D5'], '2n', now + 0.3, 0.35);
     } catch (e) {
-      console.warn('SFXEngine.playBridgeSpawn error:', e);
+      // Silently ignore
     }
   }
 
   // Collection complete - satisfying resolution
   playCollectionComplete(): void {
     if (!this.initialized || !this.melodicSynth) return;
-    const now = Tone.now();
-    NOTES.completeArpeggio.forEach((note, i) => {
-      this.melodicSynth?.triggerAttackRelease(note, '4n', now + i * 0.12, 0.6);
-    });
-    this.harmonicSynth?.triggerAttackRelease('G5', '2n', now + 0.4, 0.3);
+    if (Tone.context.state !== 'running') return;
+
+    try {
+      const now = Tone.now() + 0.05;
+      NOTES.completeArpeggio.forEach((note, i) => {
+        this.melodicSynth?.triggerAttackRelease(note, '4n', now + i * 0.12, 0.6);
+      });
+      this.harmonicSynth?.triggerAttackRelease('G5', '2n', now + 0.4, 0.3);
+    } catch (e) {
+      // Silently ignore
+    }
   }
 
   // Spiral spawn - ominous but not scary
   playSpiralSpawn(): void {
     if (!this.initialized) return;
+    if (Tone.context.state !== 'running') return;
+
     try {
-      const now = Tone.now();
+      const now = Tone.now() + 0.1;
 
-      if (this.subSynth) {
-        this.subSynth.triggerAttackRelease('G1', '2n', now + 0.05, 0.5);
-      }
-
-      this.melodicSynth?.triggerAttackRelease(['G2', 'A2'], '4n', now + 0.1, 0.3);
+      this.melodicSynth?.triggerAttackRelease(['G2', 'A2'], '4n', now, 0.3);
 
       if (this.harmonicSynth) {
-        this.harmonicSynth.triggerAttackRelease('F3', '8n', now + 0.15, 0.25);
-        this.harmonicSynth.triggerAttackRelease('Eb3', '8n', now + 0.3, 0.2);
+        this.harmonicSynth.triggerAttackRelease('F3', '8n', now + 0.08, 0.25);
+        this.harmonicSynth.triggerAttackRelease('Eb3', '8n', now + 0.2, 0.2);
       }
     } catch (e) {
-      console.warn('SFXEngine.playSpiralSpawn error:', e);
+      // Silently ignore
     }
   }
 
   // Spiral defeat - release
   playSpiralDefeat(): void {
     if (!this.initialized) return;
-    const now = Tone.now();
+    if (Tone.context.state !== 'running') return;
 
-    if (this.noiseFilter && this.noiseSynth) {
-      this.noiseFilter.frequency.setValueAtTime(400, now + 0.05);
-      this.noiseFilter.frequency.exponentialRampTo(2000, 0.3);
-      this.noiseFilter.frequency.exponentialRampTo(100, 0.5);
-      this.noiseSynth.triggerAttackRelease('4n', now + 0.05);
+    try {
+      const now = Tone.now() + 0.1;
+
+      if (this.noiseFilter && this.noiseSynth) {
+        this.noiseFilter.frequency.setValueAtTime(400, now);
+        this.noiseFilter.frequency.exponentialRampTo(2000, 0.3);
+        this.noiseFilter.frequency.exponentialRampTo(100, 0.5);
+        this.noiseSynth.triggerAttackRelease('4n', now);
+      }
+
+      this.melodicSynth?.triggerAttackRelease(['G3', 'D4'], '4n', now + 0.05, 0.4);
+      this.harmonicSynth?.triggerAttackRelease('G4', '2n', now + 0.12, 0.25);
+    } catch (e) {
+      // Silently ignore
     }
-
-    this.melodicSynth?.triggerAttackRelease(['G3', 'D4'], '4n', now + 0.1, 0.4);
-    this.harmonicSynth?.triggerAttackRelease('G4', '2n', now + 0.2, 0.25);
   }
 
   // Spiral damage - tension without harshness
   playSpiralDamage(): void {
     if (!this.initialized) return;
+    // Skip if audio context is not running (prevents timing errors after stop/start)
+    if (Tone.context.state !== 'running') return;
     
     try {
-      const now = Tone.now();
+      // Use a safe time offset to prevent scheduling conflicts
+      const now = Tone.now() + 0.1;
 
-      if (this.subSynth) {
-        // Don't call triggerRelease - just play the new note
-        this.subSynth.triggerAttackRelease('G0', '4n', now + 0.05, 0.95);
-      }
-
-      this.melodicSynth?.triggerAttackRelease(['G2', 'Bb2', 'F2', 'Bb2'], '8n', now + 0.08, 0.7);
+      // Only use melodic synth (PolySynth) - avoid MonoSynth timing issues
+      this.melodicSynth?.triggerAttackRelease(['G2', 'Bb2', 'F2'], '8n', now, 0.7);
 
       if (this.noiseFilter && this.noiseSynth) {
-        this.noiseFilter.frequency.setValueAtTime(2000, now + 0.06);
+        this.noiseFilter.frequency.setValueAtTime(2000, now + 0.02);
         this.noiseFilter.frequency.exponentialRampTo(50, 0.5);
-        this.noiseSynth.triggerAttackRelease('8n', now + 0.06);
+        this.noiseSynth.triggerAttackRelease('8n', now + 0.02);
       }
 
       if (this.harmonicSynth) {
-        this.harmonicSynth.triggerAttackRelease('G1', '8n', now + 0.12, 0.35);
+        this.harmonicSynth.triggerAttackRelease('G1', '8n', now + 0.05, 0.35);
       }
     } catch (e) {
-      console.warn('SFXEngine.playSpiralDamage error:', e);
+      // Silently ignore - audio glitches shouldn't crash the game
     }
   }
 
@@ -393,27 +425,25 @@ class SFXEngineClass {
   playYouDied(): void {
     if (!this.initialized || !this.melodicSynth) return;
     
+    // Stop music first - this is the important part
+    try { MusicLoopSystem.stop(); } catch {}
+    
+    // Skip sound if audio context is not running
+    if (Tone.context.state !== 'running') return;
+    
     try {
-      const now = Tone.now();
+      const now = Tone.now() + 0.1;
 
-      this.melodicSynth.triggerAttackRelease('G3', '2n', now + 0.02, 0.5);
-      this.melodicSynth.triggerAttackRelease('Eb4', '2n', now + 0.12, 0.45);
-      this.melodicSynth.triggerAttackRelease('C4', '2n', now + 0.22, 0.4);
-      this.melodicSynth.triggerAttackRelease('G4', '2n', now + 0.32, 0.35);
-
-      if (this.subSynth) {
-        this.subSynth.triggerAttackRelease('G1', '2n', now + 0.07, 0.6);
-      }
+      this.melodicSynth.triggerAttackRelease('G3', '2n', now, 0.5);
+      this.melodicSynth.triggerAttackRelease('Eb4', '2n', now + 0.1, 0.45);
+      this.melodicSynth.triggerAttackRelease('C4', '2n', now + 0.2, 0.4);
+      this.melodicSynth.triggerAttackRelease('G4', '2n', now + 0.3, 0.35);
 
       if (this.harmonicSynth) {
-        this.harmonicSynth.triggerAttackRelease('G4', '1n', now + 0.42, 0.2);
+        this.harmonicSynth.triggerAttackRelease('G4', '1n', now + 0.4, 0.2);
       }
-
-      MusicLoopSystem.stop();
     } catch (e) {
-      console.warn('SFXEngine.playYouDied error:', e);
-      // Still try to stop music even if sound fails
-      try { MusicLoopSystem.stop(); } catch {}
+      // Silently ignore - audio glitches shouldn't crash the game
     }
   }
 
