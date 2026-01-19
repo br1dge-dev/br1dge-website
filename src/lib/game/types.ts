@@ -42,7 +42,7 @@ export const CHAMBER_COLORS = [...CHAMBER_COLORS_SEQUENCE, '#ff2222'] as const;
 
 // URLs for colored bridges
 export const COLOR_URLS: Record<string, string> = {
-  '#39ff14': 'https://sword-gamma.vercel.app/',
+  '#39ff14': 'https://sword.br1dge.xyz/',
   '#ff6b35': 'https://birth.br1dge.xyz/',
   '#d4a574': 'https://wocl.br1dge.xyz/'
 };

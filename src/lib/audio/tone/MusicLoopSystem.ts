@@ -211,6 +211,9 @@ class MusicLoopSystemClass {
 
     if (targetTrack === this.currentTrack) return;
 
+    // Log track change for debugging
+    console.log(`%c[AUDIO] Track: ${this.currentTrack} → ${targetTrack} (level ${level})`, 'color: #39ff14; font-family: monospace;');
+
     // Immediate switch - fade out old, fade in new
     if (this.currentTrack) {
       this.setTrackVolume(this.currentTrack, 0);
