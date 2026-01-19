@@ -149,17 +149,18 @@ class MusicLoopSystemClass {
         track.source = source;
      }
 
-      // Check if setLevel() was already called and stored a target track
-      // If so, use that track directly
-      if (this.currentTrack && this.currentLevel >= 1) {
-        const targetTrack = getTrackForLevel(this.currentLevel);
-        if (targetTrack) {
-          this.setTrackVolume(targetTrack, 1);
-        }
-      }
+       // Check if setLevel() was already called and stored a target track
+       // If so, use that track directly
+       if (this.currentTrack && this.currentLevel >= 1) {
+         const targetTrack = getTrackForLevel(this.currentLevel);
+         if (targetTrack) {
+           console.log(`%c[AUDIO] Track: start → ${targetTrack} (level ${this.currentLevel})`, 'color: #39ff14; font-family: monospace;');
+           this.setTrackVolume(targetTrack, 1);
+         }
+       }
 
-      this._started = true;
-    }
+       this._started = true;
+     }
 
    /**
     * Stop all loops
