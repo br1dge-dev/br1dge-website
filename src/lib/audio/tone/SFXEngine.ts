@@ -168,14 +168,17 @@ class SFXEngineClass {
   // Capture - satisfying but warm
   playCapture(params: SFXParams = {}): void {
     if (!this.initialized) return;
-    const now = Tone.now();
-    const velocity = params.velocity ?? 0.8;
+    try {
+      const now = Tone.now();
+      const velocity = params.velocity ?? 0.8;
 
-    if (this.subSynth) {
-      this.subSynth.triggerRelease(now);
-      this.subSynth.triggerAttackRelease('G2', '4n', now + 0.01, velocity);
+      if (this.subSynth) {
+        this.subSynth.triggerAttackRelease('G2', '4n', now + 0.02, velocity);
+      }
+      this.melodicSynth?.triggerAttackRelease(['G3', 'D4'], '4n', now + 0.04, velocity * 0.5);
+    } catch (e) {
+      console.warn('SFXEngine.playCapture error:', e);
     }
-    this.melodicSynth?.triggerAttackRelease(['G3', 'D4'], '4n', now + 0.03, velocity * 0.5);
   }
 
   // Red heart - magical mid-range
@@ -197,19 +200,22 @@ class SFXEngineClass {
   // Discharge - powerful but controlled
   playDischarge(params: SFXParams = {}): void {
     if (!this.initialized) return;
-    const now = Tone.now();
-    const level = params.level ?? 1;
-    const velocity = 0.6 + (level / 10) * 0.4;
+    try {
+      const now = Tone.now();
+      const level = params.level ?? 1;
+      const velocity = 0.6 + (level / 10) * 0.4;
 
-    if (this.subSynth) {
-      this.subSynth.triggerRelease(now);
-      this.subSynth.triggerAttackRelease('G1', '2n', now + 0.01, velocity);
+      if (this.subSynth) {
+        this.subSynth.triggerAttackRelease('G1', '2n', now + 0.02, velocity);
+      }
+
+      const notes = ['G2', 'D3', 'G3'].slice(0, 2 + Math.floor(level / 3));
+      this.melodicSynth?.triggerAttackRelease(notes, '2n', now + 0.06, velocity * 0.6);
+
+      this.harmonicSynth?.triggerAttackRelease(['G4', 'D5'], '1n', now + 0.12, velocity * 0.3);
+    } catch (e) {
+      console.warn('SFXEngine.playDischarge error:', e);
     }
-
-    const notes = ['G2', 'D3', 'G3'].slice(0, 2 + Math.floor(level / 3));
-    this.melodicSynth?.triggerAttackRelease(notes, '2n', now + 0.05, velocity * 0.6);
-
-    this.harmonicSynth?.triggerAttackRelease(['G4', 'D5'], '1n', now + 0.1, velocity * 0.3);
   }
 
   // Level up - ascending, positive
@@ -235,28 +241,31 @@ class SFXEngineClass {
   // Max stack - epic but warm
   playMaxStack(): void {
     if (!this.initialized) return;
-    const now = Tone.now();
+    try {
+      const now = Tone.now();
 
-    let timeOffset = 0.01;
-    NOTES.maxStackChord.forEach((note) => {
-      if (this.melodicSynth) {
-        this.melodicSynth.triggerAttackRelease(note, '1m', now + timeOffset, 0.7);
-        timeOffset += 0.06;
+      let timeOffset = 0.02;
+      NOTES.maxStackChord.forEach((note) => {
+        if (this.melodicSynth) {
+          this.melodicSynth.triggerAttackRelease(note, '1m', now + timeOffset, 0.7);
+          timeOffset += 0.06;
+        }
+      });
+
+      if (this.subSynth) {
+        this.subSynth.triggerAttackRelease('G1', '1m', now + timeOffset, 0.9);
+        timeOffset += 0.1;
       }
-    });
 
-    if (this.subSynth) {
-      this.subSynth.triggerRelease(now);
-      this.subSynth.triggerAttackRelease('G1', '1m', now + timeOffset, 0.9);
-      timeOffset += 0.1;
+      NOTES.celestial.forEach((note) => {
+        if (this.harmonicSynth) {
+          this.harmonicSynth.triggerAttackRelease(note, '2n', now + timeOffset, 0.4);
+          timeOffset += 0.15;
+        }
+      });
+    } catch (e) {
+      console.warn('SFXEngine.playMaxStack error:', e);
     }
-
-    NOTES.celestial.forEach((note) => {
-      if (this.harmonicSynth) {
-        this.harmonicSynth.triggerAttackRelease(note, '2n', now + timeOffset, 0.4);
-        timeOffset += 0.15;
-      }
-    });
   }
 
   // Modal enter - gentle
@@ -288,18 +297,21 @@ class SFXEngineClass {
   // Bridge spawn - heroic
   playBridgeSpawn(): void {
     if (!this.initialized) return;
-    const now = Tone.now();
+    try {
+      const now = Tone.now();
 
-    if (this.subSynth) {
-      this.subSynth.triggerRelease(now);
-      this.subSynth.triggerAttackRelease('G2', '4n', now + 0.01, 0.8);
+      if (this.subSynth) {
+        this.subSynth.triggerAttackRelease('G2', '4n', now + 0.02, 0.8);
+      }
+
+      NOTES.bridgeChord.forEach((note, i) => {
+        this.melodicSynth?.triggerAttackRelease(note, '4n', now + 0.16 + i * 0.08, 0.6);
+      });
+
+      this.harmonicSynth?.triggerAttackRelease(['G4', 'D5'], '2n', now + 0.42, 0.35);
+    } catch (e) {
+      console.warn('SFXEngine.playBridgeSpawn error:', e);
     }
-
-    NOTES.bridgeChord.forEach((note, i) => {
-      this.melodicSynth?.triggerAttackRelease(note, '4n', now + 0.15 + i * 0.08, 0.6);
-    });
-
-    this.harmonicSynth?.triggerAttackRelease(['G4', 'D5'], '2n', now + 0.4, 0.35);
   }
 
   // Collection complete - satisfying resolution
@@ -315,18 +327,21 @@ class SFXEngineClass {
   // Spiral spawn - ominous but not scary
   playSpiralSpawn(): void {
     if (!this.initialized) return;
-    const now = Tone.now();
+    try {
+      const now = Tone.now();
 
-    if (this.subSynth) {
-      this.subSynth.triggerRelease(now);
-      this.subSynth.triggerAttackRelease('G1', '2n', now + 0.05, 0.5);
-    }
+      if (this.subSynth) {
+        this.subSynth.triggerAttackRelease('G1', '2n', now + 0.05, 0.5);
+      }
 
-    this.melodicSynth?.triggerAttackRelease(['G2', 'A2'], '4n', now + 0.1, 0.3);
+      this.melodicSynth?.triggerAttackRelease(['G2', 'A2'], '4n', now + 0.1, 0.3);
 
-    if (this.harmonicSynth) {
-      this.harmonicSynth.triggerAttackRelease('F3', '8n', now + 0.15, 0.25);
-      this.harmonicSynth.triggerAttackRelease('Eb3', '8n', now + 0.3, 0.2);
+      if (this.harmonicSynth) {
+        this.harmonicSynth.triggerAttackRelease('F3', '8n', now + 0.15, 0.25);
+        this.harmonicSynth.triggerAttackRelease('Eb3', '8n', now + 0.3, 0.2);
+      }
+    } catch (e) {
+      console.warn('SFXEngine.playSpiralSpawn error:', e);
     }
   }
 
@@ -349,45 +364,57 @@ class SFXEngineClass {
   // Spiral damage - tension without harshness
   playSpiralDamage(): void {
     if (!this.initialized) return;
-    const now = Tone.now();
+    
+    try {
+      const now = Tone.now();
 
-    if (this.subSynth) {
-      this.subSynth.triggerRelease(now);
-      this.subSynth.triggerAttackRelease('G0', '4n', now + 0.03, 0.95);
-    }
+      if (this.subSynth) {
+        // Don't call triggerRelease - just play the new note
+        this.subSynth.triggerAttackRelease('G0', '4n', now + 0.05, 0.95);
+      }
 
-    this.melodicSynth?.triggerAttackRelease(['G2', 'Bb2', 'F2', 'Bb2'], '8n', now + 0.06, 0.7);
+      this.melodicSynth?.triggerAttackRelease(['G2', 'Bb2', 'F2', 'Bb2'], '8n', now + 0.08, 0.7);
 
-    if (this.noiseFilter && this.noiseSynth) {
-      this.noiseFilter.frequency.setValueAtTime(2000, now + 0.04);
-      this.noiseFilter.frequency.exponentialRampTo(50, 0.5);
-      this.noiseSynth.triggerAttackRelease('8n', now + 0.04);
-    }
+      if (this.noiseFilter && this.noiseSynth) {
+        this.noiseFilter.frequency.setValueAtTime(2000, now + 0.06);
+        this.noiseFilter.frequency.exponentialRampTo(50, 0.5);
+        this.noiseSynth.triggerAttackRelease('8n', now + 0.06);
+      }
 
-    if (this.harmonicSynth) {
-      this.harmonicSynth.triggerAttackRelease('G1', '8n', now + 0.1, 0.35);
+      if (this.harmonicSynth) {
+        this.harmonicSynth.triggerAttackRelease('G1', '8n', now + 0.12, 0.35);
+      }
+    } catch (e) {
+      console.warn('SFXEngine.playSpiralDamage error:', e);
     }
   }
 
   // You died - melancholic
   playYouDied(): void {
     if (!this.initialized || !this.melodicSynth) return;
-    const now = Tone.now();
+    
+    try {
+      const now = Tone.now();
 
-    this.melodicSynth.triggerAttackRelease('G3', '2n', now, 0.5);
-    this.melodicSynth.triggerAttackRelease('Eb4', '2n', now + 0.1, 0.45);
-    this.melodicSynth.triggerAttackRelease('C4', '2n', now + 0.2, 0.4);
-    this.melodicSynth.triggerAttackRelease('G4', '2n', now + 0.3, 0.35);
+      this.melodicSynth.triggerAttackRelease('G3', '2n', now + 0.02, 0.5);
+      this.melodicSynth.triggerAttackRelease('Eb4', '2n', now + 0.12, 0.45);
+      this.melodicSynth.triggerAttackRelease('C4', '2n', now + 0.22, 0.4);
+      this.melodicSynth.triggerAttackRelease('G4', '2n', now + 0.32, 0.35);
 
-    if (this.subSynth) {
-      this.subSynth.triggerAttackRelease('G1', '2n', now + 0.05, 0.6);
+      if (this.subSynth) {
+        this.subSynth.triggerAttackRelease('G1', '2n', now + 0.07, 0.6);
+      }
+
+      if (this.harmonicSynth) {
+        this.harmonicSynth.triggerAttackRelease('G4', '1n', now + 0.42, 0.2);
+      }
+
+      MusicLoopSystem.stop();
+    } catch (e) {
+      console.warn('SFXEngine.playYouDied error:', e);
+      // Still try to stop music even if sound fails
+      try { MusicLoopSystem.stop(); } catch {}
     }
-
-    if (this.harmonicSynth) {
-      this.harmonicSynth.triggerAttackRelease('G4', '1n', now + 0.4, 0.2);
-    }
-
-    MusicLoopSystem.stop();
   }
 
   // State tracking
