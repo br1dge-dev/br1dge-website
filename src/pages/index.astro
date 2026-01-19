@@ -135,22 +135,6 @@
         <line x1="17" y1="9" x2="23" y2="15"/>
       </svg>
     </button>
-    <div id="crown-indicator" style="position: fixed; bottom: 1.2rem; right: 3.8rem; z-index: 100; opacity: 0; transition: opacity 0.5s; pointer-events: none;">
-      <svg viewBox="0 0 24 24" style="width: 28px; height: 28px; fill: none; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
-        <path d="M2 20h20l-2-8-4 4-4-8-4 8-4-4-2 8z"/>
-        <circle cx="12" cy="4" r="1"/>
-        <circle cx="4" cy="10" r="1"/>
-        <circle cx="20" cy="10" r="1"/>
-      </svg>
-    </div>
-    <div id="crown-indicator" style="position: fixed; bottom: 1.2rem; right: 3.8rem; z-index: 100; opacity: 0; transition: opacity 0.5s; pointer-events: none;">
-      <svg viewBox="0 0 24 24" style="width: 28px; height: 28px; fill: none; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
-        <path d="M2 20h20l-2-8-4 4-4-8-4 8-4-4-2 8z"/>
-        <circle cx="12" cy="4" r="1"/>
-        <circle cx="4" cy="10" r="1"/>
-        <circle cx="20" cy="10" r="1"/>
-      </svg>
-    </div>
     <div id="sound-hint">
       <span>P</span><span>L</span><span>E</span><span>A</span><span>S</span><span>E</span><span>&nbsp;</span><span>E</span><span>N</span><span>A</span><span>B</span><span>L</span><span>E</span><span>&nbsp;</span><span>S</span><span>O</span><span>U</span><span>N</span><span>D</span><span class="speaker"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
     </div>
@@ -2825,23 +2809,17 @@
             // Logo wächst, aber max 2.8 (damit Ziffer sichtbar bleibt)
             logoBaseScale = Math.min(2.8, logoBaseScale + 0.18 * levelsToAdd);
 
-           // Modal check - direkt nach Level-Increment
-           if (upgradeLevel >= currentLevelCap && !gameCompleted) {
-             gameCompleted = true;
-             // Activate post-credits mode immediately when Level 10 reached
-             if (!postCreditsMode && currentLevelCap === 10) {
-               postCreditsMode = true;
-               const crown = document.getElementById('crown-indicator');
-               if (crown) crown.style.opacity = '0.5';
-             }
-             setTimeout(() => {
-               if (currentLevelCap === 20) {
-                 showSuperSuccessModal();
-               } else {
-                 showModal();
-               }
-             }, 4000);
-           }
+            // Modal check - direkt nach Level-Increment
+            if (upgradeLevel >= currentLevelCap && !gameCompleted) {
+              gameCompleted = true;
+              setTimeout(() => {
+                if (currentLevelCap === 20) {
+                  showSuperSuccessModal();
+                } else {
+                  showModal();
+                }
+              }, 4000);
+            }
           
           // Audio & Haptic: Discharge - epischer Moment!
           AudioSystem.playDischarge(upgradeLevel);
