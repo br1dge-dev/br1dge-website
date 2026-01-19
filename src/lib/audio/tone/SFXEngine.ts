@@ -40,7 +40,6 @@ class SFXEngineClass {
     const delaySend = EffectChain.getDelaySend();
 
     if (!mainInput || !reverbSend || !delaySend) {
-      console.warn('EffectChain not initialized');
       return;
     }
 

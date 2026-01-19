@@ -103,9 +103,8 @@ class MusicLoopSystemClass {
           const arrayBuffer = await response.arrayBuffer();
           const audioBuffer = await rawContext.decodeAudioData(arrayBuffer);
           track.buffer = audioBuffer;
-          console.log(`MusicLoopSystem: Loaded ${track.name}`);
         } catch {
-          console.warn(`MusicLoopSystem: Failed to load ${track.filename}`);
+          // Silent fail - track will be skipped
         }
       });
 
@@ -119,10 +118,8 @@ class MusicLoopSystemClass {
       }
 
       this._initialized = true;
-      console.log('MusicLoopSystem: Ready');
-
-    } catch (error) {
-      console.warn('MusicLoopSystem: Init failed:', error);
+    } catch {
+      // Silent fail
     }
   }
 
@@ -158,10 +155,7 @@ class MusicLoopSystemClass {
         const targetTrack = getTrackForLevel(this.currentLevel);
         if (targetTrack) {
           this.setTrackVolume(targetTrack, 1);
-          console.log(`MusicLoopSystem: Started with ${targetTrack} (level ${this.currentLevel})`);
         }
-      } else {
-        console.log(`MusicLoopSystem: Started muted (level ${this.currentLevel})`);
       }
 
       this._started = true;
@@ -189,7 +183,6 @@ class MusicLoopSystemClass {
     }
 
     this._started = false;
-    console.log('MusicLoopSystem: Stopped');
   }
 
   /**
@@ -205,14 +198,11 @@ class MusicLoopSystemClass {
     if (!this._started) {
       // Store the target track for when we start
       this.currentTrack = targetTrack || 'base';
-      console.log(`MusicLoopSystem: Pre-start level ${level} -> track ${this.currentTrack}`);
       return;
     }
 
     // If no track (level 0 only), mute everything
     if (!targetTrack) {
-      console.log(`MusicLoopSystem: Level ${level} -> muted`);
-      // Mute current track
       if (this.currentTrack) {
         this.setTrackVolume(this.currentTrack, 0);
       }
@@ -220,8 +210,6 @@ class MusicLoopSystemClass {
     }
 
     if (targetTrack === this.currentTrack) return;
-
-    console.log(`MusicLoopSystem: Level ${level} -> ${targetTrack}`);
 
     // Immediate switch - fade out old, fade in new
     if (this.currentTrack) {
@@ -273,8 +261,6 @@ class MusicLoopSystemClass {
     this.tracks.clear();
     this._initialized = false;
     this._started = false;
-
-    console.log('MusicLoopSystem: Disposed');
   }
 }
 
