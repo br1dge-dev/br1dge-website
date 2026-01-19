@@ -610,7 +610,7 @@
                 <div style="flex: 1; text-align: left;"><div style="font-size: 0.8rem; font-weight: 500;">Birth</div><div style="font-size: 0.65rem; opacity: 0.5;">A simplistic info card</div></div>
                 <span style="opacity: 0.3;">→</span>
               </a>
-              <a href="https://sword-gamma.vercel.app/" target="_blank" class="project-link" style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); text-decoration: none; color: #000;">
+              <a href="https://sword.br1dge.xyz/" target="_blank" class="project-link" style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); text-decoration: none; color: #000;">
                 <span style="color: #39ff14; font-size: 1rem; font-weight: bold;">∩</span>
                 <div style="flex: 1; text-align: left;"><div style="font-size: 0.8rem; font-weight: 500;">GR1FTSWORD</div><div style="font-size: 0.65rem; opacity: 0.5;">An ASCII music crypto art project</div></div>
                 <span style="opacity: 0.3;">→</span>
@@ -1323,6 +1323,7 @@
             const prevLevel = upgradeLevel;
             upgradeLevel = Math.max(0, upgradeLevel - damage);
             logoBaseScale = Math.max(1, logoBaseScale - 0.18 * damage);
+            console.log(`%c[GAME] Level DOWN: ${prevLevel} → ${upgradeLevel} (spiral hit, damage: ${damage})`, 'color: #ff4444; font-family: monospace;');
 
             // Update music level if changed
             if (upgradeLevel !== prevLevel) {
@@ -2377,7 +2378,9 @@
         
         // PROGRESS: Level erhöhen bei Discharge
         if (upgradeLevel < 10) {
+          const prevLevel = upgradeLevel;
           upgradeLevel++;
+          console.log(`%c[GAME] Level UP: ${prevLevel} → ${upgradeLevel} (colored discharge)`, 'color: #39ff14; font-family: monospace;');
           logoBaseScale += 0.18;
           AudioSystem.playLevelUp(upgradeLevel);
           AudioSystem.setGameLevel(upgradeLevel); // Ambient passt sich an
@@ -2806,6 +2809,9 @@
             // No special rules, no max stack bonus
             const levelsToAdd = isInverted ? redStackCount : 1;
             upgradeLevel = Math.min(currentLevelCap, upgradeLevel + levelsToAdd);
+            if (upgradeLevel > prevLevel) {
+              console.log(`%c[GAME] Level UP: ${prevLevel} → ${upgradeLevel} (red discharge, inverted: ${isInverted}, stack: ${redStackCount})`, 'color: #39ff14; font-family: monospace;');
+            }
             // Logo wächst, aber max 2.8 (damit Ziffer sichtbar bleibt)
             logoBaseScale = Math.min(2.8, logoBaseScale + 0.18 * levelsToAdd);
 
