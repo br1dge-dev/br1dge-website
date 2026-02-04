@@ -211,11 +211,17 @@
         }
       });
       
-       let W, H, centerX, centerY;
-       let mouseX = 0, mouseY = 0;
-       let cursorX = 0, cursorY = 0;
+        let W, H, centerX, centerY;
+        let mouseX = 0, mouseY = 0;
+        let cursorX = 0, cursorY = 0;
 
-       // Mobile detection - global for access in callbacks
+        // Referenzauflösung für auflösungsunabhängige Partikeldichte (1080p)
+        const REFERENCE_WIDTH = 1920;
+        const REFERENCE_HEIGHT = 1080;
+        const REFERENCE_PARTICLES = 280;
+        const REFERENCE_SPAWN_RATE = 0.65;
+
+        // Mobile detection - global for access in callbacks
        let isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
        const MOBILE_CURSOR_OFFSET_Y = -70;  // Cursor appears above finger for visibility
        let isTouching = false;  // Track if user is currently touching
@@ -980,15 +986,30 @@
           ctx.fill();
         }
       }
-      
+
+      // Auflösungsunabhängige Partikel-Parameter berechnen
+      function getScaledParticleParams() {
+        const referenceArea = REFERENCE_WIDTH * REFERENCE_HEIGHT;
+        const currentArea = W * H;
+        const scaleFactor = currentArea / referenceArea;
+
+        // Partikelanzahl proportional zur Fläche skalieren
+        const maxParticles = Math.round(REFERENCE_PARTICLES * scaleFactor);
+
+        // Spawn-Rate skalieren: Bei mehr Partikeln schneller spawnen
+        // sqrt verhindert übermäßig hohe Werte, Max 0.95 für Performance
+        const spawnRate = Math.min(0.95, REFERENCE_SPAWN_RATE * Math.sqrt(scaleFactor));
+
+        return { maxParticles, spawnRate };
+      }
+
       // Ambient floating particles - CURSOR Gravitation
       function drawAmbientParticles() {
         const time = Date.now() / 1000;
         
-        // Partikel spawnen - gleichmäßige Verteilung über gesamten Bildschirm
-        const maxParticles = 280;
-        const spawnRate = 0.65;
-        
+        // Partikel spawnen - auflösungsunabhängige Dichte
+        const { maxParticles, spawnRate } = getScaledParticleParams();
+
         if (ambientParticles.length < maxParticles && Math.random() < spawnRate) {
           let x, y, vx, vy;
           
