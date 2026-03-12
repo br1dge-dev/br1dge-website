@@ -717,14 +717,16 @@
              continueBtn.style.color = 'rgba(0,0,0,0.3)';
            });
            continueBtn.addEventListener('click', (e) => {
-             e.preventDefault();
-             closeModal(modal);
-           });
-           continueBtn.addEventListener('touchend', (e) => {
-             e.preventDefault();
-             e.stopPropagation();
-             closeModal(modal);
-           });
+              e.preventDefault();
+              postCreditsMode = true;
+              closeModal(modal);
+            });
+            continueBtn.addEventListener('touchend', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              postCreditsMode = true;
+              closeModal(modal);
+            });
          }
 
          // Fade in
@@ -2398,7 +2400,8 @@
         setTimeout(() => { logoTargetScale = 1; }, 200);
         
         // PROGRESS: Level erhöhen bei Discharge
-        if (upgradeLevel < 10) {
+        const coloredLevelCap = postCreditsMode ? 20 : 10;
+        if (upgradeLevel < coloredLevelCap) {
           const prevLevel = upgradeLevel;
           upgradeLevel++;
           console.log(`%c[GAME] Level UP: ${prevLevel} → ${upgradeLevel} (colored discharge)`, 'color: #39ff14; font-family: monospace;');
@@ -2887,21 +2890,20 @@
            const releaseHue = (upgradeLevel * 40) % 360;
            
            // Set max rings for this discharge
-           ringsMax = 5 + upgradeLevel * 2;
-           ringsExpanded = 0;
-           
-           // Ring count based on level
-           const ringCount = ringsMax;
-           for (let o = 0; o < ringCount; o++) {
-             setTimeout(() => {
-               logoOutlines.push({
-                 alpha: 1,
-                 radius: 10 + o * 6,
-                 hue: (releaseHue + o * 15) % 360
-               });
-               ringsExpanded++;
-             }, o * 20);
-           }
+            ringsMax = 5 + upgradeLevel * 2;
+            ringsExpanded = ringsMax; // Immediately mark as emitted to avoid blocking next discharge
+            
+            // Ring count based on level
+            const ringCount = ringsMax;
+            for (let o = 0; o < ringCount; o++) {
+              setTimeout(() => {
+                logoOutlines.push({
+                  alpha: 1,
+                  radius: 10 + o * 6,
+                  hue: (releaseHue + o * 15) % 360
+                });
+              }, o * 20);
+            }
           
            // Scale punch based on level
             logoTargetScale = 1.2 + upgradeLevel * 0.05;
