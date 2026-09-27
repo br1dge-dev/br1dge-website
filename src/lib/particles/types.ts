@@ -19,6 +19,10 @@ export interface AmbientParticle extends BaseParticle {
   alpha: number;
   twinkle: number;
   absorbed: boolean;
+  isSuperStar: boolean;
+  inOrbit: boolean;
+  orbitAngle: number;
+  orbitDist: number;
 }
 
 export interface ColoredParticle extends BaseParticle {

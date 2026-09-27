@@ -116,13 +116,6 @@
         transition: opacity 0.5s ease;
         pointer-events: none;
       }
-      #pause-toggle { position: fixed; right: 1.5rem; top: 1.2rem; z-index: 100; background: none; border: 0; color: #aaa; font: 1.2rem system-ui; padding: .5rem; cursor: pointer; }
-      #game-hint { position: fixed; bottom: 1.8rem; left: 4rem; right: 4rem; text-align: center; color: #777; font: .7rem system-ui; letter-spacing: .1em; pointer-events: none; }
-      body.paused #canvas { opacity: .35; }
-      body.paused, body.paused * { cursor: default; }
-      button:focus-visible { outline: 1px solid #aaa; outline-offset: 4px; }
-      #sound-hint { background: none; border: 0; white-space: nowrap; }
-      @media (max-width: 480px) { #sound-hint { font-size: .7rem; letter-spacing: .15em; } }
       @keyframes pop {
         0%, 100% { transform: translateY(0) scale(1); opacity: 0.5; }
         50% { transform: translateY(-3px) scale(1.1); opacity: 0.9; }
@@ -130,9 +123,7 @@
     </style>
   </head>
   <body>
-    <canvas id="canvas" aria-label="Collect particles and release their energy into the central bridge."></canvas>
-    <button id="pause-toggle" type="button" aria-label="Pause game" aria-pressed="false" title="Pause (P / Escape)">Ⅱ</button>
-    <p id="game-hint" role="status" aria-live="polite"></p>
+    <canvas id="canvas"></canvas>
     <button id="sound-toggle" aria-label="Toggle sound">
       <svg viewBox="0 0 24 24" class="sound-on">
         <path d="M11 5L6 9H2v6h4l5 4V5z"/>
@@ -145,11 +136,9 @@
         <line x1="17" y1="9" x2="23" y2="15"/>
       </svg>
     </button>
-    <button id="sound-hint" type="button" aria-label="Enable sound">
+    <div id="sound-hint">
       <span>P</span><span>L</span><span>E</span><span>A</span><span>S</span><span>E</span><span>&nbsp;</span><span>E</span><span>N</span><span>A</span><span>B</span><span>L</span><span>E</span><span>&nbsp;</span><span>S</span><span>O</span><span>U</span><span>N</span><span>D</span><span class="speaker"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
-    </button>
-    <script>
-      import '../lib/game/runtime';
-    </script>
+    </div>
+    <script>import '../lib/game/accepted-preview.js';</script>
   </body>
 </html>
