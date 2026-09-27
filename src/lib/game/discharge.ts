@@ -33,7 +33,23 @@ export function availableDischarge(s: DischargeState): DischargeKind | null {
   return null;
 }
 
-/** A light visual connection; no extra cursor force or simulation particles. */
+interface LinkMote {
+  phase: number;
+  x: number;
+  y: number;
+}
+interface LinkMotion {
+  time: number;
+  cursorX: number;
+  cursorY: number;
+  lagX: number;
+  lagY: number;
+  attachment: number;
+  motes: LinkMote[];
+}
+const linkMotion = new WeakMap<CanvasRenderingContext2D, LinkMotion>();
+
+/** Visual-only charge drift. Its inertia never applies force to the player. */
 export function drawDischargeLink(ctx: CanvasRenderingContext2D, options: {
   coreX: number; coreY: number; cursorX: number; cursorY: number;
   coreRadius: number; time: number; color: string;
@@ -41,34 +57,69 @@ export function drawDischargeLink(ctx: CanvasRenderingContext2D, options: {
   const { coreX, coreY, cursorX, cursorY, coreRadius, time, color } = options;
   const dx = cursorX - coreX, dy = cursorY - coreY;
   const distance = Math.hypot(dx, dy);
-  const pulse = .5 + .5 * Math.sin(time / 450);
+  const radius = Math.max(1, coreRadius);
+  // The receiving point follows the arch slowly, like a charge clinging to it.
+  const attachment = Math.max(-.96, Math.min(.96, dx / Math.max(radius, distance) * 1.1));
+  let motion = linkMotion.get(ctx);
+  const reset = !motion || time < motion.time || time - motion.time > 150;
+  if (!motion || reset) {
+    motion = {
+      time, cursorX, cursorY, lagX: 0, lagY: 0, attachment,
+      motes: Array.from({ length: 36 }, (_, i) => ({ phase: (i * .61803398875) % 1, x: cursorX, y: cursorY })),
+    };
+    linkMotion.set(ctx, motion);
+  }
+  const dt = Math.min(.05, Math.max(0, (time - motion.time) / 1000));
+  const follow = 1 - Math.exp(-dt * 5);
+  motion.lagX += (Math.max(-65, Math.min(65, (motion.cursorX - cursorX) / Math.max(dt, .001) * .08)) - motion.lagX) * follow;
+  motion.lagY += (Math.max(-65, Math.min(65, (motion.cursorY - cursorY) / Math.max(dt, .001) * .08)) - motion.lagY) * follow;
+  motion.attachment += (attachment - motion.attachment) * (1 - Math.exp(-dt * 2.2));
+  const endX = coreX + motion.attachment * radius * .75;
+  const endY = coreY + radius * (.35 - Math.sqrt(1 - motion.attachment ** 2) * .85);
+  const spanX = endX - cursorX, spanY = endY - cursorY;
+  const span = Math.max(1, Math.hypot(spanX, spanY));
+  const nx = -spanY / span, ny = spanX / span;
+  const seconds = time / 1000;
+  const amplitude = Math.min(13, span * .045);
+  // Keep close-range charge soft instead of building up a bright knot.
+  const visibility = Math.min(1, distance / (radius * 1.5));
   ctx.save();
-  ctx.strokeStyle = ctx.fillStyle = color;
-  ctx.lineWidth = 1;
-  // A restrained receiving halo remains visible when the cursor reaches the core.
-  ctx.globalAlpha = .10 + pulse * .06;
-  ctx.beginPath();
-  ctx.arc(coreX, coreY, coreRadius + 12 + pulse * 2, 0, Math.PI * 2);
-  ctx.stroke();
-  if (distance > 28) {
-    const bend = Math.min(26, distance * .07) * Math.sin(time / 1600);
-    const mx = (coreX + cursorX) / 2 - dy / distance * bend;
-    const my = (coreY + cursorY) / 2 + dx / distance * bend;
-    ctx.globalAlpha = .12 + pulse * .04;
-    ctx.beginPath();
-    ctx.moveTo(coreX, coreY);
-    ctx.quadraticCurveTo(mx, my, cursorX, cursorY);
-    ctx.stroke();
-    // Four small lights travel from the charged cursor toward the receiving bridge.
-    for (let i = 0; i < 4; i++) {
-      const t = 1 - ((time / 1800 + i / 4) % 1);
-      const u = 1 - t;
-      ctx.globalAlpha = .36 * Math.sin(Math.PI * t);
-      ctx.beginPath();
-      ctx.arc(u * u * coreX + 2 * u * t * mx + t * t * cursorX,
-        u * u * coreY + 2 * u * t * my + t * t * cursorY, 1.4, 0, Math.PI * 2);
-      ctx.fill();
+  ctx.fillStyle = color;
+  for (let i = 0; i < motion.motes.length; i++) {
+    const mote = motion.motes[i];
+    const previous = mote.phase;
+    mote.phase = (mote.phase + dt / (1.9 + (i % 7) * .13)) % 1;
+    const p = mote.phase;
+    // Ease into the symbol, leaving a short-lived, softly moving charge there.
+    const t = 1 - (1 - p) ** 2;
+    const envelope = Math.sin(Math.PI * t);
+    const wave = Math.sin(t * 8 - seconds * 1.8 + i * 2.4)
+      + .4 * Math.sin(t * 17 + seconds * 2.1 + i);
+    const drift = envelope * amplitude * wave;
+    const cling = t ** 8 * Math.sin(seconds * 2 + i * 2.4) * 2;
+    const x = cursorX + spanX * t + nx * (drift + cling) + motion.lagX * envelope;
+    const y = cursorY + spanY * t + ny * (drift + cling) + motion.lagY * envelope;
+    const ease = 1 - Math.exp(-dt * (9 + t * 12));
+    if (reset || p < previous) {
+      mote.x = x;
+      mote.y = y;
+    } else {
+      mote.x += (x - mote.x) * ease;
+      mote.y += (y - mote.y) * ease;
     }
+    const alpha = Math.sin(Math.PI * p) * (.20 + .06 * Math.sin(seconds * 2.3 + i)) * visibility;
+    const size = .65 + (i % 4) * .16;
+    ctx.globalAlpha = alpha * .15;
+    ctx.beginPath();
+    ctx.arc(mote.x, mote.y, size * 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(mote.x, mote.y, size, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.restore();
+  motion.time = time;
+  motion.cursorX = cursorX;
+  motion.cursorY = cursorY;
 }

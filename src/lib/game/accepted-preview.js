@@ -1,4 +1,6 @@
-// Frozen original-based playtest reference; see docs/NEXT-SESSION.md.
+// Original-based playtest; targeted visual and modal-pause fixes only.
+import { GameClock } from './clock';
+const clock = new GameClock();
 import { availableDischarge, drawDischargeLink } from '../game/discharge';
 import { CHARGE } from '../game/charge';
 // ========================================
@@ -163,20 +165,20 @@ function checkTutorialProgression() {
     if (cursorEnergy >= threshold && !logoReadyForDischarge) {
         if (tutorialSubPhase === 0) {
             logoReadyForDischarge = true;
-            tutorialVibrationTime = Date.now();
+            tutorialVibrationTime = clock.now;
             tutorialVibrationIntensity = TUTORIAL_TWITCH_INTENSITY;
             AudioSystem.playModalEnter();
         }
         else if (tutorialSubPhase === 1) {
             logoReadyForDischarge = true;
-            tutorialVibrationTime = Date.now();
+            tutorialVibrationTime = clock.now;
             tutorialVibrationIntensity = TUTORIAL_VIBRATE_INTENSITY;
             AudioSystem.playLevelUp(1);
         }
     }
 }
 // Idle mode - cursor must move for progression
-let lastMouseMoveTime = Date.now();
+let lastMouseMoveTime = clock.now;
 let isIdle = false;
 // IDLE_TIMEOUT imported from ../lib/game/types
 // Colored particles flying in space (to be caught)
@@ -259,6 +261,7 @@ function closeModal(modal) {
     setTimeout(() => {
         modal.remove();
         modalShown = false;
+        clock.setPaused(false);
     }, 800);
 }
 function restartGame(modal) {
@@ -336,6 +339,11 @@ function showSuperSuccessModal() {
     if (modalShown)
         return;
     modalShown = true;
+    clock.setPaused(true);
+    isTouching = false;
+    AudioSystem.setSpiralSuction(0);
+    AudioSystem.setChamberCrackling(0);
+    AudioSystem.setBridgeAttraction(0);
     AudioSystem.playModalEnter();
     HapticManager.modalEnter();
     canvas.style.filter = '';
@@ -398,6 +406,11 @@ function showModal() {
     if (modalShown)
         return;
     modalShown = true;
+    clock.setPaused(true);
+    isTouching = false;
+    AudioSystem.setSpiralSuction(0);
+    AudioSystem.setChamberCrackling(0);
+    AudioSystem.setBridgeAttraction(0);
     // Audio & Haptic: Modal enter
     AudioSystem.playModalEnter();
     HapticManager.modalEnter();
@@ -589,7 +602,7 @@ function resetFromYouDied() {
     }
 }
 function drawGrid() {
-    const time = Date.now() / 1000;
+    const time = clock.now / 1000;
     // Pure black with subtle depth
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, W, H);
@@ -622,7 +635,7 @@ function drawGrid() {
 }
 // Draw the logo - CLEAN, MINIMAL, ALWAYS CENTERED + VIBRATION
 function drawLogo() {
-    const time = Date.now() / 1000;
+    const time = clock.now / 1000;
     // Feste Basis-Schriftgröße - Skalierung nur über ctx.scale()
     const baseLogoSize = Math.min(W, H) * 0.32;
     logoScale += (logoTargetScale - logoScale) * 0.12;
@@ -644,16 +657,16 @@ function drawLogo() {
         // Check if tutorial mode (subtle twitch) or colored mode (full vibration)
         if (gamePhase === GAME_PHASE_TUTORIAL && tutorialSubPhase < 2) {
             // Tutorial: subtle twitch based on tutorialVibrationIntensity
-            const vibTime = (Date.now() - tutorialVibrationTime) / 1000;
+            const vibTime = (clock.now - tutorialVibrationTime) / 1000;
             vibIntensity = tutorialVibrationIntensity * Math.sin(vibTime * 15) * Math.min(1, vibTime * 2);
         }
         else {
             // Regular colored particle mode: full vibration
-            const vibTime = (Date.now() - logoVibrationTime) / 1000;
+            const vibTime = (clock.now - logoVibrationTime) / 1000;
             vibIntensity = Math.min(1, vibTime * 2) * 1.5;
         }
-        vibrationX = Math.sin(Date.now() / 16) * vibIntensity;
-        vibrationY = Math.cos(Date.now() / 14) * vibIntensity * 0.7;
+        vibrationX = Math.sin(clock.now / 16) * vibIntensity;
+        vibrationY = Math.cos(clock.now / 14) * vibIntensity * 0.7;
     }
     ctx.save();
     ctx.translate(exactCenterX + vibrationX, exactCenterY + vibrationY);
@@ -700,7 +713,7 @@ function drawLogo() {
     }
     // Haupt-Symbol - weiß (or red flash if hit)
     const hitFlashDuration = 200; // 200ms flash
-    const timeSinceHit = Date.now() - logoHitFlashTime;
+    const timeSinceHit = clock.now - logoHitFlashTime;
     if (timeSinceHit < hitFlashDuration) {
         // Red flash when hit by enemy
         const flashIntensity = 1 - (timeSinceHit / hitFlashDuration);
@@ -854,7 +867,7 @@ function seedAmbientParticles() {
         spawnAmbientParticle();
 }
 function drawAmbientParticles() {
-    const time = Date.now() / 1000;
+    const time = clock.now / 1000;
     // Partikel spawnen - auflösungsunabhängige Dichte
     const { maxParticles, spawnRate } = getScaledParticleParams();
     if (ambientParticles.length < maxParticles && Math.random() < spawnRate) {
@@ -912,7 +925,7 @@ function drawAmbientParticles() {
             }
             // Wenn gerade voll geworden UND alle Farbphasen abgeschlossen, Red Particle spawnen
             if (cursorEnergy >= MAX_ENERGY && !redParticle.active && !redParticleActive && coloredBridgePhaseComplete) {
-                redParticleSpawnTime = Date.now() + 2000; // 2 Sekunden warten
+                redParticleSpawnTime = clock.now + 2000; // 2 Sekunden warten
                 redParticleActive = true;
             }
         }
@@ -963,7 +976,7 @@ function drawAmbientParticles() {
 }
 // === SPIRAL ENEMY LOGIC ===
 function updateAndDrawSpiralEnemy() {
-    const now = Date.now();
+    const now = clock.now;
     // Only spawn after tutorial phase
     if (gamePhase === GAME_PHASE_TUTORIAL) {
         lastSpiralSpawnTime = now;
@@ -1127,7 +1140,7 @@ function updateAndDrawSpiralEnemy() {
 function drawSpiralCore(x, y, rotation, intensity) {
     if (intensity <= 0)
         return;
-    const time = Date.now() / 1000;
+    const time = clock.now / 1000;
     const pulse = 1 + Math.sin(time * 5) * 0.15; // Pulsating
     const isSuper = spiralEnemy.isSuper;
     const sizeMultiplier = isSuper ? 3 : 1;
@@ -1245,7 +1258,7 @@ function spawnShockwave(x, y, strength = 1) {
     shockwave.active = true;
     shockwave.x = x;
     shockwave.y = y;
-    shockwave.startTime = Date.now();
+    shockwave.startTime = clock.now;
     shockwave.strength = strength;
     shockwave.maxRadius = Math.max(W, H) * 0.6; // Bis zum Bildschirmrand
     shockwave.radius = 0;
@@ -1255,12 +1268,12 @@ function spawnSpiralExplosion(x, y) {
     animeExplosion.x = x;
     animeExplosion.y = y;
     animeExplosion.phase = 0;
-    animeExplosion.startTime = Date.now();
+    animeExplosion.startTime = clock.now;
 }
 function updateAndDrawSpiralExplosion() {
     if (!animeExplosion.active)
         return;
-    const elapsed = Date.now() - animeExplosion.startTime;
+    const elapsed = clock.now - animeExplosion.startTime;
     const duration = 400; // Fast animation
     animeExplosion.phase = elapsed / duration * 3;
     if (animeExplosion.phase >= 3) {
@@ -1327,7 +1340,7 @@ function updateAndDrawSpiralExplosion() {
 function updateAndDrawShockwave() {
     if (!shockwave.active)
         return;
-    const elapsed = Date.now() - shockwave.startTime;
+    const elapsed = clock.now - shockwave.startTime;
     const duration = 600; // 600ms expansion
     const progress = elapsed / duration;
     if (progress >= 1) {
@@ -1391,13 +1404,13 @@ function applySpiralgravityToStars(sx, sy, radius, rotation, arms) {
 }
 // Red Particle - spawnt NUR wenn Colored Bridge Phase abgeschlossen
 function drawRedParticle() {
-    const time = Date.now() / 1000;
+    const time = clock.now / 1000;
     // Red Particles nur wenn Colored Bridge Phase vorbei ist
     if (!coloredBridgePhaseComplete) {
         return;
     }
     // Spawn nach Timer
-    if (redParticleActive && !redParticle.active && Date.now() > redParticleSpawnTime) {
+    if (redParticleActive && !redParticle.active && clock.now > redParticleSpawnTime) {
         const edge = Math.floor(Math.random() * 4);
         const speed = 1.2 + Math.random() * 0.8; // Noch langsamer, smoothere Bewegung (1.2-2.0)
         switch (edge) {
@@ -1553,7 +1566,7 @@ function drawRedParticle() {
         // Nächster Red Particle spawnt nach Pause (bis MAX_RED_STACK erreicht)
         // Rote Partikel können bis 6 gehen, nicht nur 5 wie colored particles
         if (cursorEnergy >= MAX_ENERGY && redStackCount < MAX_RED_STACK) {
-            redParticleSpawnTime = Date.now() + 2000;
+            redParticleSpawnTime = clock.now + 2000;
             redParticleActive = true;
         }
     }
@@ -1562,7 +1575,7 @@ function drawRedParticle() {
         redParticle.active = false;
         // Neuer Versuch nach längerer Pause
         if (cursorEnergy >= MAX_ENERGY) {
-            redParticleSpawnTime = Date.now() + 2000; // 2s Pause nach Miss
+            redParticleSpawnTime = clock.now + 2000; // 2s Pause nach Miss
             redParticleActive = true;
         }
     }
@@ -1583,7 +1596,7 @@ function drawRedParticle() {
 // COLORED PARTICLES - Sequential spawn (orange->brown->green)
 // ========================================
 function drawColoredParticles() {
-    const time = Date.now() / 1000;
+    const time = clock.now / 1000;
     // Skip wenn alle 3 Phasen abgeschlossen
     if (currentColorPhase >= 3) {
         coloredBridgePhaseComplete = true;
@@ -1597,7 +1610,7 @@ function drawColoredParticles() {
     // Chamber öffnet sich früh - sobald 1 Ring gefüllt ist (20% energy)
     const chamberOpenThreshold = 0.2; // 1 Ring = 20%
     if (cursorEnergy < chamberOpenThreshold) {
-        coloredParticleSpawnTime = Date.now() + 2000;
+        coloredParticleSpawnTime = clock.now + 2000;
         return;
     }
     // Aktiviere Kammer sobald 1 Ring voll
@@ -1613,7 +1626,7 @@ function drawColoredParticles() {
     const allUnlockedRingsFull = cursorEnergy >= requiredEnergy;
     if (chamberParticles.length >= CHAMBER_THRESHOLD && allUnlockedRingsFull && !logoReadyForDischarge) {
         logoReadyForDischarge = true;
-        logoVibrationTime = Date.now();
+        logoVibrationTime = clock.now;
         // Audio feedback: Collection complete
         AudioSystem.playCollectionComplete();
         // Stärkeres Vibration-Feedback wenn Kammer voll
@@ -1622,7 +1635,7 @@ function drawColoredParticles() {
     // Aktuelle Farbe für diese Phase
     const currentColor = CHAMBER_COLORS_SEQUENCE[currentColorPhase];
     // Spawn farbige Partikel (alle 1.5 Sekunden)
-    if (Date.now() > coloredParticleSpawnTime &&
+    if (clock.now > coloredParticleSpawnTime &&
         coloredParticles.length < 4 &&
         chamberParticles.length < CHAMBER_THRESHOLD) {
         const color = currentColor;
@@ -1664,7 +1677,7 @@ function drawColoredParticles() {
             alpha: 0.9 // 10% weniger intensiv
         });
         // Nächster Spawn in 1.5 Sekunden
-        coloredParticleSpawnTime = Date.now() + 1500;
+        coloredParticleSpawnTime = clock.now + 1500;
     }
     // Update & Draw colored particles
     for (let i = coloredParticles.length - 1; i >= 0; i--) {
@@ -1790,7 +1803,7 @@ function drawRipples() {
 }
 // 2026 Cursor - CLEAN, SHARP, SNAPPY + CHAMBER
 function drawCursor() {
-    const time = Date.now() / 1000;
+    const time = clock.now / 1000;
     // cursorX/cursorY werden jetzt im render() Loop VOR den Partikel-Loops aktualisiert
     // Das verhindert Race-Conditions bei schnellen Bewegungen
     // Cursor-Bewegungs-Delta für Trägheit
@@ -1854,7 +1867,7 @@ function drawCursor() {
         // Or yellow flash when enemy killed
         const isChamberStacked = redStackCount >= MAX_RED_STACK;
         const cursorFlashDuration = 150;
-        const timeSinceCursorHit = Date.now() - cursorHitFlashTime;
+        const timeSinceCursorHit = clock.now - cursorHitFlashTime;
         let cursorColor;
         if (timeSinceCursorHit < cursorFlashDuration) {
             // Yellow flash when killing enemy (positive feedback)
@@ -1937,7 +1950,7 @@ function drawCursor() {
         // Normaler Core (ohne Kammer)
         const isCoreStacked = redStackCount >= MAX_RED_STACK;
         const coreFlashDuration = 150;
-        const timeSinceCoreHit = Date.now() - cursorHitFlashTime;
+        const timeSinceCoreHit = clock.now - cursorHitFlashTime;
         let coreColor;
         if (timeSinceCoreHit < coreFlashDuration) {
             coreColor = '#ffdd00'; // Yellow flash
@@ -1994,7 +2007,7 @@ function spawnMiniBridge() {
         orbitAngle: orbitAngle, // For 3D orbit simulation
         orbitSpeed: 0.008 + Math.random() * 0.004,
         alpha: 1,
-        birthTime: Date.now(),
+        birthTime: clock.now,
         hitRadius: 25
     });
     // BIG BANG Partikel-Burst vom Logo
@@ -2015,7 +2028,7 @@ function spawnMiniBridge() {
     const logoY2 = H / 2;
     // Multiple Shockwaves from logo - big bang effect
     for (let s = 0; s < 5; s++) {
-        setTimeout(() => {
+        clock.schedule(() => {
             ripples.push({
                 x: logoX2,
                 y: logoY2,
@@ -2027,7 +2040,7 @@ function spawnMiniBridge() {
     }
     // Logo scale punch
     logoTargetScale = 1.3;
-    setTimeout(() => { logoTargetScale = 1; }, 200);
+    clock.schedule(() => { logoTargetScale = 1; }, 200);
     // PROGRESS: Level erhöhen bei Discharge
     const coloredLevelCap = postCreditsMode ? 20 : 10;
     if (upgradeLevel < coloredLevelCap) {
@@ -2062,7 +2075,7 @@ function spawnMiniBridge() {
 // Track hover state for bridges
 let hoveredBridgeIndex = -1;
 function drawFloatingBridges() {
-    const time = Date.now() / 1000;
+    const time = clock.now / 1000;
     const logoX = W / 2;
     const logoY = H / 2;
     // Check which bridge is hovered
@@ -2162,7 +2175,7 @@ function drawFloatingBridges() {
 // Draw YOU DIED screen
 function drawYouDied() {
     // Fade in
-    const fadeProgress = Math.min(1, (Date.now() - window.__youDiedStartTime || Date.now()) / 1200);
+    const fadeProgress = Math.min(1, (clock.now - window.__youDiedStartTime || clock.now) / 1200);
     const alpha = fadeProgress * 0.9;
     // Update cursor position smoothly
     cursorX += (mouseX - cursorX) * 0.15;
@@ -2221,16 +2234,16 @@ function drawDischargeCue() {
     drawDischargeLink(ctx, {
         coreX: centerX, coreY: centerY, cursorX, cursorY,
         coreRadius: Math.min(W, H) * .08 * logoScale * logoBaseScale,
-        time: Date.now(),
+        time: clock.now,
         color: kind === 'color' ? CHAMBER_COLORS_SEQUENCE[currentColorPhase] : '#ffffff',
     });
 }
 // Main render
 function render() {
+    if (modalShown) return;
     // If YOU DIED is active, show it and skip normal render
     if (youDiedActive) {
         drawYouDied();
-        requestAnimationFrame(render);
         return;
     }
     ctx.fillStyle = '#000';
@@ -2243,12 +2256,12 @@ function render() {
     AudioSystem.setChamberCrackling(chamberParticles.length);
     // Bridge attraction sound - when logo or mini-bridges are attracting/vibrating
     const bridgeAttractionStrength = logoReadyForDischarge ?
-        Math.min(1, (Date.now() - logoVibrationTime) / 2000) :
+        Math.min(1, (clock.now - logoVibrationTime) / 2000) :
         (hoveredBridgeIndex >= 0 ? 0.6 : 0);
     AudioSystem.setBridgeAttraction(bridgeAttractionStrength);
     // drawGrid(); // Entfernt - zu dezent
     // Check idle state
-    if (Date.now() - lastMouseMoveTime > IDLE_TIMEOUT) {
+    if (clock.now - lastMouseMoveTime > IDLE_TIMEOUT) {
         isIdle = true;
         // Langsamer Discharge im Idle
         if (cursorEnergy > 0) {
@@ -2291,18 +2304,19 @@ function render() {
     drawRipples();
     drawCursor();
     drawScanlines();
-    requestAnimationFrame(render);
 }
 // Events
 window.addEventListener('resize', resize);
 document.addEventListener('mousemove', (e) => {
+    if (modalShown) return;
     mouseX = e.clientX;
     mouseY = e.clientY;
-    lastMouseMoveTime = Date.now();
+    lastMouseMoveTime = clock.now;
     isIdle = false;
 });
 // Click auf Logo = ENERGIE EXPLOSION (nur wenn Threshold erreicht)
 document.addEventListener('click', (e) => {
+    if (modalShown) return;
     // If YOU DIED is active, click resets to level 2
     if (youDiedActive) {
         resetFromYouDied();
@@ -2383,7 +2397,7 @@ document.addEventListener('click', (e) => {
             // Subtle effect
             logoOutlines.push({ alpha: 0.5, radius: 10, hue: 180 });
             logoTargetScale = 1.1;
-            setTimeout(() => { logoTargetScale = 1; }, 100);
+            clock.schedule(() => { logoTargetScale = 1; }, 100);
         }
         else if (tutorialSubPhase === 1) {
             // Second discharge → full vibration, then 4 rings, then transition to colored
@@ -2395,13 +2409,13 @@ document.addEventListener('click', (e) => {
             // More noticeable effect
             logoOutlines.push({ alpha: 0.8, radius: 10, hue: 200 });
             logoTargetScale = 1.15;
-            setTimeout(() => { logoTargetScale = 1; }, 150);
+            clock.schedule(() => { logoTargetScale = 1; }, 150);
             // Set tutorial rings max (4 for phase 2)
             ringsMax = 4;
             ringsExpanded = 4; // Allow immediate discharge
             // Transition to colored particles after short delay (longer on mobile)
             const transitionDelay = isMobile ? 1200 : 500;
-            setTimeout(() => {
+            clock.schedule(() => {
                 gamePhase = GAME_PHASE_COLORED;
                 currentColorPhase = 0;
                 chamberActive = true;
@@ -2431,7 +2445,7 @@ document.addEventListener('click', (e) => {
         // Modal check - direkt nach Level-Increment
         if (upgradeLevel >= currentLevelCap && !gameCompleted) {
             gameCompleted = true;
-            setTimeout(() => {
+            clock.schedule(() => {
                 if (currentLevelCap === 20) {
                     showSuperSuccessModal();
                 }
@@ -2446,7 +2460,7 @@ document.addEventListener('click', (e) => {
         HapticManager.discharge();
         // Audio & Haptic: Level Up (wenn Level gestiegen)
         if (upgradeLevel > prevLevel) {
-            setTimeout(() => {
+            clock.schedule(() => {
                 AudioSystem.playLevelUp(upgradeLevel);
                 AudioSystem.setGameLevel(upgradeLevel); // Ambient evolution
                 HapticManager.levelUp();
@@ -2463,7 +2477,7 @@ document.addEventListener('click', (e) => {
         // Nach Discharge: Red Particles wieder aktivieren wenn Level unter Cap
         if (upgradeLevel < currentLevelCap) {
             redParticleActive = true;
-            redParticleSpawnTime = Date.now() + 3000;
+            redParticleSpawnTime = clock.now + 3000;
         }
         // Start background music on first discharge
         if (!AudioSystem.bgMusicStarted) {
@@ -2478,7 +2492,7 @@ document.addEventListener('click', (e) => {
         // Ring count based on level
         const ringCount = ringsMax;
         for (let o = 0; o < ringCount; o++) {
-            setTimeout(() => {
+            clock.schedule(() => {
                 logoOutlines.push({
                     alpha: 1,
                     radius: 10 + o * 6,
@@ -2488,7 +2502,7 @@ document.addEventListener('click', (e) => {
         }
         // Scale punch based on level
         logoTargetScale = 1.2 + upgradeLevel * 0.05;
-        setTimeout(() => { logoTargetScale = 1; }, 150);
+        clock.schedule(() => { logoTargetScale = 1; }, 150);
         // DRUCKWELLE - alle ambient particles wegstoßen
         for (let ap of ambientParticles) {
             const apDx = ap.x - exactCenterX;
@@ -2516,7 +2530,7 @@ document.addEventListener('click', (e) => {
         }
         // Mehrere Shockwaves
         for (let s = 0; s < 3; s++) {
-            setTimeout(() => {
+            clock.schedule(() => {
                 ripples.push({
                     x: exactCenterX,
                     y: exactCenterY,
@@ -2538,23 +2552,26 @@ document.addEventListener('click', (e) => {
 });
 // Touch support
 document.addEventListener('touchstart', (e) => {
+    if (modalShown) return;
     const touch = e.touches[0];
     mouseX = touch.clientX;
     mouseY = touch.clientY;
-    lastMouseMoveTime = Date.now();
+    lastMouseMoveTime = clock.now;
     isIdle = false;
     isTouching = true;
 });
 document.addEventListener('touchmove', (e) => {
+    if (modalShown) return;
     const touch = e.touches[0];
     mouseX = touch.clientX;
     mouseY = touch.clientY;
-    lastMouseMoveTime = Date.now();
+    lastMouseMoveTime = clock.now;
     isIdle = false;
     e.preventDefault();
 }, { passive: false });
 // Touch release = ENERGIE EXPLOSION (drag-and-release auf Mobile)
 document.addEventListener('touchend', (e) => {
+    if (modalShown) return;
     // WICHTIG: Der Cursor verwendet Interpolation (0.25) und "hinkt" der Zielposition hinterher.
     // Wir müssen die ZIEL-Position berechnen, nicht die interpolierte aktuelle Position!
     // Die Zielposition ist: mouseX/mouseY + offset (wenn mobile)
@@ -2689,8 +2706,13 @@ soundToggleBtn?.addEventListener('touchend', (e) => {
     e.preventDefault();
     toggleSound();
 });
+function frame(timestamp) {
+    clock.advance(timestamp, render);
+    requestAnimationFrame(frame);
+}
 // Init
 resize();
 seedAmbientParticles();
 syncSoundUi();
 render();
+requestAnimationFrame(frame);
