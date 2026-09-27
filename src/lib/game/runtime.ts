@@ -298,10 +298,17 @@ function syncPause() {
   pauseButton?.setAttribute('aria-pressed', String(manuallyPaused));
   pauseButton?.setAttribute('aria-label', manuallyPaused ? 'Resume game' : 'Pause game');
   if (pauseButton) pauseButton.textContent = manuallyPaused ? '▶' : 'Ⅱ';
-  if (paused && !AudioSystem.muted) {
+  if (modalShown) {
+    isTouching = false;
+    AudioSystem.setSpiralSuction(0);
+    AudioSystem.setChamberCrackling(0);
+    AudioSystem.setBridgeAttraction(0);
+  }
+  const muteForPause = manuallyPaused || document.hidden;
+  if (muteForPause && !AudioSystem.muted) {
     AudioSystem.toggleMute();
     autoMuted = true;
-  } else if (!paused && autoMuted) {
+  } else if (!muteForPause && autoMuted) {
     if (AudioSystem.muted) AudioSystem.toggleMute();
     autoMuted = false;
   }
@@ -2624,6 +2631,7 @@ function render() {
 window.addEventListener('resize', resize);
 
 document.addEventListener('mousemove', (e) => {
+  if (clock.paused) return;
   mouseX = e.clientX;
   mouseY = e.clientY;
   lastMouseMoveTime = clock.now;
@@ -2901,6 +2909,7 @@ document.addEventListener('mousemove', (e) => {
 
  // Touch support
 document.addEventListener('touchstart', (e) => {
+  if (clock.paused) return;
   const touch = e.touches[0];
   mouseX = touch.clientX;
   mouseY = touch.clientY;
@@ -2910,6 +2919,7 @@ document.addEventListener('touchstart', (e) => {
 });
 
 document.addEventListener('touchmove', (e) => {
+  if (clock.paused) return;
   const touch = e.touches[0];
   mouseX = touch.clientX;
   mouseY = touch.clientY;

@@ -10,7 +10,7 @@ import { spiralSpeedModifier } from '../src/lib/game/balance.ts';
 import * as constants from '../src/lib/game/types.ts';
 
 // Execute the real runtime with inert platform services; no production test hooks.
-function game() {
+function game(sourceFile = 'runtime.ts') {
   class Element {
     style: Record<string, string> = {};
     textContent = '';
@@ -21,6 +21,7 @@ function game() {
     setAttribute(name: string, value: string) { this.attributes.set(name, value); }
     getAttribute(name: string) { return this.attributes.get(name); }
     remove() {}
+    appendChild() {}
     querySelector() { return new Element(); }
     querySelectorAll() { return []; }
   }
@@ -41,13 +42,17 @@ function game() {
   const audio = new Proxy(audioState, {
     get(target, key) { return key in target ? target[key as keyof typeof target] : () => {}; },
   });
+  const uiTimers: Array<() => void> = [];
+  const listeners: Record<string, Array<(e: unknown) => void>> = {};
   const context = vm.createContext({
+    uiTimers, listeners,
     audioStub: audioState,
     console, Date, Math: Object.create(Math), Element, exports: {},
     window: { innerWidth: 1280, innerHeight: 720, addEventListener() {} },
     navigator: { maxTouchPoints: 0 },
-    document: { hidden: false, getElementById: getElement, addEventListener() {}, body: new Element() },
-    requestAnimationFrame() {}, setTimeout() {},
+    document: { hidden: false, getElementById: getElement, createElement: () => new Element(),
+      addEventListener(name: string, callback: (e: unknown) => void) { (listeners[name] ??= []).push(callback); }, body: new Element() },
+    requestAnimationFrame() {}, setTimeout(callback: () => void) { uiTimers.push(callback); },
     require(path: string) {
       if (path.endsWith('/discharge')) return { availableDischarge, drawDischargeLink };
       if (path.endsWith('/charge')) return { CHARGE };
@@ -60,7 +65,7 @@ function game() {
       throw new Error(`Unexpected import: ${path}`);
     },
   });
-  const source = readFileSync(new URL('../src/lib/game/runtime.ts', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/lib/game/' + sourceFile, import.meta.url), 'utf8');
   vm.runInContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, context);
   return (code: string) => vm.runInContext(code, context);
 }
@@ -199,3 +204,35 @@ test('tutorial readiness expires after energy loss and can be earned again', () 
   run('cursorEnergy = .4; checkTutorialProgression();');
   assert.equal(run('getAvailableDischarge()'), 'tutorial');
 });
+
+for (const source of ['runtime.ts', 'accepted-preview.js']) {
+  for (const modal of ['showModal', 'showSuperSuccessModal']) {
+    test(`${source}: ${modal} freezes gameplay and timers through fade-out, but keeps music enabled`, () => {
+      const run = game(source);
+      run(`clock.advance(0, () => {});
+        clock.schedule(() => { cursorEnergy = .123; }, 500);
+        ${modal}();`);
+      assert.equal(run('clock.paused'), true);
+      assert.equal(run('audioStub.muted'), false);
+      const snapshot = run('JSON.stringify([clock.now, cursorEnergy, cursorX, cursorY, mouseX, mouseY, spiralEnemy, ambientParticles, particles])');
+      run(`clock.advance(60000, render);
+        for (const name of ['mousemove', 'touchstart', 'touchmove', 'touchend', 'click']) {
+          for (const listener of listeners[name] ?? []) {
+            if (listener === initAudioOnInteraction) continue;
+            listener({clientX:900, clientY:500, touches:[{clientX:900,clientY:500}], changedTouches:[], preventDefault(){}});
+          }
+        }`);
+      assert.equal(run('JSON.stringify([clock.now, cursorEnergy, cursorX, cursorY, mouseX, mouseY, spiralEnemy, ambientParticles, particles])'), snapshot);
+      run('closeModal(document.createElement("div")); clock.advance(61000, render);');
+      assert.equal(run('clock.paused'), true);
+      run('uiTimers.shift()(); clock.advance(62000, () => {});');
+      assert.equal(run('clock.paused'), false);
+      assert.equal(run('audioStub.muted'), false);
+      assert.notEqual(run('cursorEnergy'), .123);
+      run('clock.advance(62499, () => {});');
+      assert.notEqual(run('cursorEnergy'), .123);
+      run('clock.advance(62500, () => {});');
+      assert.equal(run('cursorEnergy'), .123);
+    });
+  }
+}
