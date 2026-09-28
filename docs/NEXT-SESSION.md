@@ -6,23 +6,25 @@ Christian hat nach der Konzeptbesprechung eine selbstständig ausgearbeitete,
 spielbare Ausbaustufe autorisiert. Die Wallet-/Presale-Anfrage gehörte in einen
 anderen Chat und ist hier ausdrücklich verworfen.
 
-- Neue lokale Vorschau: `/evolution`, vollständig ohne sichtbare Texte.
+- Freigegebene Spielfassung: `/` und `/evolution`, ohne Tutorialtexte, mit römischen Levelzahlen.
 - Nutzt dieselbe originalbasierte Runtime wie `/playtest`, mit explizitem Opt-in
   am Canvas; kein kopierter zweiter Spielkern. Die bisherigen Regeln bleiben
-  auf `/playtest` aktiv. Die Hauptseite ist unverändert.
+  auf `/playtest` aktiv. Die Hauptseite verwendet nach Freigabe dieselbe Evolution-Fassung.
 - Ladungsabhängige Anziehung von trägen Gefahren, drei separate Strukturtreffer,
   Ladungsverlust bei Cursor-Kontakt, Rückstoß beim Entladen.
 - Farbige Projekt-Symbole auf dünnen elliptischen Orbits um das Zentrum.
-- Symbolphasen statt sichtbarer Levelzahlen; die bestehenden Musikdateien
+- Symbolphasen mit römischen Levelzahlen und deutlichem Wachstum; die bestehenden Musikdateien
   werden nach Phase zugeordnet.
 - Nachspiel mit Echo, Gezeiten und zweiter Gravitationsquelle. Keine
   Kapitelauswahl: Regeln werden im laufenden Spiel vermittelt.
-- Kleine rote Gefahrenpunkte mit leichtem Glow; erste Verfolgung einzeln und langsam.
+- Kleine rote Gefahren mit verbundenen, wabernden Blasen wie im alten Spiel,
+  unterschiedlichen Größen und leichtem Glow; erste Verfolgung einzeln und langsam.
   Ausweichen setzt Licht frei, Kontakt reißt Ladung ab.
 - Gameplay und Spielzeit pausieren bei Abschluss, Niederlage und manueller Pause;
   Musik läuft weiter. Hintergrund-Tabs pausieren die Ausbaustufe ebenfalls.
 - Bewusste Variante: Nach den drei Farbphasen erfolgt Fortschritt über volle
-  Ladung; rote Herzen und Bildschirm-Inversion sind nur im bisherigen Playtest.
+  Ladung; Goldene Blitz-Power-ups aktivieren einen achtsekündigen Overdrive mit doppelter
+  Ladung/Entladungsbelohnung und zusätzlichen Gegnern. Keine Bildschirm-Inversion.
 - Regeln und Grenzen stehen in `docs/EVOLUTION.md`. Christian hat die reduzierte Gegnerdarstellung und Projekt-Orbits positiv
   bewertet. Dieser Stand wird auf seinen Wunsch gesichert.
 
@@ -31,12 +33,11 @@ Pause während der Success Cards, einschließlich 29 erfolgreicher Tests.
 
 ## Neueste Rückmeldung
 
-Christian möchte die sichtbare Progression wieder deutlicher: römische Zahlen
-über dem Symbol und stärkeres Anwachsen. Level 10 und Nachspiel bis 20 sind
-weiter implementiert, aber die Zahlen wurden in `/evolution` ausgeblendet.
-Die roten Herzen sind dort deaktiviert. Ein freiwilliger Power-Modus mit mehr
-Belohnung und zugleich mehr Gegnern ist als nächste Richtung im Gespräch,
-noch nicht umgesetzt. Zuerst wurde ausdrücklich Commit und Push angefordert.
+Nach der Sicherung als `a9fa30d` wurde der freigegebene nächste Ausbau umgesetzt:
+römische Zahlen, stärkeres Symbolwachstum und Blitz-Power-ups als freiwilliger Overdrive.
+Der Bonus endet bei Entladung, Kontakt, Strukturtreffer oder nach acht Sekunden.
+Christian hat am 29. September die Veröffentlichung freigegeben.
+49 Verhaltenstests bestanden; Deployment über main und das bestehende Vercel-Projekt.
 
 ## Einstieg
 
@@ -52,11 +53,7 @@ Originalbewegung und Originalspiel mit schnellerem Laden, korrigierter
 Soundfreigabe und subtiler Entladeverbindung. Die temporären Ordner und Ports
 der alten Chat-Sitzung sind zum Fortsetzen nicht nötig.
 
-Die Hauptseite `/` ist wieder der Stand VOR dem abgelehnten letzten Umbau.
-Sie enthält zusätzlich die älteren Hygiene-/Refactor-Änderungen (ausgelagerter
-Runtime, pausierbare Timer, Reset-Fixes, Gegner-Speedcaps). Nicht ungeprüft mit
-der originalbasierten Spielprobe gleichsetzen. Zuerst beide vergleichen und
-mit Christian entscheiden, welche früheren Änderungen übernommen werden.
+Die Hauptseite `/` ist jetzt die freigegebene Evolution-Fassung.
 `src/pages/playtest.astro` und `src/lib/game/accepted-preview.js` sind eine
 konservierte Referenz (der damalige Inline-Code wurde ohne Verhaltensänderung
 in JavaScript überführt), kein
@@ -89,11 +86,11 @@ Die nächste Sitzung beginnt mit Christians neuem Feedback/Auftrag.
 
 ## Verifikation und Grenzen
 
-45 Verhaltenstests, Astro check und Produktionsbuild vor Abschluss erneut
+49 Verhaltenstests, Astro check und Produktionsbuild vor Abschluss erneut
 prüfen. Prüfungen betreffen Logik, nicht eine Abnahme des Spielgefühls.
 Kein echter Mobilgeräte-/Haptik-Test und keine vollständige Endgame-Abnahme.
 Ältere Auditabschnitte beschreiben teils bereits zurückgenommene Zwischenstände;
 diese Übergabe und der aktuelle Code haben Vorrang.
-Push erfolgt auf den Arbeitsbranch, kein Merge nach main. Ein eventuell von
+Die aktuelle Live-Freigabe autorisiert den Merge nach main und das Production-Deployment. Ein eventuell von
 GitHub/Vercel automatisch gestarteter Preview-Build ist vom manuellen Deployment
 zu unterscheiden.

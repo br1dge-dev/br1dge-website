@@ -1,6 +1,6 @@
 // Original-based playtest; targeted visual and modal-pause fixes only.
 import { GameClock } from './clock';
-import { GravityField, chapterFor, musicFor, chargePull, drawEvolvingBridge, drawSettlement, drawProjectOrbits, CHAPTERS } from './evolution';
+import { GravityField, chapterFor, musicFor, chargePull, drawEvolvingBridge, drawSettlement, drawProjectOrbits, drawPowerRing, CHAPTERS } from './evolution';
 const clock = new GameClock();
 import { availableDischarge, drawDischargeLink } from '../game/discharge';
 import { CHARGE } from '../game/charge';
@@ -901,7 +901,7 @@ function drawAmbientParticles() {
         if (dist < gravityRadius && dist > 8) {
             // Gravitation: quadratisch stärker je näher
             const normalizedDist = dist / gravityRadius;
-            const pullStrength = Math.pow(1 - normalizedDist, 2) * CHARGE.attractionStrength * (evolution ? 1 + chargePull(cursorEnergy) : 1) * tideStrength;
+            const pullStrength = Math.pow(1 - normalizedDist, 2) * CHARGE.attractionStrength * (evolution ? (1 + chargePull(cursorEnergy)) * (evolution.powerActive(clock.now) ? 1.6 : 1) : 1) * tideStrength;
             p.vx += (dx / dist) * pullStrength;
             p.vy += (dy / dist) * pullStrength;
             // Partikel beschleunigt sichtbar zum Cursor
@@ -937,7 +937,7 @@ function drawAmbientParticles() {
             p.absorbed = true;
             const prevEnergy = cursorEnergy;
             // Every normal star gives visible progress; no slower tutorial phase.
-            const energyGain = CHARGE.energyPerStar * (p.isSuperStar ? CHARGE.superStarMultiplier : 1);
+            const energyGain = CHARGE.energyPerStar * (evolution?.powerActive(clock.now) ? 2 : 1) * (p.isSuperStar ? CHARGE.superStarMultiplier : 1);
             cursorEnergy = Math.min(MAX_ENERGY, cursorEnergy + energyGain);
             p.alpha *= 0.2;
             // Audio & Haptic: Super star has special sound, normal stars throttled
@@ -1837,6 +1837,10 @@ function drawCursor() {
     const cursorDeltaY = cursorY - prevCursorY;
     prevCursorX = cursorX;
     prevCursorY = cursorY;
+    if (evolution?.powerActive(clock.now)) {
+        drawPowerRing(ctx, evolutionInput(), evolution);
+        return;
+    }
     // Größe
     const baseSize = 5;
     const energySize = cursorEnergy * 18;
@@ -2327,7 +2331,9 @@ function render() {
     cursorX += (targetX - cursorX) * 0.25;
     cursorY += (targetY - cursorY) * 0.25;
     if (evolution) {
+        const wasPowered = evolution.powerActive(clock.now);
         const result = evolution.update(evolutionInput());
+        if (!wasPowered && evolution.powerActive(clock.now)) { AudioSystem.playSuperStarCollect(); HapticManager.levelUp(); }
         if (result.grazed) { cursorEnergy = Math.max(0, cursorEnergy - .18); AudioSystem.playRejectDischarge(); }
         if (result.hit) { spawnShockwave(centerX, centerY, 1.4); AudioSystem.playSpiralDamage(); HapticManager.levelUp(); }
         if (result.reward) {
@@ -2494,7 +2500,7 @@ document.addEventListener('click', (e) => {
         const prevLevel = upgradeLevel;
         // SIMPLIFIED: 1 red particle = 1 level, always
         // No special rules, no max stack bonus
-        const levelsToAdd = isInverted ? redStackCount : 1;
+        const levelsToAdd = evolution ? evolution.takePowerReward(clock.now) : isInverted ? redStackCount : 1;
         upgradeLevel = Math.min(currentLevelCap, upgradeLevel + levelsToAdd);
         if (upgradeLevel > prevLevel) {
             console.log(`%c[GAME] Level UP: ${prevLevel} → ${upgradeLevel} (red discharge, inverted: ${isInverted}, stack: ${redStackCount})`, 'color: #39ff14; font-family: monospace;');

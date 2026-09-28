@@ -319,3 +319,28 @@ test('settlement animates without advancing gameplay and ignores immediate reent
   assert.equal(run('evolutionRest'), null);
   assert.equal(run('postCreditsMode && !clock.paused'), true);
 });
+
+
+test('overdrive doubles a release and clamps progression at both finales', () => {
+  for (const [chapter, level, expected] of [['tension', 5, 7], ['connection', 9, 10], ['binary', 19, 20]]) {
+    const run = game('accepted-preview.js', true);
+    run(`beginEvolution('${chapter}'); upgradeLevel = ${level}; cursorEnergy = 1; evolution.powerUntil = clock.now + 8000;
+      for (const listener of listeners.click) {
+        if (listener !== initAudioOnInteraction) listener({clientX:centerX, clientY:centerY});
+      }`);
+    assert.equal(run('upgradeLevel'), expected);
+    assert.equal(run('evolution.powerActive(clock.now)'), false);
+    if (expected === 10 || expected === 20) {
+      run('clock.advance(0, () => {}); clock.advance(4100, () => {});');
+      assert.equal(run('modalShown && clock.paused'), true);
+    }
+  }
+});
+
+test('overdrive duration freezes during a manual pause', () => {
+  const run = game('accepted-preview.js', true);
+  run("beginEvolution('tension'); evolution.powerUntil = clock.now + 8000; toggleEvolutionPause(); clock.advance(100000, render);");
+  assert.equal(run('evolution.powerUntil - clock.now'), 8000);
+  run('toggleEvolutionPause(); clock.advance(100001, () => {}); clock.advance(108002, () => {});');
+  assert.equal(run('evolution.powerActive(clock.now)'), false);
+});
