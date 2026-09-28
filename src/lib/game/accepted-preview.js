@@ -1,5 +1,6 @@
 // Original-based playtest; targeted visual and modal-pause fixes only.
 import { GameClock } from './clock';
+import { GravityField, chapterFor, musicFor, chargePull, drawEvolvingBridge, drawSettlement, drawProjectOrbits, CHAPTERS } from './evolution';
 const clock = new GameClock();
 import { availableDischarge, drawDischargeLink } from '../game/discharge';
 import { CHARGE } from '../game/charge';
@@ -13,6 +14,9 @@ import { HapticManager } from '../haptics/HapticManager';
 import { GAME_PHASE_TUTORIAL, GAME_PHASE_COLORED, GAME_PHASE_COMPLETE, MAX_ENERGY, ENERGY_THRESHOLD, CHAMBER_THRESHOLD, CHAMBER_RADIUS, MAX_RED_STACK, IDLE_TIMEOUT, TUTORIAL_RINGS_PHASE0, TUTORIAL_RINGS_PHASE1, TUTORIAL_RINGS_PHASE2, TUTORIAL_TWITCH_INTENSITY, TUTORIAL_VIBRATE_INTENSITY, RINGS_PER_PHASE, CHAMBER_COLORS_SEQUENCE, COLOR_URLS } from '../game/types';
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
+const evolution = canvas.getAttribute('data-evolution') === 'true' ? new GravityField() : null;
+let evolutionRest = null;
+let evolutionPaused = false;
 // ========================================
 // INIT AUDIO ON FIRST INTERACTION
 // ========================================
@@ -265,6 +269,7 @@ function closeModal(modal) {
     }, 800);
 }
 function restartGame(modal) {
+    if (evolution) { beginEvolution('awakening'); return; }
     // Reset game state
     upgradeLevel = 0;
     logoBaseScale = 1;
@@ -336,6 +341,7 @@ function showRestartButton() {
     });
 }
 function showSuperSuccessModal() {
+    if (evolution) { showEvolutionEnding(true); return; }
     if (modalShown)
         return;
     modalShown = true;
@@ -403,6 +409,7 @@ function showSuperSuccessModal() {
     requestAnimationFrame(() => { modal.style.opacity = '1'; });
 }
 function showModal() {
+    if (evolution) { showEvolutionEnding(false); return; }
     if (modalShown)
         return;
     modalShown = true;
@@ -566,6 +573,7 @@ function showModal() {
 // 2026 Minimal Background - Clean, Dark, Sophisticated
 // Trigger YOU DIED screen
 function triggerYouDied() {
+    if (evolution) { showEvolutionFailure(); return; }
     youDiedActive = true;
     spiralEnemy.active = false;
     spiralEnemy.dying = false;
@@ -575,6 +583,7 @@ function triggerYouDied() {
 }
 // Reset from YOU DIED
 function resetFromYouDied() {
+    if (evolution) { beginEvolution('awakening', true); return; }
     youDiedActive = false;
     // Reset to post-tutorial state at level 2
     upgradeLevel = 2;
@@ -597,7 +606,7 @@ function resetFromYouDied() {
     logoReadyForDischarge = false;
     // Restart ambient - only after tutorial phase
     if (gamePhase !== GAME_PHASE_TUTORIAL) {
-        AudioSystem.setGameLevel(upgradeLevel);
+        AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel);
         AudioSystem.startBgMusic();
     }
 }
@@ -635,6 +644,11 @@ function drawGrid() {
 }
 // Draw the logo - CLEAN, MINIMAL, ALWAYS CENTERED + VIBRATION
 function drawLogo() {
+    if (evolution) {
+        drawEvolvingBridge(ctx, evolutionInput(), evolution);
+        logoOutlines.length = 0;
+        return;
+    }
     const time = clock.now / 1000;
     // Feste Basis-Schriftgröße - Skalierung nur über ctx.scale()
     const baseLogoSize = Math.min(W, H) * 0.32;
@@ -868,6 +882,9 @@ function seedAmbientParticles() {
 }
 function drawAmbientParticles() {
     const time = clock.now / 1000;
+    const fieldChapter = evolution ? chapterFor(upgradeLevel, postCreditsMode).id : '';
+    const tideStrength = evolution ? evolution.tide(clock.now, fieldChapter === 'tides') : 1;
+    const secondWell = evolution && fieldChapter === 'binary' ? evolution.well(W, H, clock.now) : null;
     // Partikel spawnen - auflösungsunabhängige Dichte
     const { maxParticles, spawnRate } = getScaledParticleParams();
     if (ambientParticles.length < maxParticles && Math.random() < spawnRate) {
@@ -880,17 +897,26 @@ function drawAmbientParticles() {
         const dx = cursorX - p.x;
         const dy = cursorY - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const gravityRadius = CHARGE.attractionRadius; // Größere Reichweite
+        const gravityRadius = CHARGE.attractionRadius * (evolution ? .75 + .65 * chargePull(cursorEnergy) : 1); // Größere Reichweite
         if (dist < gravityRadius && dist > 8) {
             // Gravitation: quadratisch stärker je näher
             const normalizedDist = dist / gravityRadius;
-            const pullStrength = Math.pow(1 - normalizedDist, 2) * CHARGE.attractionStrength;
+            const pullStrength = Math.pow(1 - normalizedDist, 2) * CHARGE.attractionStrength * (evolution ? 1 + chargePull(cursorEnergy) : 1) * tideStrength;
             p.vx += (dx / dist) * pullStrength;
             p.vy += (dy / dist) * pullStrength;
             // Partikel beschleunigt sichtbar zum Cursor
             if (dist < 100) {
                 p.vx += (dx / dist) * CHARGE.closeAttractionStrength;
                 p.vy += (dy / dist) * CHARGE.closeAttractionStrength;
+            }
+        }
+        if (secondWell) {
+            const wx = secondWell.x - p.x, wy = secondWell.y - p.y;
+            const wd = Math.max(12, Math.hypot(wx, wy));
+            if (wd < 170) {
+                const force = (1 - wd / 170) * .08;
+                p.vx += wx / wd * force - wy / wd * .012;
+                p.vy += wy / wd * force + wx / wd * .012;
             }
         }
         // SHOCKWAVE - pushes particles away from logo on enemy hit
@@ -1116,7 +1142,7 @@ function updateAndDrawSpiralEnemy() {
         console.log(`%c[GAME] Level DOWN: ${prevLevel} → ${upgradeLevel} (spiral hit, damage: ${damage})`, 'color: #ff4444; font-family: monospace;');
         // Update music level if changed
         if (upgradeLevel !== prevLevel) {
-            AudioSystem.setGameLevel(upgradeLevel);
+            AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel);
         }
         // Check for death
         if (upgradeLevel === 0) {
@@ -1975,6 +2001,7 @@ function drawCursor() {
 // MINI-BRIDGE SPAWN - Big Bang from Logo Center
 // ========================================
 function spawnMiniBridge() {
+    if (evolution) evolution.release(clock.now, centerX, centerY);
     // Nur spawnen wenn wir noch in einer gültigen Farbphase sind (0, 1, 2)
     if (currentColorPhase >= CHAMBER_COLORS_SEQUENCE.length) {
         return;
@@ -2049,7 +2076,7 @@ function spawnMiniBridge() {
         console.log(`%c[GAME] Level UP: ${prevLevel} → ${upgradeLevel} (colored discharge)`, 'color: #39ff14; font-family: monospace;');
         logoBaseScale += 0.18;
         AudioSystem.playLevelUp(upgradeLevel);
-        AudioSystem.setGameLevel(upgradeLevel); // Ambient passt sich an
+        AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel); // Ambient passt sich an
         AudioSystem.triggerSwell(2); // Epischer Swell bei Level-Up
         HapticManager.levelUp();
         // Start background music on first levelup (Roman I appears)
@@ -2075,6 +2102,11 @@ function spawnMiniBridge() {
 // Track hover state for bridges
 let hoveredBridgeIndex = -1;
 function drawFloatingBridges() {
+    if (evolution) {
+        hoveredBridgeIndex = drawProjectOrbits(ctx, floatingBridges, W, H, clock.now, mouseX, mouseY);
+        canvas.style.cursor = hoveredBridgeIndex >= 0 ? 'pointer' : 'none';
+        return;
+    }
     const time = clock.now / 1000;
     const logoX = W / 2;
     const logoY = H / 2;
@@ -2215,6 +2247,9 @@ function drawYouDied() {
     ctx.fill();
 }
 function getAvailableDischarge() {
+    if (evolution && coloredBridgePhaseComplete) {
+        return !youDiedActive && !modalShown && !gameCompleted && upgradeLevel < (postCreditsMode ? 20 : 10) && cursorEnergy >= MAX_ENERGY ? 'level' : null;
+    }
     return availableDischarge({
         blocked: youDiedActive || modalShown,
         tutorial: gamePhase === GAME_PHASE_TUTORIAL,
@@ -2233,7 +2268,7 @@ function drawDischargeCue() {
         return;
     drawDischargeLink(ctx, {
         coreX: centerX, coreY: centerY, cursorX, cursorY,
-        coreRadius: Math.min(W, H) * .08 * logoScale * logoBaseScale,
+        coreRadius: Math.min(W, H) * (evolution ? .10 : .08 * logoScale * logoBaseScale),
         time: clock.now,
         color: kind === 'color' ? CHAMBER_COLORS_SEQUENCE[currentColorPhase] : '#ffffff',
     });
@@ -2291,13 +2326,29 @@ function render() {
     const targetY = mouseY + pullY + mobileOffsetY;
     cursorX += (targetX - cursorX) * 0.25;
     cursorY += (targetY - cursorY) * 0.25;
+    if (evolution) {
+        const result = evolution.update(evolutionInput());
+        if (result.grazed) { cursorEnergy = Math.max(0, cursorEnergy - .18); AudioSystem.playRejectDischarge(); }
+        if (result.hit) { spawnShockwave(centerX, centerY, 1.4); AudioSystem.playSpiralDamage(); HapticManager.levelUp(); }
+        if (result.reward) {
+            for (let i = 0; i < 6; i++) {
+                const angle = i * Math.PI / 3;
+                ambientParticles.push({ x: result.reward.x + Math.cos(angle) * 18, y: result.reward.y + Math.sin(angle) * 18,
+                    vx: Math.cos(angle) * .6, vy: Math.sin(angle) * .6, size: 1.8, alpha: .9,
+                    twinkle: angle, absorbed: false, isSuperStar: false });
+            }
+            AudioSystem.playCollect(2);
+        }
+        if (result.died) { triggerYouDied(); return; }
+    }
     drawFloatingBridges();
     drawAmbientParticles();
-    updateAndDrawSpiralEnemy(); // Spiral enemy (affects stars)
+    if (evolution) evolution.draw(ctx, evolutionInput());
+    else updateAndDrawSpiralEnemy(); // Spiral enemy (affects stars)
     updateAndDrawSpiralExplosion(); // Orange explosion particles
     updateAndDrawShockwave(); // Red shockwave when enemy hits logo
     drawColoredParticles();
-    drawRedParticle();
+    if (!evolution) drawRedParticle();
     drawParticles();
     drawDischargeCue();
     drawLogo();
@@ -2317,6 +2368,7 @@ document.addEventListener('mousemove', (e) => {
 // Click auf Logo = ENERGIE EXPLOSION (nur wenn Threshold erreicht)
 document.addEventListener('click', (e) => {
     if (modalShown) return;
+    if (evolution && e.target instanceof Element && e.target.closest('button, a, details, summary')) return;
     // If YOU DIED is active, click resets to level 2
     if (youDiedActive) {
         resetFromYouDied();
@@ -2346,7 +2398,7 @@ document.addEventListener('click', (e) => {
         }
     }
     const dist = distFromLogo(clickX, clickY);
-    const logoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
+    const logoRadius = Math.min(W, H) * (evolution ? .13 : .22 * logoBaseScale);
     const exactCenterX = W / 2;
     const exactCenterY = H / 2;
     // Ripple immer
@@ -2358,6 +2410,11 @@ document.addEventListener('click', (e) => {
         hue: 0
     });
     const dischargeKind = getAvailableDischarge();
+    if (evolution && dist < logoRadius && !dischargeKind) {
+        evolution.lastReject = clock.now;
+        AudioSystem.playRejectDischarge();
+        return;
+    }
     // CHAMBER DISCHARGE: Only when ALL rings are FULL and ALL previous rings have been emitted
     // Check if UNLOCKED rings are full (not all 5)
     const unlockedRingsCount = getCurrentRings();
@@ -2383,6 +2440,7 @@ document.addEventListener('click', (e) => {
     ringsMax = tutorialRingsMax;
     ringsExpanded = tutorialRingsMax; // Tutorial allows immediate discharge
     if (dist < logoRadius && dischargeKind === 'tutorial') {
+        if (evolution) evolution.release(clock.now, centerX, centerY);
         // Start background music AFTER tutorial completes
         // Music only starts after colored phase begins (gamePhase != GAME_PHASE_TUTORIAL)
         // This is handled in the discharge logic when transitioning to GAME_PHASE_COLORED
@@ -2432,6 +2490,7 @@ document.addEventListener('click', (e) => {
     // Normal Mode: Discharge wenn Ringe voll UND Colored Phase abgeschlossen
     const currentLevelCap = postCreditsMode ? 20 : 10;
     if (dist < logoRadius && dischargeKind === 'level') {
+        if (evolution) evolution.release(clock.now, centerX, centerY);
         const prevLevel = upgradeLevel;
         // SIMPLIFIED: 1 red particle = 1 level, always
         // No special rules, no max stack bonus
@@ -2462,7 +2521,7 @@ document.addEventListener('click', (e) => {
         if (upgradeLevel > prevLevel) {
             clock.schedule(() => {
                 AudioSystem.playLevelUp(upgradeLevel);
-                AudioSystem.setGameLevel(upgradeLevel); // Ambient evolution
+                AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel); // Ambient evolution
                 HapticManager.levelUp();
             }, 150);
         }
@@ -2481,7 +2540,7 @@ document.addEventListener('click', (e) => {
         }
         // Start background music on first discharge
         if (!AudioSystem.bgMusicStarted) {
-            AudioSystem.setGameLevel(upgradeLevel);
+            AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel);
             AudioSystem.startBgMusic();
         }
         const intensity = cursorEnergy;
@@ -2490,7 +2549,7 @@ document.addEventListener('click', (e) => {
         ringsMax = 5 + upgradeLevel * 2;
         ringsExpanded = ringsMax; // Immediately mark as emitted to avoid blocking next discharge
         // Ring count based on level
-        const ringCount = ringsMax;
+        const ringCount = evolution ? 2 : ringsMax;
         for (let o = 0; o < ringCount; o++) {
             clock.schedule(() => {
                 logoOutlines.push({
@@ -2515,7 +2574,7 @@ document.addEventListener('click', (e) => {
             }
         }
         // Mehr farbige Partikel
-        const particleCount = Math.floor(50 + intensity * 80 + upgradeLevel * 12);
+        const particleCount = evolution ? 22 : Math.floor(50 + intensity * 80 + upgradeLevel * 12);
         for (let i = 0; i < particleCount; i++) {
             const angle = (i / particleCount) * Math.PI * 2;
             const speed = 6 + Math.random() * 12 * intensity;
@@ -2553,6 +2612,7 @@ document.addEventListener('click', (e) => {
 // Touch support
 document.addEventListener('touchstart', (e) => {
     if (modalShown) return;
+    if (evolution && e.target instanceof Element && e.target.closest('button, a, details, summary')) return;
     const touch = e.touches[0];
     mouseX = touch.clientX;
     mouseY = touch.clientY;
@@ -2572,6 +2632,7 @@ document.addEventListener('touchmove', (e) => {
 // Touch release = ENERGIE EXPLOSION (drag-and-release auf Mobile)
 document.addEventListener('touchend', (e) => {
     if (modalShown) return;
+    if (evolution && e.target instanceof Element && e.target.closest('button, a, details, summary')) { isTouching = false; return; }
     // WICHTIG: Der Cursor verwendet Interpolation (0.25) und "hinkt" der Zielposition hinterher.
     // Wir müssen die ZIEL-Position berechnen, nicht die interpolierte aktuelle Position!
     // Die Zielposition ist: mouseX/mouseY + offset (wenn mobile)
@@ -2605,7 +2666,7 @@ document.addEventListener('touchend', (e) => {
         }
         // DRAG-AND-RELEASE: Berechne wo der Cursor SEIN SOLLTE (mit Offset) beim Loslassen
         // Wir nutzen die ZIEL-Position, nicht die interpolierte aktuelle Position!
-        const logoRadius = Math.min(W, H) * 0.22 * logoBaseScale;
+        const logoRadius = Math.min(W, H) * (evolution ? .13 : .22 * logoBaseScale);
         const exactCenterX = W / 2;
         const exactCenterY = H / 2;
         const dxLogo = cursorTargetX - exactCenterX;
@@ -2671,7 +2732,7 @@ async function enableSound() {
     if (!wasEnabled)
         AudioSystem.playThanks();
     if (!AudioSystem.bgMusicStarted && gamePhase !== GAME_PHASE_TUTORIAL) {
-        AudioSystem.setGameLevel(upgradeLevel);
+        AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel);
         AudioSystem.startBgMusic();
     }
 }
@@ -2706,8 +2767,133 @@ soundToggleBtn?.addEventListener('touchend', (e) => {
     e.preventDefault();
     toggleSound();
 });
+function evolutionInput() {
+    return { now: clock.now, width: W, height: H, cursorX, cursorY, energy: cursorEnergy, ready: !!getAvailableDischarge(),
+        level: upgradeLevel, afterglow: postCreditsMode, tutorial: gamePhase === GAME_PHASE_TUTORIAL, completing: gameCompleted };
+}
+function beginEvolution(chapterId = 'awakening', skipTutorial = false) {
+    if (!evolution) return;
+    clock.clearTimers();
+    evolutionRest = null; evolutionPaused = false;
+    evolution.reset(clock.now);
+    const chapter = CHAPTERS.find(c => c.id === chapterId) || CHAPTERS[0];
+    upgradeLevel = chapter.from;
+    postCreditsMode = ['echo', 'tides', 'binary', 'harmony'].includes(chapter.id);
+    youDiedActive = gameCompleted = isInverted = false;
+    canvas.style.filter = '';
+    logoBaseScale = logoScale = logoTargetScale = 1;
+    logoGlow = logoBreathPhase = 0;
+    logoReadyForDischarge = false;
+    tutorialSubPhase = upgradeLevel > 0 || skipTutorial ? 2 : 0;
+    tutorialDischargeCount = tutorialSubPhase;
+    gamePhase = tutorialSubPhase === 2 ? GAME_PHASE_COLORED : GAME_PHASE_TUTORIAL;
+    currentColorPhase = upgradeLevel > 0 ? 3 : 0;
+    coloredBridgePhaseComplete = currentColorPhase === 3;
+    chamberActive = gamePhase !== GAME_PHASE_TUTORIAL && !coloredBridgePhaseComplete;
+    chamberParticles.length = coloredParticles.length = floatingBridges.length = 0;
+    ambientParticles.length = particles.length = ripples.length = logoOutlines.length = 0;
+    redStackCount = redParticleCatches = cursorEnergy = 0;
+    redParticle.active = redParticleActive = false;
+    coloredParticleSpawnTime = clock.now;
+    spiralEnemy.active = spiralEnemy.dying = false;
+    shockwave.active = false;
+    ringsMax = getCurrentRings(); ringsExpanded = ringsMax;
+    lastMouseMoveTime = clock.now; isIdle = false; isTouching = false;
+    cursorX = mouseX = W * .7; cursorY = mouseY = H * .55;
+    AudioSystem.setInvertedMode(false);
+    AudioSystem.setSpiralSuction(0);
+    AudioSystem.setChamberCrackling(0);
+    AudioSystem.setBridgeAttraction(0);
+    AudioSystem.setGameLevel(musicFor(upgradeLevel, postCreditsMode));
+    if (upgradeLevel > 0 && AudioSystem.ready && !AudioSystem.muted) AudioSystem.startBgMusic();
+    const reentry = document.getElementById('evolution-reentry'); if (reentry) reentry.hidden = true;
+    modalShown = false;
+    clock.setPaused(document.hidden);
+    seedAmbientParticles();
+    // The first light already responds within reach of the player's starting position.
+    if (chapterId === 'awakening') {
+        ambientParticles.slice(0, 16).forEach((p, i) => {
+            const angle = i * 2.4;
+            p.x = cursorX + Math.cos(angle) * (45 + i * 4);
+            p.y = cursorY + Math.sin(angle) * (45 + i * 4);
+            p.vx = p.vy = 0;
+        });
+    }
+    document.getElementById('pause-toggle')?.setAttribute('aria-pressed', 'false');
+}
+
+function pauseEvolution() {
+    modalShown = true;
+    clock.setPaused(true);
+    isTouching = false;
+    AudioSystem.setSpiralSuction(0);
+    AudioSystem.setChamberCrackling(0);
+    AudioSystem.setBridgeAttraction(0);
+}
+function openEvolutionRest(kind) {
+    pauseEvolution();
+    evolutionRest = { kind, started: null, elapsed: 0 };
+    const reentry = document.getElementById('evolution-reentry');
+    if (reentry) {
+        reentry.hidden = false;
+        reentry.setAttribute('aria-label', kind === 'loss' ? 'Begin a new attempt' : kind === 'final' ? 'Begin again' : 'Continue into the afterglow');
+        reentry.focus?.({ preventScroll: true });
+    }
+}
+function showEvolutionEnding(final) {
+    if (modalShown) return;
+    openEvolutionRest(final ? 'final' : 'success');
+    AudioSystem.playModalEnter();
+}
+function showEvolutionFailure() {
+    clock.clearTimers();
+    youDiedActive = true;
+    openEvolutionRest('loss');
+    AudioSystem.playYouDied();
+}
+function continueEvolution() {
+    if (!evolutionRest || evolutionRest.elapsed < 1000) return;
+    const kind = evolutionRest.kind;
+    beginEvolution(kind === 'success' ? 'echo' : 'awakening', kind === 'loss');
+}
+function drawEvolutionRest(timestamp) {
+    if (!evolutionRest) return;
+    if (evolutionRest.started === null) evolutionRest.started = timestamp;
+    evolutionRest.elapsed = timestamp - evolutionRest.started;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    for (const p of ambientParticles) {
+        ctx.fillStyle = `rgba(220,233,226,${Math.min(.22, p.alpha * .3)})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+    }
+    drawSettlement(ctx, W, H, evolutionRest.elapsed, evolutionRest.kind === 'loss');
+}
+function toggleEvolutionPause() {
+    if (!evolution || evolutionRest) return;
+    evolutionPaused = !evolutionPaused;
+    if (evolutionPaused) pauseEvolution();
+    else { modalShown = false; clock.setPaused(document.hidden); }
+    const button = document.getElementById('pause-toggle');
+    button?.setAttribute('aria-pressed', String(evolutionPaused));
+    button?.setAttribute('aria-label', evolutionPaused ? 'Resume game' : 'Pause game');
+}
+function initEvolution() {
+    if (!evolution) return;
+    beginEvolution();
+    document.getElementById('evolution-reentry')?.addEventListener('click', event => {
+        event.stopPropagation(); continueEvolution();
+    });
+    document.getElementById('pause-toggle')?.addEventListener('click', event => {
+        event.stopPropagation(); toggleEvolutionPause();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.repeat || event.target instanceof Element && event.target.closest('button')) return;
+        if (event.code === 'Escape' || event.code === 'KeyP') { event.preventDefault(); toggleEvolutionPause(); }
+    });
+    document.addEventListener('visibilitychange', () => clock.setPaused(modalShown || document.hidden));
+}
 function frame(timestamp) {
-    clock.advance(timestamp, render);
+    if (evolutionRest) drawEvolutionRest(timestamp);
+    else clock.advance(timestamp, render);
     requestAnimationFrame(frame);
 }
 // Init
@@ -2715,4 +2901,5 @@ resize();
 seedAmbientParticles();
 syncSoundUi();
 render();
+initEvolution();
 requestAnimationFrame(frame);

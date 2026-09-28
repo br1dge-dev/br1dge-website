@@ -6,11 +6,12 @@ import ts from 'typescript';
 import { availableDischarge, drawDischargeLink } from '../src/lib/game/discharge.ts';
 import { CHARGE } from '../src/lib/game/charge.ts';
 import { GameClock } from '../src/lib/game/clock.ts';
+import * as evolutionModule from '../src/lib/game/evolution.ts';
 import { spiralSpeedModifier } from '../src/lib/game/balance.ts';
 import * as constants from '../src/lib/game/types.ts';
 
 // Execute the real runtime with inert platform services; no production test hooks.
-function game(sourceFile = 'runtime.ts') {
+function game(sourceFile = 'runtime.ts', expansion = false) {
   class Element {
     style: Record<string, string> = {};
     textContent = '';
@@ -20,6 +21,7 @@ function game(sourceFile = 'runtime.ts') {
     addEventListener() {}
     setAttribute(name: string, value: string) { this.attributes.set(name, value); }
     getAttribute(name: string) { return this.attributes.get(name); }
+    closest() { return null; }
     remove() {}
     appendChild() {}
     querySelector() { return new Element(); }
@@ -28,6 +30,7 @@ function game(sourceFile = 'runtime.ts') {
   const context2d = new Proxy({}, { get: (_, key) => key === 'measureText' ? () => ({ width: 10 }) :
     key === 'createRadialGradient' || key === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {} });
   const canvas = Object.assign(new Element(), { getContext: () => context2d });
+  if (expansion) canvas.setAttribute('data-evolution', 'true');
   const elements = new Map<string, Element>([['canvas', canvas]]);
   const getElement = (id: string) => {
     if (!elements.has(id)) elements.set(id, new Element());
@@ -56,6 +59,7 @@ function game(sourceFile = 'runtime.ts') {
     require(path: string) {
       if (path.endsWith('/discharge')) return { availableDischarge, drawDischargeLink };
       if (path.endsWith('/charge')) return { CHARGE };
+      if (path.endsWith('/evolution')) return evolutionModule;
       if (path.endsWith('/clock')) return { GameClock };
       if (path.endsWith('/balance')) return { spiralSpeedModifier };
       if (path.endsWith('/types')) return constants;
@@ -236,3 +240,82 @@ for (const source of ['runtime.ts', 'accepted-preview.js']) {
     });
   }
 }
+
+
+test('expansion is opt-in: the accepted playtest keeps its existing rules', () => {
+  const run = game('accepted-preview.js');
+  assert.equal(run('evolution'), null);
+  assert.equal(run('clock.paused'), false);
+});
+
+test('expansion starts directly and chapter restart resets hazards, timers and damage', () => {
+  const run = game('accepted-preview.js', true);
+  assert.equal(run('clock.paused || modalShown'), false);
+  run(`beginEvolution('binary'); evolution.integrity = 1;
+    clock.schedule(() => { upgradeLevel = 20; }, 1);
+    beginEvolution('resonance'); clock.advance(0, () => {}); clock.advance(20, () => {});`);
+  assert.equal(run('upgradeLevel'), 2);
+  assert.equal(run('evolution.integrity'), 3);
+  assert.equal(run('postCreditsMode || youDiedActive || clock.paused'), false);
+});
+
+test('expansion requires full charge, progresses to success and freezes the field with music unmuted', () => {
+  const run = game('accepted-preview.js', true);
+  run(`beginEvolution('connection'); upgradeLevel = 9; cursorEnergy = .99;`);
+  assert.equal(run('getAvailableDischarge()'), null);
+  run('cursorEnergy = 1;');
+  assert.equal(run('getAvailableDischarge()'), 'level');
+  run(`for (const listener of listeners.click) {
+    if (listener !== initAudioOnInteraction) listener({clientX:centerX, clientY:centerY});
+  }
+  clock.advance(0, () => {}); clock.advance(4100, () => {});`);
+  assert.equal(run('upgradeLevel'), 10);
+  assert.equal(run('modalShown && clock.paused'), true);
+  assert.equal(run('audioStub.muted'), false);
+  const before = run('JSON.stringify(evolution.hazards)');
+  run('clock.advance(100000, render);');
+  assert.equal(run('JSON.stringify(evolution.hazards)'), before);
+  run(`beginEvolution('echo');`);
+  assert.equal(run('postCreditsMode && !clock.paused'), true);
+  assert.equal(run('upgradeLevel'), 10);
+});
+
+test('expansion failure clears pending success and retry skips only the tutorial', () => {
+  const run = game('accepted-preview.js', true);
+  run(`beginEvolution('tension'); evolution.integrity = 0;
+    clock.schedule(() => { showEvolutionEnding(false); }, 50);
+    showEvolutionFailure(); clock.advance(10000, render);`);
+  assert.equal(run('youDiedActive && clock.paused'), true);
+  run(`beginEvolution('awakening', true); clock.advance(0, () => {}); clock.advance(100, () => {});`);
+  assert.equal(run('gamePhase'), constants.GAME_PHASE_COLORED);
+  assert.equal(run('currentColorPhase'), 0);
+  assert.equal(run('evolution.integrity'), 3);
+  assert.equal(run('modalShown || youDiedActive || postCreditsMode'), false);
+});
+
+test('expansion reaches the wordless finale and keeps it paused', () => {
+  const run = game('accepted-preview.js', true);
+  run(`beginEvolution('binary'); upgradeLevel = 19; cursorEnergy = 1;
+    for (const listener of listeners.click) {
+      if (listener !== initAudioOnInteraction) listener({clientX:centerX, clientY:centerY});
+    }
+    clock.advance(0, () => {}); clock.advance(4100, () => {});`);
+  assert.equal(run('upgradeLevel'), 20);
+  assert.equal(run('evolutionRest.kind'), 'final');
+  assert.equal(run('document.getElementById("evolution-reentry").hidden'), false);
+  assert.equal(run('modalShown && clock.paused'), true);
+  assert.equal(run('audioStub.muted'), false);
+});
+
+
+test('settlement animates without advancing gameplay and ignores immediate reentry', () => {
+  const run = game('accepted-preview.js', true);
+  run("showEvolutionEnding(false); drawEvolutionRest(100); continueEvolution();");
+  assert.equal(run('evolutionRest.kind'), 'success');
+  const before = run('clock.now');
+  run('drawEvolutionRest(2200);');
+  assert.equal(run('clock.now'), before);
+  run('continueEvolution();');
+  assert.equal(run('evolutionRest'), null);
+  assert.equal(run('postCreditsMode && !clock.paused'), true);
+});
