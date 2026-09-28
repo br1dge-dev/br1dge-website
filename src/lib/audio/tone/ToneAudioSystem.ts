@@ -16,6 +16,12 @@ class ToneAudioSystemClass {
   private loopStartedInternal = false;
   private currentLevel = 0; // Track current level for startBgMusic()
 
+  /** Ready to play inside the page; browser-tab and system mute are separate. */
+  get ready(): boolean {
+    return this.initialized && EffectChain.initialized && SFXEngine.initialized
+      && Tone.getContext().state === 'running';
+  }
+
   // API compatibility properties (read-only getters)
   get bgMusicStarted(): boolean {
     return this.loopStartedInternal;
@@ -31,6 +37,7 @@ class ToneAudioSystemClass {
    * This is the most reliable way to unlock audio on mobile
    */
   private async unlockAudio(): Promise<void> {
+    if (Tone.getContext().state === 'running') return;
     // Prevent concurrent unlock attempts (causes polyphony issues)
     if (this.unlocking) return;
     this.unlocking = true;
@@ -101,7 +108,8 @@ class ToneAudioSystemClass {
       await withTimeout(MusicLoopSystem.init(), 5000);
       await withTimeout(SFXEngine.init(), 5000);
       
-      this.initialized = true;
+      this.initialized = EffectChain.initialized && SFXEngine.initialized;
+      EffectChain.setMuted(this.muted);
     } catch {
       // Silent fail
     }
