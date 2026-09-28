@@ -1,5 +1,43 @@
 # Übergabe für die nächste Codex-Sitzung
 
+## Aktuelle Ausbaustufe — 28. September 2026
+
+Christian hat nach der Konzeptbesprechung eine selbstständig ausgearbeitete,
+spielbare Ausbaustufe autorisiert. Die Wallet-/Presale-Anfrage gehörte in einen
+anderen Chat und ist hier ausdrücklich verworfen.
+
+- Neue lokale Vorschau: `/evolution`, vollständig ohne sichtbare Texte.
+- Nutzt dieselbe originalbasierte Runtime wie `/playtest`, mit explizitem Opt-in
+  am Canvas; kein kopierter zweiter Spielkern. Die bisherigen Regeln bleiben
+  auf `/playtest` aktiv. Die Hauptseite ist unverändert.
+- Ladungsabhängige Anziehung von trägen Gefahren, drei separate Strukturtreffer,
+  Ladungsverlust bei Cursor-Kontakt, Rückstoß beim Entladen.
+- Farbige Projekt-Symbole auf dünnen elliptischen Orbits um das Zentrum.
+- Symbolphasen statt sichtbarer Levelzahlen; die bestehenden Musikdateien
+  werden nach Phase zugeordnet.
+- Nachspiel mit Echo, Gezeiten und zweiter Gravitationsquelle. Keine
+  Kapitelauswahl: Regeln werden im laufenden Spiel vermittelt.
+- Kleine rote Gefahrenpunkte mit leichtem Glow; erste Verfolgung einzeln und langsam.
+  Ausweichen setzt Licht frei, Kontakt reißt Ladung ab.
+- Gameplay und Spielzeit pausieren bei Abschluss, Niederlage und manueller Pause;
+  Musik läuft weiter. Hintergrund-Tabs pausieren die Ausbaustufe ebenfalls.
+- Bewusste Variante: Nach den drei Farbphasen erfolgt Fortschritt über volle
+  Ladung; rote Herzen und Bildschirm-Inversion sind nur im bisherigen Playtest.
+- Regeln und Grenzen stehen in `docs/EVOLUTION.md`. Christian hat die reduzierte Gegnerdarstellung und Projekt-Orbits positiv
+  bewertet. Dieser Stand wird auf seinen Wunsch gesichert.
+
+Der vorherige gepushte Stand ist `1d50bb8`: organischer Partikelstrom und
+Pause während der Success Cards, einschließlich 29 erfolgreicher Tests.
+
+## Neueste Rückmeldung
+
+Christian möchte die sichtbare Progression wieder deutlicher: römische Zahlen
+über dem Symbol und stärkeres Anwachsen. Level 10 und Nachspiel bis 20 sind
+weiter implementiert, aber die Zahlen wurden in `/evolution` ausgeblendet.
+Die roten Herzen sind dort deaktiviert. Ein freiwilliger Power-Modus mit mehr
+Belohnung und zugleich mehr Gegnern ist als nächste Richtung im Gespräch,
+noch nicht umgesetzt. Zuerst wurde ausdrücklich Commit und Push angefordert.
+
 ## Einstieg
 
 Projekt in Codex: br1dge-website
@@ -51,7 +89,7 @@ Die nächste Sitzung beginnt mit Christians neuem Feedback/Auftrag.
 
 ## Verifikation und Grenzen
 
-25 Regressionstests, Astro check und Produktionsbuild vor Abschluss erneut
+45 Verhaltenstests, Astro check und Produktionsbuild vor Abschluss erneut
 prüfen. Prüfungen betreffen Logik, nicht eine Abnahme des Spielgefühls.
 Kein echter Mobilgeräte-/Haptik-Test und keine vollständige Endgame-Abnahme.
 Ältere Auditabschnitte beschreiben teils bereits zurückgenommene Zwischenstände;
