@@ -1,0 +1,2911 @@
+// Original-based playtest; targeted visual and modal-pause fixes only.
+import { GameClock } from './clock';
+import { GravityField, chapterFor, musicFor, chargePull, drawEvolvingBridge, drawSettlement, drawProjectOrbits, drawPowerRing, CHAPTERS } from './evolution';
+const clock = new GameClock();
+import { availableDischarge, drawDischargeLink } from '../game/discharge';
+import { CHARGE } from '../game/charge';
+// ========================================
+// IMPORTS FROM MODULAR LIBRARY
+// ========================================
+import { hexToRgba, colorToHue, desaturate } from '../utils/color';
+// New Tone.js audio system - immersive space ambient with SFX
+import { ToneAudioSystem as AudioSystem } from '../audio/tone';
+import { HapticManager } from '../haptics/HapticManager';
+import { GAME_PHASE_TUTORIAL, GAME_PHASE_COLORED, GAME_PHASE_COMPLETE, MAX_ENERGY, ENERGY_THRESHOLD, CHAMBER_THRESHOLD, CHAMBER_RADIUS, MAX_RED_STACK, IDLE_TIMEOUT, TUTORIAL_RINGS_PHASE0, TUTORIAL_RINGS_PHASE1, TUTORIAL_RINGS_PHASE2, TUTORIAL_TWITCH_INTENSITY, TUTORIAL_VIBRATE_INTENSITY, RINGS_PER_PHASE, CHAMBER_COLORS_SEQUENCE, COLOR_URLS } from '../game/types';
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const evolution = canvas.getAttribute('data-evolution') === 'true' ? new GravityField() : null;
+let evolutionRest = null;
+let evolutionPaused = false;
+// ========================================
+// INIT AUDIO ON FIRST INTERACTION
+// ========================================
+// CRITICAL for Mobile: Audio must be unlocked within user gesture context
+// We use a simple approach: try to init on EVERY touch/click until successful
+let audioInitialization = null;
+function syncSoundUi() {
+    if (AudioSystem.ready && !AudioSystem.muted)
+        hideSoundHint();
+    updateSoundIcons(!AudioSystem.ready || AudioSystem.muted);
+}
+function initAudioOnInteraction(event) {
+    // These controls handle their own activation on click/touchend. Activating
+    // on touchstart as well would turn the first tap into an unintended mute.
+    if (event?.target instanceof Element && event.target.closest('#sound-toggle, #sound-hint')) {
+        return Promise.resolve(false);
+    }
+    if (AudioSystem.ready) {
+        syncSoundUi();
+        return Promise.resolve(true);
+    }
+    if (audioInitialization)
+        return audioInitialization;
+    audioInitialization = (async () => {
+        try {
+            if (!AudioSystem.initialized)
+                await AudioSystem.init();
+            await AudioSystem.resume();
+            syncSoundUi();
+            return AudioSystem.ready;
+        }
+        catch {
+            // Keep the hint visible and allow the next gesture to retry.
+            return false;
+        }
+    })().finally(() => { audioInitialization = null; });
+    return audioInitialization;
+}
+// Capture gestures even when a UI control stops propagation. Never unmute here:
+// an explicit mute choice must survive ordinary game clicks and touches.
+document.addEventListener('click', initAudioOnInteraction, { capture: true });
+document.addEventListener('touchstart', initAudioOnInteraction, { capture: true, passive: true });
+document.addEventListener('touchend', initAudioOnInteraction, { capture: true, passive: true });
+// Pause/resume background music when tab visibility changes
+document.addEventListener('visibilitychange', () => {
+    // ToneAudioSystem handles this internally via mute state
+    if (document.hidden) {
+        // Mute when tab is hidden (if not already muted)
+        if (!AudioSystem.muted) {
+            AudioSystem.toggleMute();
+            // Mark that we auto-muted so we can auto-unmute
+            window.__autoMutedByVisibility = true;
+        }
+    }
+    else {
+        // Unmute when tab is visible again (only if we auto-muted)
+        if (window.__autoMutedByVisibility && AudioSystem.muted) {
+            AudioSystem.toggleMute();
+            window.__autoMutedByVisibility = false;
+        }
+    }
+});
+let W, H, centerX, centerY;
+let mouseX = 0, mouseY = 0;
+let cursorX = 0, cursorY = 0;
+// Referenzauflösung für auflösungsunabhängige Partikeldichte (1080p)
+const REFERENCE_WIDTH = 1920;
+const REFERENCE_HEIGHT = 1080;
+const REFERENCE_PARTICLES = 280;
+const REFERENCE_SPAWN_RATE = 0.65;
+// Mobile detection - global for access in callbacks
+let isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+const MOBILE_CURSOR_OFFSET_Y = -70; // Cursor appears above finger for visibility
+let isTouching = false; // Track if user is currently touching
+// Logo state
+let logoScale = 1;
+let logoTargetScale = 1;
+let logoBaseScale = 1; // Wächst permanent mit jedem Upgrade
+let logoGlow = 0;
+let upgradeLevel = 0; // Anzahl der Upgrades
+let logoBreathPhase = 0; // Für organisches Atmen
+// Logo Energie-Ringe (akkumulierte Energie-Releases)
+const logoOutlines = [];
+let ringsExpanded = 0; // Track how many rings have been emitted
+let ringsMax = 5; // Will be set based on upgradeLevel
+// Cursor energy (von Partikeln gesammelt)
+let cursorEnergy = 0;
+// ENERGY_THRESHOLD, MAX_ENERGY imported from ../lib/game/types
+// ========================================
+// GAME PHASE SYSTEM
+// ========================================
+// Tutorial Phase 0: Learn to charge (2 rings → minimal twitch → 3 rings → vibrate → colored)
+// Colored Phase 1-3: Orange -> Brown -> Green particles
+// Complete Phase 4: All done
+let gamePhase = 0;
+// GAME_PHASE_TUTORIAL, GAME_PHASE_COLORED, GAME_PHASE_COMPLETE imported
+// Tutorial sub-phases
+let tutorialSubPhase = 0;
+let tutorialDischargeCount = 0;
+// TUTORIAL_RINGS_PHASE0, TUTORIAL_RINGS_PHASE1, TUTORIAL_RINGS_PHASE2 imported
+// Tutorial vibration state
+let tutorialVibrationIntensity = 0;
+let tutorialVibrationTime = 0;
+// TUTORIAL_TWITCH_INTENSITY, TUTORIAL_VIBRATE_INTENSITY imported
+// Red particle state (legacy - now integrated into chamber)
+let redParticleActive = false;
+let redParticleSpawnTime = 0;
+let redParticleCatches = 0; // Wie oft gefangen in dieser Ladung
+let redStackCount = 0; // Gestackte red particles im inverted mode (max 6: 5 Ringe + Core)
+// MAX_RED_STACK imported from ../lib/game/types
+let isInverted = false;
+const redParticle = { x: 0, y: 0, vx: 0, vy: 0, active: false, phase: 0, turnTimer: 0 };
+// ========================================
+// CHAMBER SYSTEM - Gravitationsgefängnis
+// ========================================
+const chamberParticles = []; // Gefangene Partikel in der Kammer
+// CHAMBER_THRESHOLD, CHAMBER_RADIUS imported from ../lib/game/types
+// CHAMBER_COLORS_SEQUENCE, CHAMBER_COLORS, COLOR_URLS imported from ../lib/game/types
+// Current phase: 0 = orange, 1 = brown, 2 = green, 3 = complete
+let currentColorPhase = 0;
+// RINGS_PER_PHASE imported from ../lib/game/types
+// Get current rings based on game phase
+function getCurrentRings() {
+    if (gamePhase === GAME_PHASE_TUTORIAL) {
+        if (tutorialSubPhase === 0)
+            return TUTORIAL_RINGS_PHASE0;
+        if (tutorialSubPhase === 1)
+            return TUTORIAL_RINGS_PHASE1;
+        return TUTORIAL_RINGS_PHASE2;
+    }
+    if (gamePhase >= GAME_PHASE_COLORED && gamePhase < GAME_PHASE_COMPLETE) {
+        // currentColorPhase: 0=orange(3), 1=brown(4), 2=green(5), >=3=all done(5)
+        if (currentColorPhase >= 3)
+            return 5;
+        return RINGS_PER_PHASE[currentColorPhase];
+    }
+    return 5;
+}
+// Check if we should trigger tutorial progression
+function checkTutorialProgression() {
+    if (gamePhase !== GAME_PHASE_TUTORIAL)
+        return;
+    const rings = getCurrentRings();
+    const threshold = rings / 5;
+    // Idle drain can invalidate readiness; allow collecting again instead of latching.
+    if (cursorEnergy < threshold && logoReadyForDischarge) {
+        logoReadyForDischarge = false;
+        tutorialVibrationIntensity = 0;
+    }
+    if (cursorEnergy >= threshold && !logoReadyForDischarge) {
+        if (tutorialSubPhase === 0) {
+            logoReadyForDischarge = true;
+            tutorialVibrationTime = clock.now;
+            tutorialVibrationIntensity = TUTORIAL_TWITCH_INTENSITY;
+            AudioSystem.playModalEnter();
+        }
+        else if (tutorialSubPhase === 1) {
+            logoReadyForDischarge = true;
+            tutorialVibrationTime = clock.now;
+            tutorialVibrationIntensity = TUTORIAL_VIBRATE_INTENSITY;
+            AudioSystem.playLevelUp(1);
+        }
+    }
+}
+// Idle mode - cursor must move for progression
+let lastMouseMoveTime = clock.now;
+let isIdle = false;
+// IDLE_TIMEOUT imported from ../lib/game/types
+// Colored particles flying in space (to be caught)
+const coloredParticles = [];
+let coloredParticleSpawnTime = 0;
+// Floating Mini-Bridges (spawned from chamber)
+const floatingBridges = [];
+// Chamber state
+let chamberActive = false;
+let chamberSpawnPhase = 0;
+let prevCursorX = 0;
+let prevCursorY = 0;
+// Logo ready for discharge (vibration state)
+let logoReadyForDischarge = false;
+let logoVibrationTime = 0;
+// Hit flash effects
+let logoHitFlashTime = 0; // When logo gets hit, flash red
+let cursorHitFlashTime = 0; // When cursor kills enemy, flash blue
+// Phase tracking: colored bridges first, then red particles
+let coloredBridgePhaseComplete = false;
+// Game complete state (für Restart-Button nach Modal)
+let gameCompleted = false;
+// Post-credits mode: after first completion, harder gameplay
+let postCreditsMode = false;
+// You Died state
+let youDiedActive = false;
+// Particles
+const particles = [];
+// Ripples
+const ripples = [];
+// Ambient floating particles
+const ambientParticles = [];
+// === SPIRAL ENEMY ===
+// Invisible spiral that sucks in stars, moves toward logo
+// Only visible through gravitational effect on stars
+let spiralEnemy = {
+    active: false,
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    rotation: 0,
+    arms: 3, // 3-5 arms, varies per spawn
+    radius: 80, // gravitational influence radius
+    dying: false,
+    deathTime: 0,
+    deathProgress: 0,
+    consumedEnergy: 0, // Tracks how much energy/particles consumed -> increases speed
+    speedModifier: 1, // 1X, 2X, 4X, or 8X based on random roll
+    isSuper: false // Super enemies: 3x size, 2x speed, 3 dmg, chromatic abberation
+};
+let lastSpiralSpawnTime = 0;
+const SPIRAL_SPAWN_INTERVAL = 15000; // 15 seconds
+const SPIRAL_BASE_SPEED = 0.4; // Base movement speed
+const SPIRAL_MAX_SPEED = 1.5; // Max speed when fully fed
+const SPIRAL_FLEE_SPEED = 3.0;
+const SPIRAL_DEATH_DURATION = 3500;
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    centerX = W / 2;
+    centerY = H / 2;
+}
+// Distance from logo (Logo ist IMMER in der Mitte)
+function distFromLogo(x, y) {
+    const dx = x - centerX;
+    const dy = y - centerY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+// Modal für Level 10 - INVERTIERT (weiß), CLEAN, MINIMAL
+let modalShown = false;
+let modalCursorX = 0, modalCursorY = 0;
+let modalTargetX = 0, modalTargetY = 0;
+function closeModal(modal) {
+    // Audio: Modal close
+    AudioSystem.playModalClose();
+    // Reset gameCompleted so next modal can trigger
+    gameCompleted = false;
+    modal.style.opacity = '0';
+    setTimeout(() => {
+        modal.remove();
+        modalShown = false;
+        clock.setPaused(false);
+    }, 800);
+}
+function restartGame(modal) {
+    if (evolution) { beginEvolution('awakening'); return; }
+    // Reset game state
+    upgradeLevel = 0;
+    logoBaseScale = 1;
+    cursorEnergy = 0;
+    redParticleActive = false;
+    redParticleCatches = 0;
+    redStackCount = 0;
+    redParticle.active = false;
+    isInverted = false;
+    logoBreathPhase = 0;
+    gameCompleted = false;
+    // Chamber system reset
+    chamberParticles.length = 0;
+    chamberActive = false;
+    coloredParticles.length = 0;
+    floatingBridges.length = 0;
+    coloredBridgePhaseComplete = false;
+    currentColorPhase = 0;
+    logoReadyForDischarge = false;
+    seedAmbientParticles();
+    // Entferne Restart-Button falls vorhanden
+    const existingBtn = document.getElementById('restart-overlay-btn');
+    if (existingBtn)
+        existingBtn.remove();
+    if (modal)
+        closeModal(modal);
+}
+function showRestartButton() {
+    // Entferne vorherigen falls vorhanden
+    const existingBtn = document.getElementById('restart-overlay-btn');
+    if (existingBtn)
+        existingBtn.remove();
+    const btn = document.createElement('button');
+    btn.id = 'restart-overlay-btn';
+    btn.textContent = 'RESTART';
+    // Fester Offset unter dem Logo (Logo ist bei 50%, Button darunter)
+    const logoVisualSize = Math.min(W, H) * 0.18; // Basis-Logo-Größe ohne Scale
+    const buttonOffset = logoVisualSize + 60; // Unter dem Logo mit Abstand
+    btn.style.cssText = `
+          position: fixed;
+          left: 50%;
+          top: calc(50% + ${buttonOffset}px);
+          transform: translateX(-50%);
+          background: transparent;
+          border: 1px solid rgba(255,255,255,0.2);
+          color: rgba(255,255,255,0.4);
+          padding: 0.5rem 1.2rem;
+          font-size: 0.75rem;
+          cursor: none;
+          transition: all 0.3s;
+          letter-spacing: 0.15em;
+          font-family: "SF Pro Display", system-ui, sans-serif;
+          z-index: 9999;
+          opacity: 0;
+        `;
+    btn.addEventListener('mouseenter', () => {
+        btn.style.borderColor = 'rgba(255,255,255,0.5)';
+        btn.style.color = '#fff';
+    });
+    btn.addEventListener('mouseleave', () => {
+        btn.style.borderColor = 'rgba(255,255,255,0.2)';
+        btn.style.color = 'rgba(255,255,255,0.4)';
+    });
+    btn.addEventListener('click', () => restartGame(null));
+    document.body.appendChild(btn);
+    // Fade in
+    requestAnimationFrame(() => {
+        btn.style.opacity = '1';
+    });
+}
+function showSuperSuccessModal() {
+    if (evolution) { showEvolutionEnding(true); return; }
+    if (modalShown)
+        return;
+    modalShown = true;
+    clock.setPaused(true);
+    isTouching = false;
+    AudioSystem.setSpiralSuction(0);
+    AudioSystem.setChamberCrackling(0);
+    AudioSystem.setBridgeAttraction(0);
+    AudioSystem.playModalEnter();
+    HapticManager.modalEnter();
+    canvas.style.filter = '';
+    isInverted = false;
+    const modal = document.createElement('div');
+    modal.id = 'super-success-modal';
+    modal.style.cssText = `
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background: #fff; color: #000; display: flex; flex-direction: column;
+          justify-content: center; align-items: center; z-index: 1000;
+          font-family: "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+          opacity: 0; transition: opacity 2.5s ease;
+        `;
+    modal.innerHTML = `
+          <button id="close-btn" style="position: absolute; top: 1rem; right: 1rem; background: transparent; border: none; color: #000; font-size: 1.5rem; cursor: none; padding: 0.5rem; opacity: 0.4; transition: opacity 0.3s;">✕</button>
+          <div style="padding: 1rem; width: 100%; max-width: 400px; box-sizing: border-box; text-align: center;">
+            <div style="font-size: clamp(4rem, 15vw, 7rem); font-weight: 100; margin-bottom: 0.5rem; letter-spacing: -0.05em;">∩</div>
+            <h1 style="font-size: clamp(1.2rem, 5vw, 2rem); font-weight: 200; letter-spacing: 0.2em; text-transform: uppercase; margin: 0 0 1rem;">Wow, you are something</h1>
+            <p style="font-size: clamp(0.75rem, 3vw, 0.9rem); margin-bottom: 1.5rem; opacity: 0.5; font-weight: 300;">Send me a DM and tell me secret word "Labskaus".</p>
+            <div style="display: flex; gap: 0.8rem; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center;">
+              <a href="https://x.com/br1dge_eth" target="_blank" style="color: #000; text-decoration: none; font-size: clamp(0.75rem, 2.5vw, 0.9rem); padding: 0.6rem 1.2rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">X / TWITTER</a>
+              <a href="https://farcaster.xyz/br1dge" target="_blank" style="color: #000; text-decoration: none; font-size: clamp(0.75rem, 2.5vw, 0.9rem); padding: 0.6rem 1.2rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">FARCASTER</a>
+            </div>
+          </div>
+          <div id="modal-cursor" style="position: fixed; pointer-events: none; z-index: 1001;">
+            <div style="width: 6px; height: 6px; background: #000; border-radius: 50%;"></div>
+            <div style="position: absolute; top: -9px; left: -9px; width: 24px; height: 24px; border: 1px solid rgba(0,0,0,0.3); border-radius: 50%;"></div>
+          </div>
+        `;
+    document.body.appendChild(modal);
+    const modalCursor = document.getElementById('modal-cursor');
+    const closeBtn = modal.querySelector('#close-btn');
+    // Modal cursor tracking
+    modal.addEventListener('mousemove', (e) => {
+        modalTargetX = e.clientX;
+        modalTargetY = e.clientY;
+    });
+    // Animate modal cursor
+    function animateSuperModalCursor() {
+        if (!modalShown || !document.getElementById('super-success-modal'))
+            return;
+        modalCursorX += (modalTargetX - modalCursorX) * 0.2;
+        modalCursorY += (modalTargetY - modalCursorY) * 0.2;
+        if (modalCursor) {
+            modalCursor.style.left = (modalCursorX - 3) + 'px';
+            modalCursor.style.top = (modalCursorY - 3) + 'px';
+        }
+        requestAnimationFrame(animateSuperModalCursor);
+    }
+    animateSuperModalCursor();
+    // Close button
+    if (closeBtn) {
+        closeBtn.addEventListener('mouseenter', () => { closeBtn.style.opacity = '1'; });
+        closeBtn.addEventListener('mouseleave', () => { closeBtn.style.opacity = '0.4'; });
+        closeBtn.addEventListener('click', () => closeModal(modal));
+    }
+    requestAnimationFrame(() => { modal.style.opacity = '1'; });
+}
+function showModal() {
+    if (evolution) { showEvolutionEnding(false); return; }
+    if (modalShown)
+        return;
+    modalShown = true;
+    clock.setPaused(true);
+    isTouching = false;
+    AudioSystem.setSpiralSuction(0);
+    AudioSystem.setChamberCrackling(0);
+    AudioSystem.setBridgeAttraction(0);
+    // Audio & Haptic: Modal enter
+    AudioSystem.playModalEnter();
+    HapticManager.modalEnter();
+    // Inversion zurücksetzen für Modal
+    canvas.style.filter = '';
+    isInverted = false;
+    const modal = document.createElement('div');
+    modal.id = 'level10-modal';
+    modal.style.cssText = `
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background: #fff; color: #000; display: flex; flex-direction: column;
+          justify-content: center; align-items: center; z-index: 1000;
+          font-family: "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+          opacity: 0; transition: opacity 2.5s ease; cursor: none;
+        `;
+    modal.innerHTML = `
+          <button id="close-btn" style="position: absolute; top: 1rem; right: 1rem; background: transparent; border: none; color: #000; font-size: 1.5rem; cursor: none; padding: 0.5rem; opacity: 0.4; transition: opacity 0.3s;">✕</button>
+          
+          <div style="padding: 1rem; width: 100%; max-width: 400px; box-sizing: border-box; text-align: center;">
+            <div style="font-size: clamp(4rem, 15vw, 7rem); font-weight: 100; margin-bottom: 0.5rem; letter-spacing: -0.05em;">∩</div>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+              <h1 style="font-size: clamp(1.2rem, 5vw, 2rem); font-weight: 200; letter-spacing: 0.2em; text-transform: uppercase; margin: 0;">Congratulations</h1>
+              <button id="restart-btn" style="background: transparent; border: none; color: rgba(0,0,0,0.3); font-size: 0.9rem; cursor: none; transition: all 0.3s; font-family: inherit;" title="Restart">↻</button>
+            </div>
+            <p style="font-size: clamp(0.75rem, 3vw, 0.9rem); margin-bottom: 1.5rem; opacity: 0.5; font-weight: 300; padding: 0 0.5rem;">You made it this far, we're basically friends now. Drop a follow and share your experience.</p>
+            
+            <div style="display: flex; gap: 0.8rem; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center;">
+              <a href="https://x.com/br1dge_eth" target="_blank" class="modal-link" style="color: #000; text-decoration: none; font-size: clamp(0.75rem, 2.5vw, 0.9rem); padding: 0.6rem 1.2rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">X / TWITTER</a>
+              <a href="https://farcaster.xyz/br1dge" target="_blank" class="modal-link" style="color: #000; text-decoration: none; font-size: clamp(0.75rem, 2.5vw, 0.9rem); padding: 0.6rem 1.2rem; border: 1px solid rgba(0,0,0,0.2); transition: all 0.3s; letter-spacing: 0.1em;">FARCASTER</a>
+            </div>
+            
+            <details id="projects-details" style="width: 100%; max-width: 320px; margin: 0 auto 1.5rem;">
+            <summary style="font-size: 0.7rem; font-weight: 400; letter-spacing: 0.2em; opacity: 0.5; text-transform: uppercase; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+              <span>Projects</span>
+              <span class="arrow" style="transition: transform 0.2s;">▼</span>
+            </summary>
+            <div style="margin-top: 1rem;">
+              <a href="https://birth.br1dge.xyz/" target="_blank" class="project-link" style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); text-decoration: none; color: #000;">
+                <span style="color: #ff6b35; font-size: 1rem; font-weight: bold;">∩</span>
+                <div style="flex: 1; text-align: left;"><div style="font-size: 0.8rem; font-weight: 500;">Birth</div><div style="font-size: 0.65rem; opacity: 0.5;">A simplistic info card</div></div>
+                <span style="opacity: 0.3;">→</span>
+              </a>
+              <a href="https://sword.br1dge.xyz/" target="_blank" class="project-link" style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); text-decoration: none; color: #000;">
+                <span style="color: #39ff14; font-size: 1rem; font-weight: bold;">∩</span>
+                <div style="flex: 1; text-align: left;"><div style="font-size: 0.8rem; font-weight: 500;">GR1FTSWORD</div><div style="font-size: 0.65rem; opacity: 0.5;">An ASCII music crypto art project</div></div>
+                <span style="opacity: 0.3;">→</span>
+              </a>
+              <a href="https://wocl.br1dge.xyz/" target="_blank" class="project-link" style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; text-decoration: none; color: #000;">
+                <span style="color: #d4a574; font-size: 1rem; font-weight: bold;">∩</span>
+                <div style="flex: 1; text-align: left;"><div style="font-size: 0.8rem; font-weight: 500;">Word of Choice</div><div style="font-size: 0.65rem; opacity: 0.5;">Express yourself onchain</div></div>
+                <span style="opacity: 0.3;">→</span>
+              </a>
+            </div>
+           </details>
+
+           <!-- Credits -->
+           <p style="font-size: 0.7rem; opacity: 0.4; font-weight: 300; text-align: center; max-width: 280px; line-height: 1.6; margin: 0 auto 1.5rem;">Kudos to Switch Angel for the awesome track! Make sure to <a href="https://www.youtube.com/watch?v=hFSwWzxrqUA" target="_blank" style="color: #000; text-decoration: underline;">subscribe to her channel</a> →</p>
+
+           <!-- Continue... Button -->
+           <a href="#" id="continue-btn" style="display: block; text-align: center; width: 100%; max-width: 320px; margin: 0 auto 1.5rem; padding: 0.6rem 1.2rem; background: transparent; border: 1px solid rgba(0,0,0,0.2); color: rgba(0,0,0,0.3); font-size: 0.75rem; text-decoration: none; cursor: none; transition: all 0.3s; font-family: inherit; letter-spacing: 0.1em; box-sizing: border-box;">Continue...?</a>
+
+           </div>
+
+           <div id="modal-cursor" style="position: fixed; pointer-events: none; z-index: 1001;">
+            <div style="width: 6px; height: 6px; background: #000; border-radius: 50%;"></div>
+            <div style="position: absolute; top: -9px; left: -9px; width: 24px; height: 24px; border: 1px solid rgba(0,0,0,0.3); border-radius: 50%;"></div>
+          </div>
+          
+          <style>
+            details[open] .arrow { transform: rotate(180deg); }
+            .project-link:hover { background: rgba(0,0,0,0.03); }
+          </style>
+        `;
+    document.body.appendChild(modal);
+    const modalCursor = document.getElementById('modal-cursor');
+    const closeBtn = document.getElementById('close-btn');
+    const restartBtn = document.getElementById('restart-btn');
+    // Modal cursor tracking
+    modal.addEventListener('mousemove', (e) => {
+        modalTargetX = e.clientX;
+        modalTargetY = e.clientY;
+    });
+    // Animate modal cursor
+    function animateModalCursor() {
+        if (!modalShown)
+            return;
+        modalCursorX += (modalTargetX - modalCursorX) * 0.2;
+        modalCursorY += (modalTargetY - modalCursorY) * 0.2;
+        if (modalCursor) {
+            modalCursor.style.left = (modalCursorX - 3) + 'px';
+            modalCursor.style.top = (modalCursorY - 3) + 'px';
+        }
+        requestAnimationFrame(animateModalCursor);
+    }
+    animateModalCursor();
+    // Close button
+    if (closeBtn) {
+        closeBtn.addEventListener('mouseenter', () => { closeBtn.style.opacity = '1'; });
+        closeBtn.addEventListener('mouseleave', () => { closeBtn.style.opacity = '0.4'; });
+        closeBtn.addEventListener('click', () => closeModal(modal));
+    }
+    // Hover-Effekte für Links
+    modal.querySelectorAll('.modal-link').forEach(link => {
+        link.addEventListener('mouseenter', () => {
+            link.style.background = 'rgba(0,0,0,0.05)';
+            link.style.borderColor = '#000';
+        });
+        link.addEventListener('mouseleave', () => {
+            link.style.background = 'transparent';
+            link.style.borderColor = 'rgba(0,0,0,0.2)';
+        });
+    });
+    // Restart button
+    if (restartBtn) {
+        restartBtn.addEventListener('mouseenter', () => {
+            restartBtn.style.borderColor = 'rgba(0,0,0,0.4)';
+            restartBtn.style.color = '#000';
+        });
+        restartBtn.addEventListener('mouseleave', () => {
+            restartBtn.style.borderColor = 'rgba(0,0,0,0.15)';
+            restartBtn.style.color = 'rgba(0,0,0,0.4)';
+        });
+        restartBtn.addEventListener('click', () => restartGame(modal));
+    }
+    // Continue button
+    const continueBtn = document.getElementById('continue-btn');
+    if (continueBtn) {
+        continueBtn.addEventListener('mouseenter', () => {
+            continueBtn.style.borderColor = 'rgba(0,0,0,0.4)';
+            continueBtn.style.color = '#000';
+        });
+        continueBtn.addEventListener('mouseleave', () => {
+            continueBtn.style.borderColor = 'rgba(0,0,0,0.2)';
+            continueBtn.style.color = 'rgba(0,0,0,0.3)';
+        });
+        continueBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            postCreditsMode = true;
+            closeModal(modal);
+        });
+        continueBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            postCreditsMode = true;
+            closeModal(modal);
+        });
+    }
+    // Fade in
+    requestAnimationFrame(() => {
+        modal.style.opacity = '1';
+    });
+}
+// 2026 Minimal Background - Clean, Dark, Sophisticated
+// Trigger YOU DIED screen
+function triggerYouDied() {
+    if (evolution) { showEvolutionFailure(); return; }
+    youDiedActive = true;
+    spiralEnemy.active = false;
+    spiralEnemy.dying = false;
+    // Stop ambient music and play melancholic chord
+    AudioSystem.stopBgMusic();
+    AudioSystem.playYouDied();
+}
+// Reset from YOU DIED
+function resetFromYouDied() {
+    if (evolution) { beginEvolution('awakening', true); return; }
+    youDiedActive = false;
+    // Reset to post-tutorial state at level 2
+    upgradeLevel = 2;
+    logoBaseScale = 1.2;
+    cursorEnergy = 0;
+    redParticleActive = false;
+    redParticleCatches = 0;
+    redStackCount = 0;
+    redParticle.active = false;
+    isInverted = false;
+    logoBreathPhase = 0;
+    gameCompleted = false;
+    // Chamber system reset
+    chamberParticles.length = 0;
+    chamberActive = false;
+    coloredParticles.length = 0;
+    floatingBridges.length = 0;
+    coloredBridgePhaseComplete = false;
+    currentColorPhase = 0;
+    logoReadyForDischarge = false;
+    // Restart ambient - only after tutorial phase
+    if (gamePhase !== GAME_PHASE_TUTORIAL) {
+        AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel);
+        AudioSystem.startBgMusic();
+    }
+}
+function drawGrid() {
+    const time = clock.now / 1000;
+    // Pure black with subtle depth
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, W, H);
+    // Sehr subtiler radialer Gradient - kaum sichtbar
+    const subtleGradient = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
+    subtleGradient.addColorStop(0, 'rgba(20, 20, 25, 0.5)');
+    subtleGradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = subtleGradient;
+    ctx.fillRect(0, 0, W, H);
+    // Minimales Dot-Grid statt Linien (moderner)
+    const dotSpacing = 80;
+    const dotSize = 1;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+    for (let x = dotSpacing; x < W; x += dotSpacing) {
+        for (let y = dotSpacing; y < H; y += dotSpacing) {
+            ctx.beginPath();
+            ctx.arc(x, y, dotSize, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    // Subtile vertikale Linien (sehr dünn, sehr transparent)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.015)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 200) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
+        ctx.stroke();
+    }
+}
+// Draw the logo - CLEAN, MINIMAL, ALWAYS CENTERED + VIBRATION
+function drawLogo() {
+    if (evolution) {
+        drawEvolvingBridge(ctx, evolutionInput(), evolution);
+        logoOutlines.length = 0;
+        return;
+    }
+    const time = clock.now / 1000;
+    // Feste Basis-Schriftgröße - Skalierung nur über ctx.scale()
+    const baseLogoSize = Math.min(W, H) * 0.32;
+    logoScale += (logoTargetScale - logoScale) * 0.12;
+    logoGlow *= 0.9;
+    // Organisches Atmen - mehrere überlagerte Sinuswellen für natürlichen Rhythmus
+    logoBreathPhase += 0.008; // Langsamer
+    const breath1 = Math.sin(logoBreathPhase) * 0.008; // Hauptatmung
+    const breath2 = Math.sin(logoBreathPhase * 1.7) * 0.003; // Sekundär
+    const breath3 = Math.sin(logoBreathPhase * 0.5) * 0.005; // Langwelle
+    const breathScale = 1 + breath1 + breath2 + breath3;
+    // Gesamtskalierung: Base + Upgrades + Breath + Animation
+    const totalScale = logoBaseScale * logoScale * breathScale;
+    const exactCenterX = W / 2;
+    const exactCenterY = H / 2;
+    // Vibration wenn ready for discharge (colored OR tutorial)
+    let vibrationX = 0, vibrationY = 0;
+    let vibIntensity = 0;
+    if (logoReadyForDischarge) {
+        // Check if tutorial mode (subtle twitch) or colored mode (full vibration)
+        if (gamePhase === GAME_PHASE_TUTORIAL && tutorialSubPhase < 2) {
+            // Tutorial: subtle twitch based on tutorialVibrationIntensity
+            const vibTime = (clock.now - tutorialVibrationTime) / 1000;
+            vibIntensity = tutorialVibrationIntensity * Math.sin(vibTime * 15) * Math.min(1, vibTime * 2);
+        }
+        else {
+            // Regular colored particle mode: full vibration
+            const vibTime = (clock.now - logoVibrationTime) / 1000;
+            vibIntensity = Math.min(1, vibTime * 2) * 1.5;
+        }
+        vibrationX = Math.sin(clock.now / 16) * vibIntensity;
+        vibrationY = Math.cos(clock.now / 14) * vibIntensity * 0.7;
+    }
+    ctx.save();
+    ctx.translate(exactCenterX + vibrationX, exactCenterY + vibrationY);
+    ctx.scale(totalScale, totalScale);
+    // Feste Schriftgröße - Skalierung passiert über ctx.scale()
+    ctx.font = `200 ${baseLogoSize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Chromatic Aberration - sichtbar, ab Level 5 nur noch geringe Verstärkung
+    if (upgradeLevel > 0) {
+        // Offset: Level 1-4 gentle growth, level 5+ very subtle
+        // Ab Level 9-10: kaum noch sichtbar (kaum Phasenverschiebung)
+        let offset;
+        if (upgradeLevel <= 4) {
+            offset = 1.5 + upgradeLevel * 0.6; // 1.5-3.9px
+        }
+        else if (upgradeLevel <= 8) {
+            offset = 3.9 + (upgradeLevel - 4) * 0.02; // 3.9-4.3px
+        }
+        else {
+            // Level 9-10: minimal - kaum Phasenverschiebung
+            offset = 1.5 + (upgradeLevel - 8) * 0.3; // 1.5-2.1px
+        }
+        const effectiveOffset = offset;
+        // Alpha: very subtle, level 9-10 minimal
+        let alphaBase;
+        if (upgradeLevel <= 4) {
+            alphaBase = 0.08 + upgradeLevel * 0.025; // 0.08-0.18
+        }
+        else if (upgradeLevel <= 8) {
+            alphaBase = 0.18 + (upgradeLevel - 4) * 0.004; // 0.18-0.20
+        }
+        else {
+            // Level 9-10: fast nicht mehr sichtbar
+            alphaBase = 0.06 + (upgradeLevel - 8) * 0.02; // 0.06-0.08
+        }
+        // Single layer - cleaner look
+        ctx.globalAlpha = alphaBase;
+        ctx.fillStyle = '#ff0066';
+        ctx.fillText('∩', -effectiveOffset, 0);
+        ctx.fillStyle = '#00ffff';
+        ctx.fillText('∩', effectiveOffset, 0);
+        ctx.globalAlpha = 1;
+    }
+    // Haupt-Symbol - weiß (or red flash if hit)
+    const hitFlashDuration = 200; // 200ms flash
+    const timeSinceHit = clock.now - logoHitFlashTime;
+    if (timeSinceHit < hitFlashDuration) {
+        // Red flash when hit by enemy
+        const flashIntensity = 1 - (timeSinceHit / hitFlashDuration);
+        ctx.fillStyle = `rgb(255, ${Math.floor(255 * (1 - flashIntensity))}, ${Math.floor(255 * (1 - flashIntensity))})`;
+    }
+    else {
+        ctx.fillStyle = '#ffffff';
+    }
+    ctx.fillText('∩', 0, 0);
+    ctx.restore(); // Ende Logo-Transform
+    // Römische Ziffer über dem Logo (mit Vibration wenn Logo vibriert)
+    ctx.save();
+    // Array: Index 1 = "I" (Level 1), Index 10 = "X" (Level 10), etc.
+    const romanNumerals = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+    const levelIdx = Math.max(0, Math.min(20, upgradeLevel));
+    const romanLevel = romanNumerals[levelIdx];
+    // Nur zeichnen wenn Level > 0
+    if (upgradeLevel > 0) {
+        // Größe proportional zum baseLogoSize (nicht zur skalierten Größe)
+        const levelDisplaySize = baseLogoSize * 0.10;
+        // Position: fester Abstand über dem Logo (unabhängig von logoBaseScale)
+        const levelX = (W / 2) + vibrationX;
+        const levelY = (H / 2) - (baseLogoSize * 0.55) + vibrationY;
+        // Filigran, dünn, dezent - wie Modal-Style
+        ctx.font = `200 ${levelDisplaySize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(romanLevel, levelX, levelY);
+    }
+    ctx.restore();
+    // Expanding Rings bei Entladung - mit Farbe (immer zentriert)
+    for (let i = logoOutlines.length - 1; i >= 0; i--) {
+        const outline = logoOutlines[i];
+        outline.alpha *= 0.96;
+        outline.radius = (outline.radius || 10) + 5;
+        if (outline.alpha < 0.01) {
+            logoOutlines.splice(i, 1);
+            continue;
+        }
+        ctx.beginPath();
+        // Ringe skalieren mit logoBaseScale für konsistente Größe
+        ctx.arc(exactCenterX, exactCenterY, outline.radius * logoBaseScale, 0, Math.PI * 2);
+        ctx.strokeStyle = outline.hue !== undefined
+            ? `hsla(${outline.hue}, 100%, 70%, ${outline.alpha})`
+            : `rgba(255, 255, 255, ${outline.alpha})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+}
+// Draw particles - CLEAN
+function drawParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.life -= 0.02;
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+            continue;
+        }
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+        ctx.fillStyle = p.hue
+            ? `hsla(${p.hue}, 100%, 70%, ${p.life})`
+            : `rgba(255, 255, 255, ${p.life})`;
+        ctx.fill();
+    }
+}
+// Auflösungsunabhängige Partikel-Parameter berechnen
+function getScaledParticleParams() {
+    const referenceArea = REFERENCE_WIDTH * REFERENCE_HEIGHT;
+    const currentArea = W * H;
+    const scaleFactor = currentArea / referenceArea;
+    // Partikelanzahl proportional zur Fläche skalieren
+    const maxParticles = Math.round(REFERENCE_PARTICLES * scaleFactor);
+    // Spawn-Rate skalieren: Bei mehr Partikeln schneller spawnen
+    // sqrt verhindert übermäßig hohe Werte, Max 0.95 für Performance
+    const spawnRate = Math.min(0.95, REFERENCE_SPAWN_RATE * Math.sqrt(scaleFactor));
+    return { maxParticles, spawnRate };
+}
+// Ambient floating particles - CURSOR Gravitation
+function spawnAmbientParticle() {
+    let x, y, vx, vy;
+    // Einfache gleichmäßige Verteilung über gesamten Bildschirm
+    // Kein Polar, kein Rechteck-Grid - einfach random mit Jitter
+    const rand = Math.random();
+    if (rand < 0.2) {
+        // 20% von Rändern - für kontinuierlichen Nachschub
+        const edge = Math.floor(Math.random() * 4);
+        switch (edge) {
+            case 0:
+                x = Math.random() * W;
+                y = -10;
+                break;
+            case 1:
+                x = W + 10;
+                y = Math.random() * H;
+                break;
+            case 2:
+                x = Math.random() * W;
+                y = H + 10;
+                break;
+            default:
+                x = -10;
+                y = Math.random() * H;
+        }
+        // Sanfter Drift zur Mitte
+        const centerX = W / 2, centerY = H / 2;
+        const dx = centerX - x, dy = centerY - y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        vx = (dx / dist) * (0.3 + Math.random() * 0.3);
+        vy = (dy / dist) * (0.3 + Math.random() * 0.3);
+    }
+    else {
+        // 80% überall im Bildschirm - komplett zufällig
+        // Nutze Gaussian-ähnliche Verteilung für natürlicheren Look
+        // Box-Muller für weichere Verteilung
+        const u1 = Math.random();
+        const u2 = Math.random();
+        const gaussian1 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        const gaussian2 = Math.sqrt(-2 * Math.log(u1)) * Math.sin(2 * Math.PI * u2);
+        // Zentriert mit Standardabweichung ~0.35 der Bildschirmgröße
+        x = W / 2 + gaussian1 * W * 0.35;
+        y = H / 2 + gaussian2 * H * 0.35;
+        // Clamp auf sichtbaren Bereich mit etwas Rand
+        x = Math.max(20, Math.min(W - 20, x));
+        y = Math.max(20, Math.min(H - 20, y));
+        // Sehr langsame zufällige Drift
+        const driftAngle = Math.random() * Math.PI * 2;
+        const driftSpeed = 0.05 + Math.random() * 0.15;
+        vx = Math.cos(driftAngle) * driftSpeed;
+        vy = Math.sin(driftAngle) * driftSpeed;
+    }
+    // 5% chance for a brighter super star; its energy bonus is configured in CHARGE.
+    const isSuperStar = Math.random() < 0.05;
+    ambientParticles.push({
+        x, y, vx, vy,
+        size: isSuperStar ? 2.5 + Math.random() * 1.0 : 0.8 + Math.random() * 1.2,
+        alpha: isSuperStar ? 0.85 + Math.random() * 0.15 : 0.30 + Math.random() * 0.30,
+        twinkle: Math.random() * Math.PI * 2,
+        absorbed: false,
+        isSuperStar: isSuperStar
+    });
+}
+function seedAmbientParticles() {
+    const count = Math.min(CHARGE.startingParticles, getScaledParticleParams().maxParticles);
+    while (ambientParticles.length < count)
+        spawnAmbientParticle();
+}
+function drawAmbientParticles() {
+    const time = clock.now / 1000;
+    const fieldChapter = evolution ? chapterFor(upgradeLevel, postCreditsMode).id : '';
+    const tideStrength = evolution ? evolution.tide(clock.now, fieldChapter === 'tides') : 1;
+    const secondWell = evolution && fieldChapter === 'binary' ? evolution.well(W, H, clock.now) : null;
+    // Partikel spawnen - auflösungsunabhängige Dichte
+    const { maxParticles, spawnRate } = getScaledParticleParams();
+    if (ambientParticles.length < maxParticles && Math.random() < spawnRate) {
+        spawnAmbientParticle();
+    }
+    // Draw and update particles
+    for (let i = ambientParticles.length - 1; i >= 0; i--) {
+        const p = ambientParticles[i];
+        // CURSOR Gravitation - STÄRKER
+        const dx = cursorX - p.x;
+        const dy = cursorY - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const gravityRadius = CHARGE.attractionRadius * (evolution ? .75 + .65 * chargePull(cursorEnergy) : 1); // Größere Reichweite
+        if (dist < gravityRadius && dist > 8) {
+            // Gravitation: quadratisch stärker je näher
+            const normalizedDist = dist / gravityRadius;
+            const pullStrength = Math.pow(1 - normalizedDist, 2) * CHARGE.attractionStrength * (evolution ? (1 + chargePull(cursorEnergy)) * (evolution.powerActive(clock.now) ? 1.6 : 1) : 1) * tideStrength;
+            p.vx += (dx / dist) * pullStrength;
+            p.vy += (dy / dist) * pullStrength;
+            // Partikel beschleunigt sichtbar zum Cursor
+            if (dist < 100) {
+                p.vx += (dx / dist) * CHARGE.closeAttractionStrength;
+                p.vy += (dy / dist) * CHARGE.closeAttractionStrength;
+            }
+        }
+        if (secondWell) {
+            const wx = secondWell.x - p.x, wy = secondWell.y - p.y;
+            const wd = Math.max(12, Math.hypot(wx, wy));
+            if (wd < 170) {
+                const force = (1 - wd / 170) * .08;
+                p.vx += wx / wd * force - wy / wd * .012;
+                p.vy += wy / wd * force + wx / wd * .012;
+            }
+        }
+        // SHOCKWAVE - pushes particles away from logo on enemy hit
+        if (shockwave.active) {
+            const swDx = p.x - shockwave.x;
+            const swDy = p.y - shockwave.y;
+            const swDist = Math.sqrt(swDx * swDx + swDy * swDy);
+            // Particles within the expanding ring get pushed
+            const distFromWave = swDist - shockwave.radius;
+            if (Math.abs(distFromWave) < 80 && swDist > 10) {
+                const pushStrength = shockwave.strength * (1 - swDist / shockwave.maxRadius) * 0.8;
+                p.vx += (swDx / swDist) * pushStrength;
+                p.vy += (swDy / swDist) * pushStrength;
+            }
+        }
+        // Partikel wird vom Cursor absorbiert - nur wenn nicht voll, nicht idle, und nicht im Tutorial-Warte-Modus
+        if (dist < CHARGE.captureRadius && !p.absorbed && cursorEnergy < MAX_ENERGY && !isIdle && !(gamePhase === GAME_PHASE_TUTORIAL && logoReadyForDischarge)) {
+            p.absorbed = true;
+            const prevEnergy = cursorEnergy;
+            // Every normal star gives visible progress; no slower tutorial phase.
+            const energyGain = CHARGE.energyPerStar * (evolution?.powerActive(clock.now) ? 2 : 1) * (p.isSuperStar ? CHARGE.superStarMultiplier : 1);
+            cursorEnergy = Math.min(MAX_ENERGY, cursorEnergy + energyGain);
+            p.alpha *= 0.2;
+            // Audio & Haptic: Super star has special sound, normal stars throttled
+            if (p.isSuperStar) {
+                AudioSystem.playSuperStarCollect();
+                HapticManager.levelUp(); // Stronger haptic for super star
+            }
+            else if (Math.floor(cursorEnergy * 25) > Math.floor(prevEnergy * 25)) {
+                AudioSystem.playCollect(Math.floor(cursorEnergy * 5));
+                HapticManager.collect();
+            }
+            // Wenn gerade voll geworden UND alle Farbphasen abgeschlossen, Red Particle spawnen
+            if (cursorEnergy >= MAX_ENERGY && !redParticle.active && !redParticleActive && coloredBridgePhaseComplete) {
+                redParticleSpawnTime = clock.now + 2000; // 2 Sekunden warten
+                redParticleActive = true;
+            }
+        }
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.985;
+        p.vy *= 0.985;
+        p.twinkle += 0.05;
+        if (p.absorbed) {
+            p.alpha *= 0.8;
+        }
+        // Remove
+        if (p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50 || p.alpha < 0.01) {
+            ambientParticles.splice(i, 1);
+            continue;
+        }
+        const twinkleAlpha = p.alpha * (0.7 + Math.sin(p.twinkle) * 0.3);
+        // Cleaner look - nur weiß mit Intensitätsvariation
+        let alpha = twinkleAlpha;
+        if (dist < gravityRadius && !p.absorbed) {
+            // Heller wenn nah am Cursor
+            alpha = twinkleAlpha * (1 + (1 - dist / gravityRadius) * 0.5);
+        }
+        // Super stars: slightly brighter with faster twinkle
+        if (p.isSuperStar && !p.absorbed) {
+            // Faster, more intense twinkle for sparkle effect
+            const sparkle = 0.85 + Math.sin(p.twinkle * 3) * 0.15;
+            const superAlpha = Math.min(1, alpha * 1.25 * sparkle);
+            // Subtle soft glow (not voluminous)
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * 1.4, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${superAlpha * 0.25})`;
+            ctx.fill();
+            // Bright core
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${superAlpha})`;
+            ctx.fill();
+        }
+        else {
+            // Normal star
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * (p.absorbed ? 0.3 : 1), 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, alpha)})`;
+            ctx.fill();
+        }
+    }
+}
+// === SPIRAL ENEMY LOGIC ===
+function updateAndDrawSpiralEnemy() {
+    const now = clock.now;
+    // Only spawn after tutorial phase
+    if (gamePhase === GAME_PHASE_TUTORIAL) {
+        lastSpiralSpawnTime = now;
+        return;
+    }
+    // Spawn new spiral every 15 seconds if none active
+    if (!spiralEnemy.active && now - lastSpiralSpawnTime > SPIRAL_SPAWN_INTERVAL) {
+        // Spawn from random edge
+        const edge = Math.floor(Math.random() * 4);
+        switch (edge) {
+            case 0:
+                spiralEnemy.x = Math.random() * W;
+                spiralEnemy.y = -50;
+                break;
+            case 1:
+                spiralEnemy.x = W + 50;
+                spiralEnemy.y = Math.random() * H;
+                break;
+            case 2:
+                spiralEnemy.x = Math.random() * W;
+                spiralEnemy.y = H + 50;
+                break;
+            default:
+                spiralEnemy.x = -50;
+                spiralEnemy.y = Math.random() * H;
+        }
+        spiralEnemy.active = true;
+        spiralEnemy.dying = false;
+        spiralEnemy.deathProgress = 0;
+        spiralEnemy.consumedEnergy = 0; // Reset consumed energy
+        spiralEnemy.arms = 3 + Math.floor(Math.random() * 3); // 3-5 arms
+        spiralEnemy.rotation = Math.random() * Math.PI * 2;
+        spiralEnemy.radius = 100 + Math.random() * 40; // Larger radius for more visible gravity (100-140)
+        // Speed modifier: 50% 2X, 25% 4X, 12.5% 8X, 12.5% 1X
+        const roll = Math.random();
+        if (roll < 0.5) {
+            spiralEnemy.speedModifier = 2;
+        }
+        else if (roll < 0.75) {
+            spiralEnemy.speedModifier = 4;
+        }
+        else if (roll < 0.875) {
+            spiralEnemy.speedModifier = 8;
+        }
+        else {
+            spiralEnemy.speedModifier = 1;
+        }
+        // Super enemies: only in post-credits mode, 30% chance
+        spiralEnemy.isSuper = postCreditsMode && Math.random() < 0.3;
+        if (spiralEnemy.isSuper) {
+            spiralEnemy.radius *= 3; // 3x größer
+            spiralEnemy.speedModifier *= 2; // 2x Basis-Speed
+        }
+        lastSpiralSpawnTime = now;
+        // Play ominous spawn sound
+        AudioSystem.playSpiralSpawn();
+    }
+    if (!spiralEnemy.active)
+        return;
+    // Update rotation (fast spinning)
+    spiralEnemy.rotation += 0.15;
+    // Calculate distances
+    const dxLogo = centerX - spiralEnemy.x;
+    const dyLogo = centerY - spiralEnemy.y;
+    const distToLogo = Math.sqrt(dxLogo * dxLogo + dyLogo * dyLogo);
+    const dxCursor = cursorX - spiralEnemy.x;
+    const dyCursor = cursorY - spiralEnemy.y;
+    const distToCursor = Math.sqrt(dxCursor * dxCursor + dyCursor * dyCursor);
+    // === DYING STATE (after cursor collision) ===
+    if (spiralEnemy.dying) {
+        spiralEnemy.deathProgress = (now - spiralEnemy.deathTime) / SPIRAL_DEATH_DURATION;
+        if (spiralEnemy.deathProgress >= 1) {
+            spiralEnemy.active = false;
+            spiralEnemy.dying = false;
+            return;
+        }
+        // Spiral shrinks and fades during death
+        spiralEnemy.radius = (70 + Math.random() * 30) * (1 - spiralEnemy.deathProgress);
+        // Still affects stars but weaker
+        applySpiralgravityToStars(spiralEnemy.x, spiralEnemy.y, spiralEnemy.radius * 0.5, spiralEnemy.rotation, spiralEnemy.arms);
+        return;
+    }
+    // === MOVEMENT LOGIC ===
+    // Speed increases with consumed energy (faster the more it eats)
+    // Apply random speed modifier (1X, 2X, 4X, 8X)
+    const energySpeedBonus = spiralEnemy.consumedEnergy * 2; // Each consumed star adds speed
+    const baseSpeed = Math.min(SPIRAL_MAX_SPEED, SPIRAL_BASE_SPEED + energySpeedBonus);
+    const currentSpeed = baseSpeed * spiralEnemy.speedModifier;
+    // Move directly toward logo (no flutter)
+    let moveX = (dxLogo / distToLogo) * currentSpeed;
+    let moveY = (dyLogo / distToLogo) * currentSpeed;
+    // Flee from cursor if close (within 150px)
+    const fleeRadius = 150;
+    if (distToCursor < fleeRadius) {
+        const fleeFactor = 1 - (distToCursor / fleeRadius);
+        const fleeX = -(dxCursor / distToCursor) * SPIRAL_FLEE_SPEED * fleeFactor;
+        const fleeY = -(dyCursor / distToCursor) * SPIRAL_FLEE_SPEED * fleeFactor;
+        moveX += fleeX;
+        moveY += fleeY;
+    }
+    spiralEnemy.x += moveX;
+    spiralEnemy.y += moveY;
+    // === CURSOR COLLISION - cursor flashes blue ===
+    const cursorCollisionRadius = 35;
+    if (distToCursor < cursorCollisionRadius && !spiralEnemy.dying) {
+        // Anime-style implosion
+        spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y);
+        // Cursor flashes blue
+        cursorHitFlashTime = now;
+        spiralEnemy.active = false;
+        spiralEnemy.dying = false;
+        AudioSystem.playSpiralDefeat();
+        HapticManager.collect();
+        return;
+    }
+    // === LOGO COLLISION - logo flashes red ===
+    const baseLogoSize = Math.min(W, H) * 0.08;
+    const energyBonus = cursorEnergy * Math.min(W, H) * 0.04;
+    const actualLogoRadius = baseLogoSize + energyBonus;
+    const blobSize = 18; // Blob body size
+    const logoCollisionRadius = actualLogoRadius + blobSize * 0.5;
+    if (distToLogo < logoCollisionRadius) {
+        // Anime-style implosion
+        spawnSpiralExplosion(spiralEnemy.x, spiralEnemy.y);
+        // Trigger shockwave from logo center - pushes all particles away
+        spawnShockwave(centerX, centerY, 2.5);
+        // Logo flashes red - "hit registered"
+        logoHitFlashTime = now;
+        logoVibrationTime = now;
+        logoReadyForDischarge = false;
+        // Damage: 1 in normal mode, 2 in post-credits, 3 for super enemies
+        const baseDamage = postCreditsMode ? 2 : 1;
+        const damage = spiralEnemy.isSuper ? 3 : baseDamage;
+        const prevLevel = upgradeLevel;
+        upgradeLevel = Math.max(0, upgradeLevel - damage);
+        logoBaseScale = Math.max(1, logoBaseScale - 0.18 * damage);
+        console.log(`%c[GAME] Level DOWN: ${prevLevel} → ${upgradeLevel} (spiral hit, damage: ${damage})`, 'color: #ff4444; font-family: monospace;');
+        // Update music level if changed
+        if (upgradeLevel !== prevLevel) {
+            AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel);
+        }
+        // Check for death
+        if (upgradeLevel === 0) {
+            triggerYouDied();
+        }
+        AudioSystem.playSpiralDamage();
+        HapticManager.levelUp();
+        spiralEnemy.active = false;
+        return;
+    }
+    // === APPLY GRAVITY TO STARS ===
+    applySpiralgravityToStars(spiralEnemy.x, spiralEnemy.y, spiralEnemy.radius, spiralEnemy.rotation, spiralEnemy.arms);
+    // === DRAW BUBBLE BODY ===
+    drawSpiralCore(spiralEnemy.x, spiralEnemy.y, spiralEnemy.rotation, spiralEnemy.dying ? 1 - spiralEnemy.deathProgress : 1);
+    // === ORBIT STARS ===
+    updateSpiralOrbit();
+    // Play continuous suction sound
+    AudioSystem.setSpiralSuction(Math.min(1, spiralEnemy.radius / 100));
+}
+// Draw plain white pulsating bubble blob - 2-4 connected bubbles
+function drawSpiralCore(x, y, rotation, intensity) {
+    if (intensity <= 0)
+        return;
+    const time = clock.now / 1000;
+    const pulse = 1 + Math.sin(time * 5) * 0.15; // Pulsating
+    const isSuper = spiralEnemy.isSuper;
+    const sizeMultiplier = isSuper ? 3 : 1;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation * 0.3); // Rotate the whole blob
+    // Generate 2-4 connected bubbles
+    const bubbleCount = 2 + Math.floor((rotation % 3));
+    const baseSize = 8 * intensity * pulse * sizeMultiplier;
+    // Chromatic abberation for super enemies
+    if (isSuper) {
+        const caOffset = 4;
+        ctx.fillStyle = `rgba(255, 0, 100, ${intensity * 0.4})`;
+        for (let i = 0; i < bubbleCount; i++) {
+            const angle = (i / bubbleCount) * Math.PI * 2;
+            const dist = baseSize * 0.6;
+            const bx = Math.cos(angle) * dist - caOffset;
+            const by = Math.sin(angle) * dist;
+            const bubbleSize = baseSize * (0.6 + Math.sin(time * 4 + i) * 0.2);
+            ctx.beginPath();
+            ctx.arc(bx, by, bubbleSize, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.fillStyle = `rgba(0, 255, 255, ${intensity * 0.4})`;
+        for (let i = 0; i < bubbleCount; i++) {
+            const angle = (i / bubbleCount) * Math.PI * 2;
+            const dist = baseSize * 0.6;
+            const bx = Math.cos(angle) * dist + caOffset;
+            const by = Math.sin(angle) * dist;
+            const bubbleSize = baseSize * (0.6 + Math.sin(time * 4 + i) * 0.2);
+            ctx.beginPath();
+            ctx.arc(bx, by, bubbleSize, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    // Plain white, no glow, no contours
+    ctx.fillStyle = `rgba(255, 255, 255, ${intensity})`;
+    // Draw bubbles as connected blobs
+    for (let i = 0; i < bubbleCount; i++) {
+        const angle = (i / bubbleCount) * Math.PI * 2;
+        const dist = baseSize * 0.6;
+        const bx = Math.cos(angle) * dist;
+        const by = Math.sin(angle) * dist;
+        const bubbleSize = baseSize * (0.6 + Math.sin(time * 4 + i) * 0.2);
+        // Plain white bubble - filled, no stroke
+        ctx.beginPath();
+        ctx.arc(bx, by, bubbleSize, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    // Central connection blob - plain white
+    ctx.beginPath();
+    ctx.arc(0, 0, baseSize * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+// Orbit captured stars around the spiral enemy
+let spiralOrbitStars = [];
+function updateSpiralOrbit() {
+    if (!spiralEnemy.active) {
+        spiralOrbitStars = [];
+        return;
+    }
+    // Capture nearby absorbed stars into orbit
+    for (const p of ambientParticles) {
+        if (p.absorbed && !p.inOrbit) {
+            const dx = spiralEnemy.x - p.x;
+            const dy = spiralEnemy.y - p.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 30) {
+                p.inOrbit = true;
+                p.orbitAngle = Math.atan2(dy, dx);
+                p.orbitDist = 20 + Math.random() * 15;
+                spiralOrbitStars.push(p);
+            }
+        }
+    }
+    // Update and draw orbit stars
+    for (let i = spiralOrbitStars.length - 1; i >= 0; i--) {
+        const p = spiralOrbitStars[i];
+        // Rotate around spiral
+        p.orbitAngle += 0.08;
+        p.x = spiralEnemy.x + Math.cos(p.orbitAngle) * p.orbitDist;
+        p.y = spiralEnemy.y + Math.sin(p.orbitAngle) * p.orbitDist;
+        // Draw orbiting star
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha * 0.7})`;
+        ctx.fill();
+        // Fade out slowly
+        p.alpha *= 0.995;
+        if (p.alpha < 0.1) {
+            spiralOrbitStars.splice(i, 1);
+        }
+    }
+}
+// Anime-style explosion state
+let animeExplosion = {
+    active: false,
+    x: 0,
+    y: 0,
+    phase: 0, // 0-1: expand, 1-2: hold/collapse, 2-3: implode
+    startTime: 0
+};
+// Shockwave state - pushes particles away on logo hit
+let shockwave = {
+    active: false,
+    x: 0,
+    y: 0,
+    radius: 0,
+    maxRadius: 0,
+    startTime: 0,
+    strength: 0
+};
+function spawnShockwave(x, y, strength = 1) {
+    shockwave.active = true;
+    shockwave.x = x;
+    shockwave.y = y;
+    shockwave.startTime = clock.now;
+    shockwave.strength = strength;
+    shockwave.maxRadius = Math.max(W, H) * 0.6; // Bis zum Bildschirmrand
+    shockwave.radius = 0;
+}
+function spawnSpiralExplosion(x, y) {
+    animeExplosion.active = true;
+    animeExplosion.x = x;
+    animeExplosion.y = y;
+    animeExplosion.phase = 0;
+    animeExplosion.startTime = clock.now;
+}
+function updateAndDrawSpiralExplosion() {
+    if (!animeExplosion.active)
+        return;
+    const elapsed = clock.now - animeExplosion.startTime;
+    const duration = 400; // Fast animation
+    animeExplosion.phase = elapsed / duration * 3;
+    if (animeExplosion.phase >= 3) {
+        animeExplosion.active = false;
+        return;
+    }
+    ctx.save();
+    ctx.translate(animeExplosion.x, animeExplosion.y);
+    const phase = animeExplosion.phase;
+    if (phase < 1) {
+        // Phase 1: FAST EXPAND - circle grows rapidly (PURE WHITE)
+        const expand = phase;
+        const radius = expand * 80;
+        const alpha = 0.8 - expand * 0.3;
+        const lineWidth = 4 - expand * 2;
+        // Expanding ring - pure white
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.lineWidth = Math.max(1, lineWidth);
+        ctx.stroke();
+        // Inner fill fading - pure white
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.3})`;
+        ctx.fill();
+    }
+    else if (phase < 2) {
+        // Phase 2: COLLAPSE - ring shrinks back quickly (PURE WHITE)
+        const collapse = phase - 1;
+        const radius = 80 * (1 - collapse * 0.7);
+        const alpha = 0.5 + collapse * 0.3;
+        // Collapsing ring gets thicker - pure white
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.lineWidth = 2 + collapse * 4;
+        ctx.stroke();
+    }
+    else {
+        // Phase 3: IMPLODE - anime style snap to center
+        const implode = phase - 2;
+        const finalRadius = 24 * (1 - implode);
+        const alpha = 1 - implode * 0.5;
+        // Imploding ring - thick and bright (PURE WHITE)
+        ctx.beginPath();
+        ctx.arc(0, 0, finalRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.lineWidth = 6 * (1 - implode);
+        ctx.stroke();
+        // Central flash at the end
+        if (implode > 0.6) {
+            const flash = (implode - 0.6) / 0.4;
+            const flashSize = 15 * (1 - flash);
+            ctx.beginPath();
+            ctx.arc(0, 0, flashSize, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${flash * 0.9})`;
+            ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+// Update and draw shockwave - expanding ring that pushes particles
+function updateAndDrawShockwave() {
+    if (!shockwave.active)
+        return;
+    const elapsed = clock.now - shockwave.startTime;
+    const duration = 600; // 600ms expansion
+    const progress = elapsed / duration;
+    if (progress >= 1) {
+        shockwave.active = false;
+        return;
+    }
+    // Expanding radius
+    shockwave.radius = shockwave.maxRadius * Math.pow(progress, 0.4); // Ease out
+    const alpha = 1 - progress;
+    const lineWidth = 3 * (1 - progress * 0.5);
+    // Draw shockwave ring
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(shockwave.x, shockwave.y, shockwave.radius, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 100, 100, ${alpha * 0.6})`; // Red tint
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+    // Inner glow
+    ctx.beginPath();
+    ctx.arc(shockwave.x, shockwave.y, shockwave.radius * 0.95, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 150, 150, ${alpha * 0.3})`;
+    ctx.lineWidth = lineWidth * 2;
+    ctx.stroke();
+    ctx.restore();
+}
+// Apply spiral gravity to ambient stars - this is how we "see" the spiral
+// Doubled strength for more visible effect
+function applySpiralgravityToStars(sx, sy, radius, rotation, arms) {
+    for (const p of ambientParticles) {
+        if (p.absorbed)
+            continue;
+        const dx = sx - p.x;
+        const dy = sy - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < radius && dist > 5) {
+            // Spiral arm effect - pull stronger along spiral arms
+            const angle = Math.atan2(dy, dx);
+            const armAngle = (angle - rotation) * arms;
+            const armStrength = 0.5 + Math.sin(armAngle) * 0.5;
+            // Gravitational pull toward spiral center - 2X STRONGER
+            const pullStrength = (1 - dist / radius) * 0.5 * armStrength;
+            p.vx += (dx / dist) * pullStrength;
+            p.vy += (dy / dist) * pullStrength;
+            // Rotational component (swirl) - 2X STRONGER
+            const tangentX = -dy / dist;
+            const tangentY = dx / dist;
+            const swirlStrength = (1 - dist / radius) * 0.3;
+            p.vx += tangentX * swirlStrength;
+            p.vy += tangentY * swirlStrength;
+            // Stars near center get absorbed (destroyed) - track consumed energy
+            if (dist < 20) {
+                p.absorbed = true;
+                p.alpha *= 0.1;
+                // Track consumed energy for speed boost
+                if (spiralEnemy.active) {
+                    spiralEnemy.consumedEnergy += 0.02;
+                }
+            }
+        }
+    }
+}
+// Red Particle - spawnt NUR wenn Colored Bridge Phase abgeschlossen
+function drawRedParticle() {
+    const time = clock.now / 1000;
+    // Red Particles nur wenn Colored Bridge Phase vorbei ist
+    if (!coloredBridgePhaseComplete) {
+        return;
+    }
+    // Spawn nach Timer
+    if (redParticleActive && !redParticle.active && clock.now > redParticleSpawnTime) {
+        const edge = Math.floor(Math.random() * 4);
+        const speed = 1.2 + Math.random() * 0.8; // Noch langsamer, smoothere Bewegung (1.2-2.0)
+        switch (edge) {
+            case 0:
+                redParticle.x = Math.random() * W;
+                redParticle.y = -10;
+                break;
+            case 1:
+                redParticle.x = W + 10;
+                redParticle.y = Math.random() * H;
+                break;
+            case 2:
+                redParticle.x = Math.random() * W;
+                redParticle.y = H + 10;
+                break;
+            default:
+                redParticle.x = -10;
+                redParticle.y = Math.random() * H;
+        }
+        // Richtung grob zur Mitte, aber mit Offset
+        const targetX = W / 2 + (Math.random() - 0.5) * W * 0.4;
+        const targetY = H / 2 + (Math.random() - 0.5) * H * 0.4;
+        const dx = targetX - redParticle.x;
+        const dy = targetY - redParticle.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        redParticle.vx = (dx / dist) * speed;
+        redParticle.vy = (dy / dist) * speed;
+        redParticle.active = true;
+        redParticle.phase = Math.random() * Math.PI * 2;
+        redParticle.turnTimer = 0;
+    }
+    if (!redParticle.active)
+        return;
+    // FLEE BEHAVIOR: Red particle flees from cursor
+    const fleeDx = redParticle.x - cursorX;
+    const fleeDy = redParticle.y - cursorY;
+    const fleeDist = Math.sqrt(fleeDx * fleeDx + fleeDy * fleeDy);
+    const fleeRadius = 200; // Start fleeing when cursor is within this radius
+    if (fleeDist < fleeRadius && fleeDist > 1) {
+        // Flee strength increases as cursor gets closer
+        const fleeIntensity = Math.pow(1 - fleeDist / fleeRadius, 1.5);
+        const fleeStrength = 0.8 * fleeIntensity; // Moderate flee speed - challenging but catchable
+        const fleeAngle = Math.atan2(fleeDy, fleeDx);
+        // Add flee velocity (away from cursor)
+        redParticle.vx += Math.cos(fleeAngle) * fleeStrength;
+        redParticle.vy += Math.sin(fleeAngle) * fleeStrength;
+        // Cap max speed so player can still catch it
+        const maxSpeed = 4.5;
+        const currentSpeed = Math.sqrt(redParticle.vx * redParticle.vx + redParticle.vy * redParticle.vy);
+        if (currentSpeed > maxSpeed) {
+            redParticle.vx = (redParticle.vx / currentSpeed) * maxSpeed;
+            redParticle.vy = (redParticle.vy / currentSpeed) * maxSpeed;
+        }
+    }
+    else {
+        // When cursor is far, slow down gradually and drift
+        redParticle.vx *= 0.98;
+        redParticle.vy *= 0.98;
+        // Add slight random drift when not fleeing
+        redParticle.vx += (Math.random() - 0.5) * 0.1;
+        redParticle.vy += (Math.random() - 0.5) * 0.1;
+    }
+    // Gentle curve motion for organic feel
+    redParticle.phase += 0.03;
+    const speed = Math.sqrt(redParticle.vx * redParticle.vx + redParticle.vy * redParticle.vy);
+    if (speed > 0.5) {
+        const curve = Math.sin(redParticle.phase) * 0.8;
+        const perpX = -redParticle.vy / speed;
+        const perpY = redParticle.vx / speed;
+        redParticle.x += redParticle.vx + perpX * curve;
+        redParticle.y += redParticle.vy + perpY * curve;
+    }
+    else {
+        redParticle.x += redParticle.vx;
+        redParticle.y += redParticle.vy;
+    }
+    // Soft bounce from edges - stays in visible area
+    const margin = 60;
+    const pushStrength = 0.3;
+    if (redParticle.x < margin)
+        redParticle.vx += pushStrength;
+    if (redParticle.x > W - margin)
+        redParticle.vx -= pushStrength;
+    if (redParticle.y < margin)
+        redParticle.vy += pushStrength;
+    if (redParticle.y > H - margin)
+        redParticle.vy -= pushStrength;
+    // Check capture
+    const dx = cursorX - redParticle.x;
+    const dy = cursorY - redParticle.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    // Red particles can always be captured, even when chamber has colored particles
+    // This allows stacking red particles up to MAX_RED_STACK (6) for instant Level 10
+    if (dist < 30) {
+        // CAPTURED! - Jetzt geht Red Particle in die Kammer
+        redParticle.active = false;
+        redParticleCatches++;
+        // Aktiviere Kammer wenn nicht aktiv
+        if (!chamberActive) {
+            chamberActive = true;
+        }
+        // Audio & Haptic: Capture
+        AudioSystem.playCapture();
+        HapticManager.capture();
+        // In Kammer einsperren (mit isRed Flag für Spezialeffekte)
+        chamberParticles.push({
+            x: 0,
+            y: 0,
+            vx: (Math.random() - 0.5) * 3,
+            vy: (Math.random() - 0.5) * 3,
+            color: '#ff2222',
+            size: 3.5,
+            isRed: true
+        });
+        // Erster Red Particle: Aktiviere Inversion
+        if (!isInverted && redStackCount === 0) {
+            isInverted = true;
+            canvas.style.filter = 'invert(1)';
+            redStackCount = 1;
+            // Audio: Underwater mode
+            AudioSystem.setInvertedMode(true);
+        }
+        else if (redStackCount < MAX_RED_STACK) {
+            redStackCount++;
+            // Max Stack erreicht = epischer Moment!
+            if (redStackCount >= MAX_RED_STACK) {
+                AudioSystem.playMaxStack();
+            }
+        }
+        // Besonderer Ton für JEDES Herz (nicht nur erster)
+        AudioSystem.playRedHeartCapture();
+        // Kleiner Partikel-Burst (weniger dramatisch, da in Kammer)
+        for (let i = 0; i < 20; i++) {
+            const angle = (i / 20) * Math.PI * 2;
+            const burstSpeed = 4 + Math.random() * 4;
+            particles.push({
+                x: cursorX,
+                y: cursorY,
+                vx: Math.cos(angle) * burstSpeed,
+                vy: Math.sin(angle) * burstSpeed,
+                life: 0.8,
+                hue: 0
+            });
+        }
+        // Shockwave
+        ripples.push({
+            x: cursorX,
+            y: cursorY,
+            size: 10,
+            alpha: 0.8,
+            hue: 0
+        });
+        // Nächster Red Particle spawnt nach Pause (bis MAX_RED_STACK erreicht)
+        // Rote Partikel können bis 6 gehen, nicht nur 5 wie colored particles
+        if (cursorEnergy >= MAX_ENERGY && redStackCount < MAX_RED_STACK) {
+            redParticleSpawnTime = clock.now + 2000;
+            redParticleActive = true;
+        }
+    }
+    // Off screen - neuer Versuch nach Pause (kein Limit)
+    if (redParticle.x < -100 || redParticle.x > W + 100 || redParticle.y < -100 || redParticle.y > H + 100) {
+        redParticle.active = false;
+        // Neuer Versuch nach längerer Pause
+        if (cursorEnergy >= MAX_ENERGY) {
+            redParticleSpawnTime = clock.now + 2000; // 2s Pause nach Miss
+            redParticleActive = true;
+        }
+    }
+    // Draw - Gefülltes rotes Herz (deutlich größer)
+    const heartSize = 12; // Größeres Herz
+    ctx.save();
+    ctx.translate(redParticle.x, redParticle.y);
+    ctx.beginPath();
+    // Herz-Form mit Bezier-Kurven
+    ctx.moveTo(0, heartSize * 0.3);
+    ctx.bezierCurveTo(-heartSize * 0.5, -heartSize * 0.3, -heartSize, heartSize * 0.3, 0, heartSize);
+    ctx.bezierCurveTo(heartSize, heartSize * 0.3, heartSize * 0.5, -heartSize * 0.3, 0, heartSize * 0.3);
+    ctx.fillStyle = '#ff2222';
+    ctx.fill();
+    ctx.restore();
+}
+// ========================================
+// COLORED PARTICLES - Sequential spawn (orange->brown->green)
+// ========================================
+function drawColoredParticles() {
+    const time = clock.now / 1000;
+    // Skip wenn alle 3 Phasen abgeschlossen
+    if (currentColorPhase >= 3) {
+        coloredBridgePhaseComplete = true;
+        return;
+    }
+    // Check tutorial progression
+    if (gamePhase === GAME_PHASE_TUTORIAL) {
+        checkTutorialProgression();
+        return;
+    }
+    // Chamber öffnet sich früh - sobald 1 Ring gefüllt ist (20% energy)
+    const chamberOpenThreshold = 0.2; // 1 Ring = 20%
+    if (cursorEnergy < chamberOpenThreshold) {
+        coloredParticleSpawnTime = clock.now + 2000;
+        return;
+    }
+    // Aktiviere Kammer sobald 1 Ring voll
+    if (!chamberActive) {
+        chamberActive = true;
+        chamberSpawnPhase = 0;
+    }
+    // Check ob 5 Partikel gesammelt UND freigeschaltete Ringe voll - Logo ready for discharge
+    // Discharge ist NUR möglich wenn BEIDE Bedingungen erfüllt sind
+    // Bei Phase 0: 3 Ringe = 60%, Phase 1: 4 Ringe = 80%, Phase 2: 5 Ringe = 100%
+    const unlockedRingsForCheck = getCurrentRings();
+    const requiredEnergy = (unlockedRingsForCheck / 5) * MAX_ENERGY;
+    const allUnlockedRingsFull = cursorEnergy >= requiredEnergy;
+    if (chamberParticles.length >= CHAMBER_THRESHOLD && allUnlockedRingsFull && !logoReadyForDischarge) {
+        logoReadyForDischarge = true;
+        logoVibrationTime = clock.now;
+        // Audio feedback: Collection complete
+        AudioSystem.playCollectionComplete();
+        // Stärkeres Vibration-Feedback wenn Kammer voll
+        HapticManager.levelUp();
+    }
+    // Aktuelle Farbe für diese Phase
+    const currentColor = CHAMBER_COLORS_SEQUENCE[currentColorPhase];
+    // Spawn farbige Partikel (alle 1.5 Sekunden)
+    if (clock.now > coloredParticleSpawnTime &&
+        coloredParticles.length < 4 &&
+        chamberParticles.length < CHAMBER_THRESHOLD) {
+        const color = currentColor;
+        // Spawn von zufälligem Rand
+        const edge = Math.floor(Math.random() * 4);
+        let x, y;
+        switch (edge) {
+            case 0:
+                x = Math.random() * W;
+                y = -20;
+                break;
+            case 1:
+                x = W + 20;
+                y = Math.random() * H;
+                break;
+            case 2:
+                x = Math.random() * W;
+                y = H + 20;
+                break;
+            default:
+                x = -20;
+                y = Math.random() * H;
+        }
+        // Richtung gezielt zum Cursor für bessere Capture-Experience
+        const targetX = cursorX;
+        const targetY = cursorY;
+        const dx = targetX - x;
+        const dy = targetY - y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const speed = 1.2 + Math.random() * 0.8; // 20% langsamer (1.2-2.0)
+        coloredParticles.push({
+            x, y,
+            vx: (dx / dist) * speed,
+            vy: (dy / dist) * speed,
+            color,
+            size: 3.3, // 10% größer (3 * 1.1)
+            phase: Math.random() * Math.PI * 2,
+            turnTimer: 0,
+            alpha: 0.9 // 10% weniger intensiv
+        });
+        // Nächster Spawn in 1.5 Sekunden
+        coloredParticleSpawnTime = clock.now + 1500;
+    }
+    // Update & Draw colored particles
+    for (let i = coloredParticles.length - 1; i >= 0; i--) {
+        const p = coloredParticles[i];
+        // Skip wenn bereits als captured markiert (Sicherheit gegen Race Conditions)
+        if (p.captured) {
+            coloredParticles.splice(i, 1);
+            continue;
+        }
+        // Kurvige Flugbahn (ähnlich wie Red Particle)
+        p.phase += 0.06;
+        p.turnTimer++;
+        // Zufällige Richtungswechsel
+        if (p.turnTimer > 80 + Math.random() * 60) {
+            p.turnTimer = 0;
+            const turnAngle = (Math.random() - 0.5) * Math.PI * 0.6;
+            const currentSpeed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+            const currentAngle = Math.atan2(p.vy, p.vx);
+            const newAngle = currentAngle + turnAngle;
+            p.vx = Math.cos(newAngle) * currentSpeed;
+            p.vy = Math.sin(newAngle) * currentSpeed;
+        }
+        // Kurvige Bewegung
+        const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        const curve = Math.sin(p.phase) * 1.5 + Math.sin(p.phase * 1.7) * 0.8;
+        const perpX = -p.vy / speed;
+        const perpY = p.vx / speed;
+        p.x += p.vx + perpX * curve;
+        p.y += p.vy + perpY * curve;
+        // Sanfte Abstoßung vom Rand
+        const margin = 60;
+        const pushStrength = 0.12;
+        if (p.x < margin)
+            p.vx += pushStrength;
+        if (p.x > W - margin)
+            p.vx -= pushStrength;
+        if (p.y < margin)
+            p.vy += pushStrength;
+        if (p.y > H - margin)
+            p.vy -= pushStrength;
+        // Cursor-Gravitation (stärker als bei weißen Partikeln)
+        // ABER: Nicht wenn Kammer voll ist (verhindert "Geisterfolger")
+        const dxCursor = cursorX - p.x;
+        const dyCursor = cursorY - p.y;
+        const distCursor = Math.sqrt(dxCursor * dxCursor + dyCursor * dyCursor);
+        // Capture check - in Kammer eingesperrt
+        // WICHTIG: Capture nur wenn Kammer sichtbar ist (cursorEnergy >= threshold OR hasParticles)
+        const chamberVisible = cursorEnergy >= 0.2 || chamberParticles.length > 0;
+        const canCapture = chamberParticles.length < CHAMBER_THRESHOLD && chamberVisible;
+        // Gravitation NUR wenn noch Platz in der Kammer ist
+        if (distCursor < 200 && distCursor > 5 && canCapture) {
+            const pullStrength = Math.pow(1 - distCursor / 200, 2) * 0.25;
+            p.vx += (dxCursor / distCursor) * pullStrength;
+            p.vy += (dyCursor / distCursor) * pullStrength;
+        }
+        if (distCursor < 45 && canCapture) {
+            // SOFORT als captured markieren - verhindert jede weitere Verarbeitung
+            p.captured = true;
+            // In Kammer transferieren
+            chamberParticles.push({
+                x: 0, // Relativ zum Cursor-Zentrum
+                y: 0,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
+                color: p.color,
+                size: 3,
+                isRed: false
+            });
+            // Audio & Haptic - sparkly chamber capture
+            AudioSystem.playChamberCapture(chamberParticles.length);
+            HapticManager.collect();
+            // Aus fliegenden Partikeln entfernen
+            coloredParticles.splice(i, 1);
+            continue;
+        }
+        // Off screen check
+        if (p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50) {
+            coloredParticles.splice(i, 1);
+            continue;
+        }
+        // Draw - Scharfer, intensiver Punkt ohne Schweif
+        // Kleiner Glow für Tiefe
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(p.color, 0.2 * p.alpha);
+        ctx.fill();
+        // Scharfer Core - mit alpha (10% weniger intensiv)
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(p.color, p.alpha);
+        ctx.fill();
+    }
+}
+// hexToRgba imported from ../lib/utils/color
+// Minimal overlay - nur subtile Vignette
+function drawScanlines() {
+    // Elegante Vignette
+    const vignetteGradient = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.8);
+    vignetteGradient.addColorStop(0, 'transparent');
+    vignetteGradient.addColorStop(0.7, 'transparent');
+    vignetteGradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+    ctx.fillStyle = vignetteGradient;
+    ctx.fillRect(0, 0, W, H);
+}
+// Draw ripples - mit optionaler Farbe
+function drawRipples() {
+    for (let i = ripples.length - 1; i >= 0; i--) {
+        const r = ripples[i];
+        r.size += 12;
+        r.alpha -= 0.02;
+        if (r.alpha <= 0) {
+            ripples.splice(i, 1);
+            continue;
+        }
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.size, 0, Math.PI * 2);
+        ctx.strokeStyle = r.hue !== undefined
+            ? `hsla(${r.hue}, 100%, 70%, ${r.alpha})`
+            : `rgba(255, 255, 255, ${r.alpha})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+}
+// 2026 Cursor - CLEAN, SHARP, SNAPPY + CHAMBER
+function drawCursor() {
+    const time = clock.now / 1000;
+    // cursorX/cursorY werden jetzt im render() Loop VOR den Partikel-Loops aktualisiert
+    // Das verhindert Race-Conditions bei schnellen Bewegungen
+    // Cursor-Bewegungs-Delta für Trägheit
+    const cursorDeltaX = cursorX - prevCursorX;
+    const cursorDeltaY = cursorY - prevCursorY;
+    prevCursorX = cursorX;
+    prevCursorY = cursorY;
+    if (evolution?.powerActive(clock.now)) {
+        drawPowerRing(ctx, evolutionInput(), evolution);
+        return;
+    }
+    // Größe
+    const baseSize = 5;
+    const energySize = cursorEnergy * 18;
+    const cursorSize = baseSize + energySize;
+    ctx.save();
+    ctx.translate(cursorX, cursorY);
+    // === POWER METER - Rings with unlock system ===
+    const totalLayers = 5;
+    const energyPerLayer = MAX_ENERGY / totalLayers;
+    // Available rings based on current game phase (tutorial or colored)
+    const unlockedRings = getCurrentRings();
+    for (let layer = 0; layer < totalLayers; layer++) {
+        const ringRadius = cursorSize + 5 + layer * 5;
+        const ringWidth = 4;
+        // Check if ring is unlocked
+        const isUnlocked = layer < unlockedRings;
+        if (!isUnlocked) {
+            // Locked ring - very faint outline
+            ctx.beginPath();
+            ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.lineWidth = ringWidth;
+            ctx.lineCap = 'butt';
+            ctx.stroke();
+            continue;
+        }
+        const layerStart = layer * energyPerLayer;
+        const layerProgress = Math.max(0, Math.min(1, (cursorEnergy - layerStart) / energyPerLayer));
+        // Show ring if: has energy progress OR has red stack OR isInverted
+        const hasRedStackForRing = redStackCount > 0 && redStackCount >= (totalLayers - layer);
+        const shouldShowRing = layerProgress > 0 || hasRedStackForRing || isInverted;
+        if (!shouldShowRing)
+            continue;
+        // Ringe von außen nach innen cyan färben basierend auf redStackCount
+        const isStackedRing = redStackCount >= (totalLayers - layer);
+        // Draw full ring if stacked, otherwise use layerProgress
+        const arcEnd = isStackedRing ? Math.PI * 2 : (-Math.PI / 2 + layerProgress * Math.PI * 2);
+        ctx.beginPath();
+        ctx.arc(0, 0, ringRadius, -Math.PI / 2, arcEnd);
+        // Idle = grau, sonst normal
+        ctx.strokeStyle = isIdle ? '#555555' : (isStackedRing ? '#00ffff' : '#ffffff');
+        ctx.lineWidth = ringWidth;
+        ctx.lineCap = 'butt';
+        ctx.stroke();
+    }
+    // === CHAMBER (Gravitationsgefängnis) - auch bei red particles sichtbar ===
+    const chamberOpenThreshold = 0.2;
+    const hasParticlesInChamber = chamberParticles.length > 0;
+    if ((cursorEnergy >= chamberOpenThreshold && chamberActive) || hasParticlesInChamber) {
+        const chamberOuterRadius = cursorSize;
+        const chamberInnerRadius = cursorSize - CHAMBER_RADIUS;
+        // Donut-Shape zeichnen (Kammer-Wand)
+        // Färbe cyan wenn 6 red particles gesammelt (MAX_RED_STACK)
+        // Or yellow flash when enemy killed
+        const isChamberStacked = redStackCount >= MAX_RED_STACK;
+        const cursorFlashDuration = 150;
+        const timeSinceCursorHit = clock.now - cursorHitFlashTime;
+        let cursorColor;
+        if (timeSinceCursorHit < cursorFlashDuration) {
+            // Yellow flash when killing enemy (positive feedback)
+            cursorColor = '#ffdd00';
+        }
+        else if (isIdle) {
+            cursorColor = '#555555';
+        }
+        else if (isChamberStacked) {
+            cursorColor = '#00ffff';
+        }
+        else {
+            cursorColor = '#ffffff';
+        }
+        ctx.beginPath();
+        ctx.arc(0, 0, chamberOuterRadius, 0, Math.PI * 2);
+        ctx.arc(0, 0, Math.max(2, chamberInnerRadius), 0, Math.PI * 2, true); // Loch
+        ctx.fillStyle = cursorColor;
+        ctx.fill();
+        // Füllstandsanzeige im Kammer-Rand (optional: subtiler Glow basierend auf Füllstand)
+        if (chamberParticles.length > 0) {
+            const fillProgress = chamberParticles.length / CHAMBER_THRESHOLD;
+            const fillAngle = fillProgress * Math.PI * 2;
+            // Progress-Arc auf der Kammer
+            ctx.beginPath();
+            ctx.arc(0, 0, chamberOuterRadius + 2, -Math.PI / 2, -Math.PI / 2 + fillAngle);
+            ctx.strokeStyle = `rgba(255, 255, 255, 0.5)`;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        // === Gefangene Partikel in der Kammer ===
+        for (let i = 0; i < chamberParticles.length; i++) {
+            const p = chamberParticles[i];
+            // Trägheit: Partikel reagieren auf Cursor-Bewegung
+            // BEGRENZT um zu verhindern dass Partikel "entkommen"
+            const maxInertia = 3;
+            const inertiaX = Math.max(-maxInertia, Math.min(maxInertia, -cursorDeltaX * 0.15));
+            const inertiaY = Math.max(-maxInertia, Math.min(maxInertia, -cursorDeltaY * 0.15));
+            p.vx += inertiaX;
+            p.vy += inertiaY;
+            // Sanfte Eigenbewegung
+            p.x += p.vx;
+            p.y += p.vy;
+            // Dämpfung
+            p.vx *= 0.96;
+            p.vy *= 0.96;
+            // Leichte zufällige Bewegung (Brownsche Bewegung)
+            p.vx += (Math.random() - 0.5) * 0.3;
+            p.vy += (Math.random() - 0.5) * 0.3;
+            // Boundary-Constraint: In der Kammer bleiben (IMMER anwenden)
+            const distFromCenter = Math.sqrt(p.x * p.x + p.y * p.y);
+            const maxDist = Math.max(1, chamberInnerRadius - p.size - 2); // Mindestens 1
+            if (distFromCenter > maxDist) {
+                // Zurück zur Kammer-Grenze + Bounce
+                const angle = Math.atan2(p.y, p.x);
+                p.x = Math.cos(angle) * maxDist;
+                p.y = Math.sin(angle) * maxDist;
+                // Velocity reflektieren (Bounce) - nur wenn distFromCenter > 0
+                if (distFromCenter > 0) {
+                    const normalX = p.x / distFromCenter;
+                    const normalY = p.y / distFromCenter;
+                    const dot = p.vx * normalX + p.vy * normalY;
+                    p.vx -= 2 * dot * normalX * 0.6;
+                    p.vy -= 2 * dot * normalY * 0.6;
+                }
+            }
+            // Partikel zeichnen
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = p.color;
+            ctx.fill();
+            // Subtiler Glow
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * 1.5, 0, Math.PI * 2);
+            ctx.fillStyle = hexToRgba(p.color, 0.3);
+            ctx.fill();
+        }
+    }
+    else {
+        // Normaler Core (ohne Kammer)
+        const isCoreStacked = redStackCount >= MAX_RED_STACK;
+        const coreFlashDuration = 150;
+        const timeSinceCoreHit = clock.now - cursorHitFlashTime;
+        let coreColor;
+        if (timeSinceCoreHit < coreFlashDuration) {
+            coreColor = '#ffdd00'; // Yellow flash
+        }
+        else if (isIdle) {
+            coreColor = '#555555';
+        }
+        else if (isCoreStacked) {
+            coreColor = '#00ffff';
+        }
+        else {
+            coreColor = '#ffffff';
+        }
+        ctx.beginPath();
+        ctx.arc(0, 0, cursorSize, 0, Math.PI * 2);
+        ctx.fillStyle = coreColor;
+        ctx.fill();
+    }
+    ctx.restore();
+}
+// ========================================
+// MINI-BRIDGE SPAWN - Big Bang from Logo Center
+// ========================================
+function spawnMiniBridge() {
+    if (evolution) evolution.release(clock.now, centerX, centerY);
+    // Nur spawnen wenn wir noch in einer gültigen Farbphase sind (0, 1, 2)
+    if (currentColorPhase >= CHAMBER_COLORS_SEQUENCE.length) {
+        return;
+    }
+    // Aktuelle Farbe für diese Phase
+    const dominantColor = CHAMBER_COLORS_SEQUENCE[currentColorPhase];
+    // Audio & Haptic: Mini-Bridge Spawn - big bang effect
+    AudioSystem.playBridgeSpawn();
+    HapticManager.levelUp();
+    // URL für diese Farbe
+    const url = COLOR_URLS[dominantColor] || null;
+    const logoX = W / 2;
+    const logoY = H / 2;
+    // Mini-Bridge erstellen - spawnt vom Logo-Zentrum
+    const spawnAngle = Math.random() * Math.PI * 2;
+    const spawnSpeed = 4 + Math.random() * 3; // Schneller für Big Bang
+    // 3D orbit angle für depth simulation
+    const orbitAngle = (floatingBridges.length * Math.PI * 2 / 3) + Math.random() * 0.5;
+    floatingBridges.push({
+        x: logoX,
+        y: logoY,
+        vx: Math.cos(spawnAngle) * spawnSpeed,
+        vy: Math.sin(spawnAngle) * spawnSpeed,
+        color: dominantColor,
+        url: url,
+        size: 10,
+        rotation: 0,
+        rotationSpeed: 0,
+        phase: Math.random() * Math.PI * 2,
+        orbitAngle: orbitAngle, // For 3D orbit simulation
+        orbitSpeed: 0.008 + Math.random() * 0.004,
+        alpha: 1,
+        birthTime: clock.now,
+        hitRadius: 25
+    });
+    // BIG BANG Partikel-Burst vom Logo
+    const burstCount = 60 + currentColorPhase * 20; // Mehr Partikel pro Phase
+    for (let i = 0; i < burstCount; i++) {
+        const angle = (i / burstCount) * Math.PI * 2;
+        const burstSpeed = 8 + Math.random() * 10;
+        particles.push({
+            x: logoX,
+            y: logoY,
+            vx: Math.cos(angle) * burstSpeed,
+            vy: Math.sin(angle) * burstSpeed,
+            life: 1.2,
+            hue: colorToHue(dominantColor)
+        });
+    }
+    const logoX2 = W / 2;
+    const logoY2 = H / 2;
+    // Multiple Shockwaves from logo - big bang effect
+    for (let s = 0; s < 5; s++) {
+        clock.schedule(() => {
+            ripples.push({
+                x: logoX2,
+                y: logoY2,
+                size: 10 + s * 15,
+                alpha: 1 - s * 0.15,
+                hue: colorToHue(dominantColor)
+            });
+        }, s * 60);
+    }
+    // Logo scale punch
+    logoTargetScale = 1.3;
+    clock.schedule(() => { logoTargetScale = 1; }, 200);
+    // PROGRESS: Level erhöhen bei Discharge
+    const coloredLevelCap = postCreditsMode ? 20 : 10;
+    if (upgradeLevel < coloredLevelCap) {
+        const prevLevel = upgradeLevel;
+        upgradeLevel++;
+        console.log(`%c[GAME] Level UP: ${prevLevel} → ${upgradeLevel} (colored discharge)`, 'color: #39ff14; font-family: monospace;');
+        logoBaseScale += 0.18;
+        AudioSystem.playLevelUp(upgradeLevel);
+        AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel); // Ambient passt sich an
+        AudioSystem.triggerSwell(2); // Epischer Swell bei Level-Up
+        HapticManager.levelUp();
+        // Start background music on first levelup (Roman I appears)
+        if (!AudioSystem.bgMusicStarted) {
+            AudioSystem.startBgMusic();
+        }
+    }
+    // Reset chamber state (aber NICHT red particle state - die sind unabhängig)
+    chamberParticles.length = 0;
+    cursorEnergy = 0; // WICHTIG: Energie zurücksetzen
+    logoReadyForDischarge = false;
+    // Advance to next color phase
+    currentColorPhase++;
+    // Check if all 3 colored phases complete (orange=0, brown=1, green=2 → nach green ist phase=3)
+    if (currentColorPhase >= 3) {
+        coloredBridgePhaseComplete = true;
+    }
+}
+// colorToHue imported from ../lib/utils/color
+// ========================================
+// FLOATING BRIDGES - Orbit um Main Logo
+// ========================================
+// Track hover state for bridges
+let hoveredBridgeIndex = -1;
+function drawFloatingBridges() {
+    if (evolution) {
+        hoveredBridgeIndex = drawProjectOrbits(ctx, floatingBridges, W, H, clock.now, mouseX, mouseY);
+        canvas.style.cursor = hoveredBridgeIndex >= 0 ? 'pointer' : 'none';
+        return;
+    }
+    const time = clock.now / 1000;
+    const logoX = W / 2;
+    const logoY = H / 2;
+    // Check which bridge is hovered
+    hoveredBridgeIndex = -1;
+    for (let i = 0; i < floatingBridges.length; i++) {
+        const bridge = floatingBridges[i];
+        const dx = mouseX - bridge.x;
+        const dy = mouseY - bridge.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 40) {
+            hoveredBridgeIndex = i;
+            break;
+        }
+    }
+    // Cursor-Type basierend auf Bridge-Hover
+    if (hoveredBridgeIndex >= 0) {
+        canvas.style.cursor = 'pointer';
+    }
+    else {
+        canvas.style.cursor = 'none';
+    }
+    for (let i = floatingBridges.length - 1; i >= 0; i--) {
+        const bridge = floatingBridges[i];
+        const isHovered = (i === hoveredBridgeIndex);
+        // Orbit-Logik: Weiträumig um das Logo kreisen
+        const dxLogo = logoX - bridge.x;
+        const dyLogo = logoY - bridge.y;
+        const distLogo = Math.sqrt(dxLogo * dxLogo + dyLogo * dyLogo);
+        // Ziel-Orbit-Radius (weiträumig, verschiedene Distanzen)
+        const targetOrbitRadius = 200 + (i * 60);
+        // Speed-Multiplikator (langsamer bei Hover)
+        const speedMult = isHovered ? 0.15 : 1.0;
+        // Orbit-Kraft: Sanft zur Orbit-Linie ziehen
+        if (distLogo > 10) {
+            const orbitError = distLogo - targetOrbitRadius;
+            const pullStrength = orbitError * 0.0006 * speedMult;
+            bridge.vx += (dxLogo / distLogo) * pullStrength;
+            bridge.vy += (dyLogo / distLogo) * pullStrength;
+            // Tangentiale Bewegung (langsam im Uhrzeigersinn)
+            const tangentX = -dyLogo / distLogo;
+            const tangentY = dxLogo / distLogo;
+            const tangentSpeed = 0.012 * speedMult;
+            bridge.vx += tangentX * tangentSpeed;
+            bridge.vy += tangentY * tangentSpeed;
+        }
+        // Sanfte Phase für leichte Wellen
+        bridge.phase += 0.008 * speedMult;
+        const wave = Math.sin(bridge.phase) * 0.15;
+        // Position Update
+        bridge.x += (bridge.vx + wave) * speedMult;
+        bridge.y += (bridge.vy + wave * 0.5) * speedMult;
+        // Starke Dämpfung für sanfte Bewegung
+        bridge.vx *= 0.97;
+        bridge.vy *= 0.97;
+        // Sanftes Bouncing von Rändern
+        const margin = 80;
+        if (bridge.x < margin)
+            bridge.vx += 0.015;
+        if (bridge.x > W - margin)
+            bridge.vx -= 0.015;
+        if (bridge.y < margin)
+            bridge.vy += 0.015;
+        if (bridge.y > H - margin)
+            bridge.vy -= 0.015;
+        // Feste Größe (kein Atmen mehr)
+        const size = bridge.size;
+        // Hover-Effekt: leicht größer
+        const hoverScale = isHovered ? 1.15 : 1.0;
+        ctx.save();
+        ctx.translate(bridge.x, bridge.y);
+        // ∩ Symbol zeichnen - GROSS (4x size)
+        ctx.font = `bold ${size * 4 * hoverScale}px "SF Pro Display", system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // 90% desaturated for soft appearance
+        ctx.fillStyle = desaturate(bridge.color, 0.9);
+        ctx.globalAlpha = isHovered ? 1 : 0.85;
+        ctx.fillText('∩', 0, 0);
+        // Kein "ⁱ" superscript mehr
+        ctx.globalAlpha = 1;
+        ctx.restore();
+        // Store hitbox for click detection
+        bridge.hitRadius = size * 2.5;
+        // Sanfte Gravitation (zieht weiße Partikel an)
+        for (const ap of ambientParticles) {
+            const dx = bridge.x - ap.x;
+            const dy = bridge.y - ap.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 60 && dist > 5) {
+                const pull = 0.01 * (1 - dist / 60);
+                ap.vx += (dx / dist) * pull;
+                ap.vy += (dy / dist) * pull;
+            }
+        }
+    }
+}
+// Draw YOU DIED screen
+function drawYouDied() {
+    // Fade in
+    const fadeProgress = Math.min(1, (clock.now - window.__youDiedStartTime || clock.now) / 1200);
+    const alpha = fadeProgress * 0.9;
+    // Update cursor position smoothly
+    cursorX += (mouseX - cursorX) * 0.15;
+    cursorY += (mouseY - cursorY) * 0.15;
+    // Dark overlay
+    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+    ctx.fillRect(0, 0, W, H);
+    // YOU DIED - weiß mit chromatic abberation
+    const fontSize = Math.min(W, H) * 0.07;
+    ctx.font = `200 ${fontSize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Chromatic abberation für YOU DIED
+    const caOffset = 2;
+    ctx.fillStyle = `rgba(255, 0, 100, ${fadeProgress * 0.3})`;
+    ctx.fillText('YOU DIED', W / 2 - caOffset, H / 2);
+    ctx.fillStyle = `rgba(0, 255, 255, ${fadeProgress * 0.3})`;
+    ctx.fillText('YOU DIED', W / 2 + caOffset, H / 2);
+    // Haupttext weiß
+    ctx.fillStyle = `rgba(255, 255, 255, ${fadeProgress})`;
+    ctx.fillText('YOU DIED', W / 2, H / 2);
+    // Restart button (↻) unterhalb - mehr Abstand, mit chromatic abberation
+    const restartSize = fontSize * 0.5;
+    const restartY = H / 2 + fontSize * 1.5;
+    ctx.font = `300 ${restartSize}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
+    // Chromatic abberation für Restart
+    ctx.fillStyle = `rgba(255, 0, 100, ${fadeProgress * 0.2})`;
+    ctx.fillText('↻', W / 2 - 1.5, restartY);
+    ctx.fillStyle = `rgba(0, 255, 255, ${fadeProgress * 0.2})`;
+    ctx.fillText('↻', W / 2 + 1.5, restartY);
+    ctx.fillStyle = `rgba(255, 255, 255, ${fadeProgress * 0.6})`;
+    ctx.fillText('↻', W / 2, restartY);
+    // Minimalistischer Cursor
+    ctx.beginPath();
+    ctx.arc(cursorX, cursorY, 4, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${fadeProgress * 0.9})`;
+    ctx.fill();
+}
+function getAvailableDischarge() {
+    if (evolution && coloredBridgePhaseComplete) {
+        return !youDiedActive && !modalShown && !gameCompleted && upgradeLevel < (postCreditsMode ? 20 : 10) && cursorEnergy >= MAX_ENERGY ? 'level' : null;
+    }
+    return availableDischarge({
+        blocked: youDiedActive || modalShown,
+        tutorial: gamePhase === GAME_PHASE_TUTORIAL,
+        tutorialSubPhase, ready: logoReadyForDischarge,
+        energy: cursorEnergy, requiredEnergy: getCurrentRings() / 5 * MAX_ENERGY,
+        chamberCount: chamberParticles.length, chamberThreshold: CHAMBER_THRESHOLD,
+        ringsEmitted: ringsExpanded >= ringsMax, inverted: isInverted,
+        redStack: redStackCount, colorsComplete: coloredBridgePhaseComplete,
+        level: upgradeLevel, levelCap: postCreditsMode ? 20 : 10,
+        energyThreshold: ENERGY_THRESHOLD,
+    });
+}
+function drawDischargeCue() {
+    const kind = getAvailableDischarge();
+    if (!kind)
+        return;
+    drawDischargeLink(ctx, {
+        coreX: centerX, coreY: centerY, cursorX, cursorY,
+        coreRadius: Math.min(W, H) * (evolution ? .10 : .08 * logoScale * logoBaseScale),
+        time: clock.now,
+        color: kind === 'color' ? CHAMBER_COLORS_SEQUENCE[currentColorPhase] : '#ffffff',
+    });
+}
+// Main render
+function render() {
+    if (modalShown) return;
+    // If YOU DIED is active, show it and skip normal render
+    if (youDiedActive) {
+        drawYouDied();
+        return;
+    }
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    // === AUDIO-VISUAL SYNC ===
+    // Intensity basiert auf Energie + Level für immersive Symbiose
+    const audioIntensity = Math.min(1, 0.3 + cursorEnergy * 0.4 + (upgradeLevel / 10) * 0.3);
+    AudioSystem.setIntensity(audioIntensity);
+    // Chamber crackling - electric hum from caught particles
+    AudioSystem.setChamberCrackling(chamberParticles.length);
+    // Bridge attraction sound - when logo or mini-bridges are attracting/vibrating
+    const bridgeAttractionStrength = logoReadyForDischarge ?
+        Math.min(1, (clock.now - logoVibrationTime) / 2000) :
+        (hoveredBridgeIndex >= 0 ? 0.6 : 0);
+    AudioSystem.setBridgeAttraction(bridgeAttractionStrength);
+    // drawGrid(); // Entfernt - zu dezent
+    // Check idle state
+    if (clock.now - lastMouseMoveTime > IDLE_TIMEOUT) {
+        isIdle = true;
+        // Langsamer Discharge im Idle
+        if (cursorEnergy > 0) {
+            cursorEnergy = Math.max(0, cursorEnergy - 0.002);
+        }
+    }
+    // UPDATE CURSOR POSITION FIRST - vor allen Partikel-Checks!
+    // Das verhindert Race-Conditions bei schnellen Bewegungen
+    const logoX = W / 2;
+    const logoY = H / 2;
+    const dxToLogo = mouseX - logoX;
+    const dyToLogo = mouseY - logoY;
+    const distToLogo = Math.sqrt(dxToLogo * dxToLogo + dyToLogo * dyToLogo);
+    let pullX = 0, pullY = 0;
+    const captureRadius = 180;
+    if (distToLogo < captureRadius && cursorEnergy >= ENERGY_THRESHOLD) {
+        const proximity = 1 - distToLogo / captureRadius;
+        const pullStrength = cursorEnergy * proximity * 0.6;
+        if (distToLogo > 1) {
+            pullX = -(dxToLogo / distToLogo) * pullStrength * distToLogo * 0.3;
+            pullY = -(dyToLogo / distToLogo) * pullStrength * distToLogo * 0.3;
+        }
+    }
+    // Mobile: Cursor erscheint ÜBER dem Finger für bessere Sichtbarkeit
+    const mobileOffsetY = (isMobile && isTouching) ? MOBILE_CURSOR_OFFSET_Y : 0;
+    const targetX = mouseX + pullX;
+    const targetY = mouseY + pullY + mobileOffsetY;
+    cursorX += (targetX - cursorX) * 0.25;
+    cursorY += (targetY - cursorY) * 0.25;
+    if (evolution) {
+        const wasPowered = evolution.powerActive(clock.now);
+        const result = evolution.update(evolutionInput());
+        if (!wasPowered && evolution.powerActive(clock.now)) { AudioSystem.playSuperStarCollect(); HapticManager.levelUp(); }
+        if (result.grazed) { cursorEnergy = Math.max(0, cursorEnergy - .18); AudioSystem.playRejectDischarge(); }
+        if (result.hit) { spawnShockwave(centerX, centerY, 1.4); AudioSystem.playSpiralDamage(); HapticManager.levelUp(); }
+        if (result.reward) {
+            for (let i = 0; i < 6; i++) {
+                const angle = i * Math.PI / 3;
+                ambientParticles.push({ x: result.reward.x + Math.cos(angle) * 18, y: result.reward.y + Math.sin(angle) * 18,
+                    vx: Math.cos(angle) * .6, vy: Math.sin(angle) * .6, size: 1.8, alpha: .9,
+                    twinkle: angle, absorbed: false, isSuperStar: false });
+            }
+            AudioSystem.playCollect(2);
+        }
+        if (result.died) { triggerYouDied(); return; }
+    }
+    drawFloatingBridges();
+    drawAmbientParticles();
+    if (evolution) evolution.draw(ctx, evolutionInput());
+    else updateAndDrawSpiralEnemy(); // Spiral enemy (affects stars)
+    updateAndDrawSpiralExplosion(); // Orange explosion particles
+    updateAndDrawShockwave(); // Red shockwave when enemy hits logo
+    drawColoredParticles();
+    if (!evolution) drawRedParticle();
+    drawParticles();
+    drawDischargeCue();
+    drawLogo();
+    drawRipples();
+    drawCursor();
+    drawScanlines();
+}
+// Events
+window.addEventListener('resize', resize);
+document.addEventListener('mousemove', (e) => {
+    if (modalShown) return;
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    lastMouseMoveTime = clock.now;
+    isIdle = false;
+});
+// Click auf Logo = ENERGIE EXPLOSION (nur wenn Threshold erreicht)
+document.addEventListener('click', (e) => {
+    if (modalShown) return;
+    if (evolution && e.target instanceof Element && e.target.closest('button, a, details, summary')) return;
+    // If YOU DIED is active, click resets to level 2
+    if (youDiedActive) {
+        resetFromYouDied();
+        return;
+    }
+    const clickX = e.clientX;
+    const clickY = e.clientY;
+    // ZUERST: Check ob ein Floating Bridge angeklickt wurde
+    for (const bridge of floatingBridges) {
+        const dx = clickX - bridge.x;
+        const dy = clickY - bridge.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < (bridge.hitRadius || 30) && bridge.url) {
+            // Bridge angeklickt! Öffne URL
+            window.open(bridge.url, '_blank');
+            // Visuelles Feedback
+            ripples.push({
+                x: bridge.x,
+                y: bridge.y,
+                size: 10,
+                alpha: 1,
+                hue: colorToHue(bridge.color)
+            });
+            // Audio
+            AudioSystem.playCollect(4);
+            return; // Keine weitere Verarbeitung
+        }
+    }
+    const dist = distFromLogo(clickX, clickY);
+    const logoRadius = Math.min(W, H) * (evolution ? .13 : .22 * logoBaseScale);
+    const exactCenterX = W / 2;
+    const exactCenterY = H / 2;
+    // Ripple immer
+    ripples.push({
+        x: clickX,
+        y: clickY,
+        size: 5,
+        alpha: 0.5,
+        hue: 0
+    });
+    const dischargeKind = getAvailableDischarge();
+    if (evolution && dist < logoRadius && !dischargeKind) {
+        evolution.lastReject = clock.now;
+        AudioSystem.playRejectDischarge();
+        return;
+    }
+    // CHAMBER DISCHARGE: Only when ALL rings are FULL and ALL previous rings have been emitted
+    // Check if UNLOCKED rings are full (not all 5)
+    const unlockedRingsCount = getCurrentRings();
+    const requiredEnergyForDischarge = (unlockedRingsCount / 5) * MAX_ENERGY;
+    const ringsFullForDischarge = cursorEnergy >= requiredEnergyForDischarge;
+    const chamberFull = chamberParticles.length >= CHAMBER_THRESHOLD;
+    if (gamePhase !== GAME_PHASE_TUTORIAL && dist < logoRadius && !isInverted) {
+        // Check if all conditions met for discharge (ONLY in normal mode, not inverted)
+        if (dischargeKind === 'color') {
+            spawnMiniBridge();
+            return;
+        }
+        // Rejected: clicked logo but requirements not met
+        // Only play reject sound if chamber has particles (user is trying to discharge)
+        if (chamberParticles.length > 0 && (!ringsFullForDischarge || !chamberFull)) {
+            AudioSystem.playRejectDischarge();
+            return;
+        }
+    }
+    // TUTORIAL DISCHARGE: Click logo at threshold to progress tutorial
+    // Tutorial has its own ring system (3 rings), always allow discharge
+    const tutorialRingsMax = 3;
+    ringsMax = tutorialRingsMax;
+    ringsExpanded = tutorialRingsMax; // Tutorial allows immediate discharge
+    if (dist < logoRadius && dischargeKind === 'tutorial') {
+        if (evolution) evolution.release(clock.now, centerX, centerY);
+        // Start background music AFTER tutorial completes
+        // Music only starts after colored phase begins (gamePhase != GAME_PHASE_TUTORIAL)
+        // This is handled in the discharge logic when transitioning to GAME_PHASE_COLORED
+        // Progress tutorial
+        if (tutorialSubPhase === 0) {
+            // First discharge → minimal twitch, then 3 rings
+            tutorialDischargeCount++;
+            tutorialSubPhase = 1;
+            logoReadyForDischarge = false;
+            cursorEnergy = 0;
+            AudioSystem.playDischarge(1);
+            // Subtle effect
+            logoOutlines.push({ alpha: 0.5, radius: 10, hue: 180 });
+            logoTargetScale = 1.1;
+            clock.schedule(() => { logoTargetScale = 1; }, 100);
+        }
+        else if (tutorialSubPhase === 1) {
+            // Second discharge → full vibration, then 4 rings, then transition to colored
+            tutorialDischargeCount++;
+            tutorialSubPhase = 2;
+            logoReadyForDischarge = false;
+            cursorEnergy = 0;
+            AudioSystem.playLevelUp(1);
+            // More noticeable effect
+            logoOutlines.push({ alpha: 0.8, radius: 10, hue: 200 });
+            logoTargetScale = 1.15;
+            clock.schedule(() => { logoTargetScale = 1; }, 150);
+            // Set tutorial rings max (4 for phase 2)
+            ringsMax = 4;
+            ringsExpanded = 4; // Allow immediate discharge
+            // Transition to colored particles after short delay (longer on mobile)
+            const transitionDelay = isMobile ? 1200 : 500;
+            clock.schedule(() => {
+                gamePhase = GAME_PHASE_COLORED;
+                currentColorPhase = 0;
+                chamberActive = true;
+                // Play transition sound - music starts later on first real levelup (Roman I)
+                AudioSystem.playBridgeSpawn();
+                // NOTE: Music does NOT start here - it starts on first real discharge (line ~2855)
+                // when the Roman numeral I appears above the logo
+            }, transitionDelay);
+        }
+        return;
+    }
+    // Nur wenn auf Logo geklickt UND nicht in Chamber-Phase
+    // Im Inverted Mode: Discharge JEDERZEIT wenn mindestens 1 heart gefangen
+    // Normal Mode: Discharge wenn Ringe voll UND Colored Phase abgeschlossen
+    const currentLevelCap = postCreditsMode ? 20 : 10;
+    if (dist < logoRadius && dischargeKind === 'level') {
+        if (evolution) evolution.release(clock.now, centerX, centerY);
+        const prevLevel = upgradeLevel;
+        // SIMPLIFIED: 1 red particle = 1 level, always
+        // No special rules, no max stack bonus
+        const levelsToAdd = evolution ? evolution.takePowerReward(clock.now) : isInverted ? redStackCount : 1;
+        upgradeLevel = Math.min(currentLevelCap, upgradeLevel + levelsToAdd);
+        if (upgradeLevel > prevLevel) {
+            console.log(`%c[GAME] Level UP: ${prevLevel} → ${upgradeLevel} (red discharge, inverted: ${isInverted}, stack: ${redStackCount})`, 'color: #39ff14; font-family: monospace;');
+        }
+        // Logo wächst, aber max 2.8 (damit Ziffer sichtbar bleibt)
+        logoBaseScale = Math.min(2.8, logoBaseScale + 0.18 * levelsToAdd);
+        // Modal check - direkt nach Level-Increment
+        if (upgradeLevel >= currentLevelCap && !gameCompleted) {
+            gameCompleted = true;
+            clock.schedule(() => {
+                if (currentLevelCap === 20) {
+                    showSuperSuccessModal();
+                }
+                else {
+                    showModal();
+                }
+            }, 4000);
+        }
+        // Audio & Haptic: Discharge - epischer Moment!
+        AudioSystem.playDischarge(upgradeLevel);
+        AudioSystem.triggerSwell(2.5); // Ambient crescendo
+        HapticManager.discharge();
+        // Audio & Haptic: Level Up (wenn Level gestiegen)
+        if (upgradeLevel > prevLevel) {
+            clock.schedule(() => {
+                AudioSystem.playLevelUp(upgradeLevel);
+                AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel); // Ambient evolution
+                HapticManager.levelUp();
+            }, 150);
+        }
+        // Reset nach Discharge - always reset if inverted or had red particles
+        if (isInverted || redStackCount > 0) {
+            redStackCount = 0;
+            isInverted = false;
+            canvas.style.filter = '';
+            // Audio: Zurück zum normalen Sound
+            AudioSystem.setInvertedMode(false);
+        }
+        // Nach Discharge: Red Particles wieder aktivieren wenn Level unter Cap
+        if (upgradeLevel < currentLevelCap) {
+            redParticleActive = true;
+            redParticleSpawnTime = clock.now + 3000;
+        }
+        // Start background music on first discharge
+        if (!AudioSystem.bgMusicStarted) {
+            AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel);
+            AudioSystem.startBgMusic();
+        }
+        const intensity = cursorEnergy;
+        const releaseHue = (upgradeLevel * 40) % 360;
+        // Set max rings for this discharge
+        ringsMax = 5 + upgradeLevel * 2;
+        ringsExpanded = ringsMax; // Immediately mark as emitted to avoid blocking next discharge
+        // Ring count based on level
+        const ringCount = evolution ? 2 : ringsMax;
+        for (let o = 0; o < ringCount; o++) {
+            clock.schedule(() => {
+                logoOutlines.push({
+                    alpha: 1,
+                    radius: 10 + o * 6,
+                    hue: (releaseHue + o * 15) % 360
+                });
+            }, o * 20);
+        }
+        // Scale punch based on level
+        logoTargetScale = 1.2 + upgradeLevel * 0.05;
+        clock.schedule(() => { logoTargetScale = 1; }, 150);
+        // DRUCKWELLE - alle ambient particles wegstoßen
+        for (let ap of ambientParticles) {
+            const apDx = ap.x - exactCenterX;
+            const apDy = ap.y - exactCenterY;
+            const apDist = Math.sqrt(apDx * apDx + apDy * apDy);
+            if (apDist > 0 && apDist < 400) {
+                const pushStrength = (1 - apDist / 400) * 15 * intensity;
+                ap.vx += (apDx / apDist) * pushStrength;
+                ap.vy += (apDy / apDist) * pushStrength;
+            }
+        }
+        // Mehr farbige Partikel
+        const particleCount = evolution ? 22 : Math.floor(50 + intensity * 80 + upgradeLevel * 12);
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (i / particleCount) * Math.PI * 2;
+            const speed = 6 + Math.random() * 12 * intensity;
+            particles.push({
+                x: exactCenterX,
+                y: exactCenterY,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 1,
+                hue: (releaseHue + Math.random() * 60) % 360
+            });
+        }
+        // Mehrere Shockwaves
+        for (let s = 0; s < 3; s++) {
+            clock.schedule(() => {
+                ripples.push({
+                    x: exactCenterX,
+                    y: exactCenterY,
+                    size: 10 + s * 20,
+                    alpha: 1,
+                    hue: (releaseHue + s * 30) % 360
+                });
+            }, s * 40);
+        }
+        cursorEnergy = 0;
+        redParticleActive = false;
+        redParticleCatches = 0; // Reset für nächste Ladung
+        redParticle.active = false;
+        // Chamber reset
+        chamberParticles.length = 0;
+        chamberActive = false;
+        coloredParticles.length = 0;
+    }
+});
+// Touch support
+document.addEventListener('touchstart', (e) => {
+    if (modalShown) return;
+    if (evolution && e.target instanceof Element && e.target.closest('button, a, details, summary')) return;
+    const touch = e.touches[0];
+    mouseX = touch.clientX;
+    mouseY = touch.clientY;
+    lastMouseMoveTime = clock.now;
+    isIdle = false;
+    isTouching = true;
+});
+document.addEventListener('touchmove', (e) => {
+    if (modalShown) return;
+    const touch = e.touches[0];
+    mouseX = touch.clientX;
+    mouseY = touch.clientY;
+    lastMouseMoveTime = clock.now;
+    isIdle = false;
+    e.preventDefault();
+}, { passive: false });
+// Touch release = ENERGIE EXPLOSION (drag-and-release auf Mobile)
+document.addEventListener('touchend', (e) => {
+    if (modalShown) return;
+    if (evolution && e.target instanceof Element && e.target.closest('button, a, details, summary')) { isTouching = false; return; }
+    // WICHTIG: Der Cursor verwendet Interpolation (0.25) und "hinkt" der Zielposition hinterher.
+    // Wir müssen die ZIEL-Position berechnen, nicht die interpolierte aktuelle Position!
+    // Die Zielposition ist: mouseX/mouseY + offset (wenn mobile)
+    const cursorTargetX = mouseX; // X hat keinen Offset
+    const cursorTargetY = mouseY + (isMobile ? MOBILE_CURSOR_OFFSET_Y : 0);
+    isTouching = false;
+    if (e.changedTouches.length > 0) {
+        const touch = e.changedTouches[0];
+        const touchX = touch.clientX;
+        const touchY = touch.clientY;
+        // ZUERST: Check ob ein Floating Bridge getippt wurde
+        for (const bridge of floatingBridges) {
+            const dx = touchX - bridge.x;
+            const dy = touchY - bridge.y;
+            const bridgeDist = Math.sqrt(dx * dx + dy * dy);
+            if (bridgeDist < (bridge.hitRadius || 30) && bridge.url) {
+                // Bridge getippt! Öffne URL
+                window.open(bridge.url, '_blank');
+                // Visuelles Feedback
+                ripples.push({
+                    x: bridge.x,
+                    y: bridge.y,
+                    size: 10,
+                    alpha: 1,
+                    hue: colorToHue(bridge.color)
+                });
+                // Audio
+                AudioSystem.playCollect(4);
+                return; // Keine weitere Verarbeitung
+            }
+        }
+        // DRAG-AND-RELEASE: Berechne wo der Cursor SEIN SOLLTE (mit Offset) beim Loslassen
+        // Wir nutzen die ZIEL-Position, nicht die interpolierte aktuelle Position!
+        const logoRadius = Math.min(W, H) * (evolution ? .13 : .22 * logoBaseScale);
+        const exactCenterX = W / 2;
+        const exactCenterY = H / 2;
+        const dxLogo = cursorTargetX - exactCenterX;
+        const dyLogo = cursorTargetY - exactCenterY;
+        const cursorDistToLogo = Math.sqrt(dxLogo * dxLogo + dyLogo * dyLogo);
+        ripples.push({
+            x: touchX,
+            y: touchY,
+            size: 5,
+            alpha: 0.5,
+            hue: 0
+        });
+        // MOBILE TOUCH: Simuliere einen Click an der CURSOR-Position (nicht Finger!)
+        // Der Cursor ist 70px über dem Finger positioniert
+        // Wir dispatchen ein synthetisches Click-Event an der Cursor-Position,
+        // damit die gleiche Logik wie Desktop verwendet wird.
+        // Prüfe ob Cursor über Logo ist
+        const cursorOverLogo = cursorDistToLogo < logoRadius * 1.5; // Etwas toleranter für Touch
+        if (cursorOverLogo) {
+            // Simuliere Click an Cursor-Position (dispatcht das gleiche Event wie Desktop)
+            const clickEvent = new MouseEvent('click', {
+                bubbles: true,
+                cancelable: true,
+                clientX: cursorTargetX,
+                clientY: cursorTargetY
+            });
+            document.dispatchEvent(clickEvent);
+        }
+    }
+});
+// Sound Hint - staggered animation per letter
+const soundHint = document.getElementById('sound-hint');
+const hintSpans = soundHint?.querySelectorAll('span:not(.speaker)');
+hintSpans?.forEach((span, i) => {
+    // Random delay offset for each letter (playful, independent)
+    const delay = Math.random() * 1.5;
+    span.style.animationDelay = `${delay}s`;
+});
+function hideSoundHint() {
+    soundHint?.classList.add('hidden');
+    if (soundHint)
+        soundHint.hidden = true;
+}
+// Sound Toggle Button
+const soundToggleBtn = document.getElementById('sound-toggle');
+const soundOnIcon = soundToggleBtn?.querySelector('.sound-on');
+const soundOffIcon = soundToggleBtn?.querySelector('.sound-off');
+function updateSoundIcons(muted) {
+    if (soundOnIcon && soundOffIcon) {
+        soundOnIcon.style.display = muted ? 'none' : 'block';
+        soundOffIcon.style.display = muted ? 'block' : 'none';
+    }
+    soundToggleBtn?.classList.toggle('muted', muted);
+    soundToggleBtn?.setAttribute('aria-label', muted ? 'Enable sound' : 'Mute sound');
+}
+async function enableSound() {
+    const wasEnabled = AudioSystem.ready && !AudioSystem.muted;
+    if (!await initAudioOnInteraction())
+        return;
+    if (AudioSystem.muted)
+        AudioSystem.toggleMute();
+    syncSoundUi();
+    if (!wasEnabled)
+        AudioSystem.playThanks();
+    if (!AudioSystem.bgMusicStarted && gamePhase !== GAME_PHASE_TUTORIAL) {
+        AudioSystem.setGameLevel(evolution ? musicFor(upgradeLevel, postCreditsMode) : upgradeLevel);
+        AudioSystem.startBgMusic();
+    }
+}
+// Sound Hint click handler - enables sound
+soundHint?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    enableSound();
+});
+// Touch support for sound hint (mobile)
+soundHint?.addEventListener('touchend', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    enableSound();
+});
+async function toggleSound() {
+    // A first click enables audio instead of initializing and immediately muting it.
+    if (!AudioSystem.ready || AudioSystem.muted) {
+        await enableSound();
+        return;
+    }
+    AudioSystem.toggleMute();
+    AudioSystem.stopBgMusic();
+    syncSoundUi();
+}
+soundToggleBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleSound();
+});
+// Touch support for sound toggle button (mobile)
+soundToggleBtn?.addEventListener('touchend', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    toggleSound();
+});
+function evolutionInput() {
+    return { now: clock.now, width: W, height: H, cursorX, cursorY, energy: cursorEnergy, ready: !!getAvailableDischarge(),
+        level: upgradeLevel, afterglow: postCreditsMode, tutorial: gamePhase === GAME_PHASE_TUTORIAL, completing: gameCompleted };
+}
+function beginEvolution(chapterId = 'awakening', skipTutorial = false) {
+    if (!evolution) return;
+    clock.clearTimers();
+    evolutionRest = null; evolutionPaused = false;
+    evolution.reset(clock.now);
+    const chapter = CHAPTERS.find(c => c.id === chapterId) || CHAPTERS[0];
+    upgradeLevel = chapter.from;
+    postCreditsMode = ['echo', 'tides', 'binary', 'harmony'].includes(chapter.id);
+    youDiedActive = gameCompleted = isInverted = false;
+    canvas.style.filter = '';
+    logoBaseScale = logoScale = logoTargetScale = 1;
+    logoGlow = logoBreathPhase = 0;
+    logoReadyForDischarge = false;
+    tutorialSubPhase = upgradeLevel > 0 || skipTutorial ? 2 : 0;
+    tutorialDischargeCount = tutorialSubPhase;
+    gamePhase = tutorialSubPhase === 2 ? GAME_PHASE_COLORED : GAME_PHASE_TUTORIAL;
+    currentColorPhase = upgradeLevel > 0 ? 3 : 0;
+    coloredBridgePhaseComplete = currentColorPhase === 3;
+    chamberActive = gamePhase !== GAME_PHASE_TUTORIAL && !coloredBridgePhaseComplete;
+    chamberParticles.length = coloredParticles.length = floatingBridges.length = 0;
+    ambientParticles.length = particles.length = ripples.length = logoOutlines.length = 0;
+    redStackCount = redParticleCatches = cursorEnergy = 0;
+    redParticle.active = redParticleActive = false;
+    coloredParticleSpawnTime = clock.now;
+    spiralEnemy.active = spiralEnemy.dying = false;
+    shockwave.active = false;
+    ringsMax = getCurrentRings(); ringsExpanded = ringsMax;
+    lastMouseMoveTime = clock.now; isIdle = false; isTouching = false;
+    cursorX = mouseX = W * .7; cursorY = mouseY = H * .55;
+    AudioSystem.setInvertedMode(false);
+    AudioSystem.setSpiralSuction(0);
+    AudioSystem.setChamberCrackling(0);
+    AudioSystem.setBridgeAttraction(0);
+    AudioSystem.setGameLevel(musicFor(upgradeLevel, postCreditsMode));
+    if (upgradeLevel > 0 && AudioSystem.ready && !AudioSystem.muted) AudioSystem.startBgMusic();
+    const reentry = document.getElementById('evolution-reentry'); if (reentry) reentry.hidden = true;
+    modalShown = false;
+    clock.setPaused(document.hidden);
+    seedAmbientParticles();
+    // The first light already responds within reach of the player's starting position.
+    if (chapterId === 'awakening') {
+        ambientParticles.slice(0, 16).forEach((p, i) => {
+            const angle = i * 2.4;
+            p.x = cursorX + Math.cos(angle) * (45 + i * 4);
+            p.y = cursorY + Math.sin(angle) * (45 + i * 4);
+            p.vx = p.vy = 0;
+        });
+    }
+    document.getElementById('pause-toggle')?.setAttribute('aria-pressed', 'false');
+}
+
+function pauseEvolution() {
+    modalShown = true;
+    clock.setPaused(true);
+    isTouching = false;
+    AudioSystem.setSpiralSuction(0);
+    AudioSystem.setChamberCrackling(0);
+    AudioSystem.setBridgeAttraction(0);
+}
+function openEvolutionRest(kind) {
+    pauseEvolution();
+    evolutionRest = { kind, started: null, elapsed: 0 };
+    const reentry = document.getElementById('evolution-reentry');
+    if (reentry) {
+        reentry.hidden = false;
+        reentry.setAttribute('aria-label', kind === 'loss' ? 'Begin a new attempt' : kind === 'final' ? 'Begin again' : 'Continue into the afterglow');
+        reentry.focus?.({ preventScroll: true });
+    }
+}
+function showEvolutionEnding(final) {
+    if (modalShown) return;
+    openEvolutionRest(final ? 'final' : 'success');
+    AudioSystem.playModalEnter();
+}
+function showEvolutionFailure() {
+    clock.clearTimers();
+    youDiedActive = true;
+    openEvolutionRest('loss');
+    AudioSystem.playYouDied();
+}
+function continueEvolution() {
+    if (!evolutionRest || evolutionRest.elapsed < 1000) return;
+    const kind = evolutionRest.kind;
+    beginEvolution(kind === 'success' ? 'echo' : 'awakening', kind === 'loss');
+}
+function drawEvolutionRest(timestamp) {
+    if (!evolutionRest) return;
+    if (evolutionRest.started === null) evolutionRest.started = timestamp;
+    evolutionRest.elapsed = timestamp - evolutionRest.started;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    for (const p of ambientParticles) {
+        ctx.fillStyle = `rgba(220,233,226,${Math.min(.22, p.alpha * .3)})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+    }
+    drawSettlement(ctx, W, H, evolutionRest.elapsed, evolutionRest.kind === 'loss');
+}
+function toggleEvolutionPause() {
+    if (!evolution || evolutionRest) return;
+    evolutionPaused = !evolutionPaused;
+    if (evolutionPaused) pauseEvolution();
+    else { modalShown = false; clock.setPaused(document.hidden); }
+    const button = document.getElementById('pause-toggle');
+    button?.setAttribute('aria-pressed', String(evolutionPaused));
+    button?.setAttribute('aria-label', evolutionPaused ? 'Resume game' : 'Pause game');
+}
+function initEvolution() {
+    if (!evolution) return;
+    beginEvolution();
+    document.getElementById('evolution-reentry')?.addEventListener('click', event => {
+        event.stopPropagation(); continueEvolution();
+    });
+    document.getElementById('pause-toggle')?.addEventListener('click', event => {
+        event.stopPropagation(); toggleEvolutionPause();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.repeat || event.target instanceof Element && event.target.closest('button')) return;
+        if (event.code === 'Escape' || event.code === 'KeyP') { event.preventDefault(); toggleEvolutionPause(); }
+    });
+    document.addEventListener('visibilitychange', () => clock.setPaused(modalShown || document.hidden));
+}
+function frame(timestamp) {
+    if (evolutionRest) drawEvolutionRest(timestamp);
+    else clock.advance(timestamp, render);
+    requestAnimationFrame(frame);
+}
+// Init
+resize();
+seedAmbientParticles();
+syncSoundUi();
+render();
+initEvolution();
+requestAnimationFrame(frame);

@@ -17,7 +17,7 @@ Features include chromatic aberration, shockwaves, haptic feedback (Gamepad API)
 
 | Layer | Technology |
 |-------|------------|
-| **Framework** | Astro v5 (static output) |
+| **Framework** | Astro v7 (static output) |
 | **Styling** | TailwindCSS v4 |
 | **Language** | TypeScript |
 | **Audio** | Tone.js (synthesis, loops, SFX) |
@@ -32,14 +32,14 @@ src/
 ├── lib/
 │   ├── audio/tone/         # Tone.js engine: ambient, SFX, loops, effects
 │   ├── canvas/             # Canvas utilities
-│   ├── game/               # Game logic, phases, constants, types
+│   ├── game/               # Client runtime, pause-aware clock, balance, phases
 │   ├── haptics/            # Gamepad vibration manager
 │   ├── input/              # Keyboard, mouse, touch handlers
 │   ├── particles/          # Particle system (ambient, effects)
 │   ├── ui/                 # UI components (sound toggle)
 │   └── utils/              # Color helpers, math utilities
 ├── pages/
-│   └── index.astro         # Main entry (1300+ lines of game loop)
+│   └── index.astro         # Page shell, controls, styles
 └── styles/                 # Global styles
 ```
 
@@ -53,7 +53,10 @@ src/
 - `HapticManager` — Unified Gamepad API wrapper for vibration feedback on controllers
 
 ### Game Loop
-- Canvas-based render loop at 60fps
+- Original per-animation-frame movement and cursor response; pause-aware elapsed-time timers
+- Pause button and P / Escape; hidden tabs and completion dialogs pause simulation
+- Restart clears pending gameplay timers and restores the full tutorial
+- Enemy speed caps grow with progression (2× / 3× / 4×; 8× after credits)
 - Phase-based progression (Tutorial → Colored → Complete)
 - Enemy spawn system with spiral AI
 - Shockwave physics on enemy kill
@@ -67,10 +70,22 @@ src/
 
 | Command | Action |
 |---------|--------|
-| `npm install` | Install dependencies |
+| `npm ci` | Install locked dependencies (Node 22.12+; `.nvmrc` selects 22) |
+| `npm run check` | Strict Astro / TypeScript checks |
+| `npm test` | Timing, balance, restart and collision regression tests |
 | `npm run dev` | Start dev server at `localhost:4321` |
 | `npm run build` | Build production bundle to `./dist/` |
 | `npm run preview` | Preview build locally |
+
+## Deployment and verification
+
+This is a static site. Vercel's Astro preset builds with `npm run build` and serves
+`dist/`; no server adapter is required. See the
+[official deployment guide](https://docs.astro.build/en/guides/deploy/vercel/).
+Use Node 22.12 or newer on the host. Deployment settings have not been changed remotely.
+
+CI runs type checks, regression tests, production build, and the dependency audit.
+See [the audit](docs/AUDIT-2026-09-27.md) for findings and remaining work.
 
 ## Links
 
@@ -85,3 +100,8 @@ From the br1dge ecosystem:
 - [Birth](https://birth.br1dge.xyz/) — Minimalist info card
 - [GR1FTSWORD](https://sword-gamma.vercel.app/) — ASCII music crypto art
 - [Word of Choice](https://wocl.br1dge.xyz/) — On-chain expression
+
+## Next Codex session
+
+Read [the handoff](docs/NEXT-SESSION.md) first. The last tested original-based
+version is preserved at `/playtest`; the rejected Flow redesign was removed.
