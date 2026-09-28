@@ -7,7 +7,7 @@ am Symbol erzeugt einen kleinen Rückstoß. Die zwei ersten Entladungen bleiben
 als ungefährliche Spielsequenz erhalten, ohne sie zu beschriften.
 
 Die erste Gefahr bleibt einzeln und langsam. Erst eine erlebte Verfolgung mit
-anschließender Entladung erlaubt mehrere Gegner. Kleine rote Punkte mit schwachem Glow und einem feinen Ankunftsring
+anschließender Entladung erlaubt mehrere Gegner. Kleine rote, organisch wabernde Blobs in unterschiedlichen Größen mit schwachem Glow und einem feinen Ankunftsring
 trennen Gefahr vom sammelbaren Licht. Eine saubere Flucht setzt sammelbare Sterne frei; bei
 Kontakt reißen sichtbar Partikel vom Spieler zur Gefahr ab. Neue Abschnitte
 lösen bestehende Gefahren auf und lassen fünf Sekunden zum Ankommen.
@@ -30,8 +30,13 @@ Berührung des pulsierenden Restlichts startet vor den Farbphasen, ohne das Tuto
 persistenten Freischaltungen oder Ranglisten.
 
 Nach den drei Farbphasen wird eine vollständige Ladung am Symbol entladen.
-Jede Entladung treibt den Aufbau weiter und stößt nahe Gefahren zurück. Rote
-Herzen und die Inversion sind in dieser Variante deaktiviert. Der ursprüngliche
+Jede Entladung treibt den Aufbau weiter und stößt nahe Gefahren zurück. Die alte
+Inversion ist in dieser Variante deaktiviert. Goldene Blitz-Power-ups aktivieren stattdessen
+einen freiwilligen Overdrive nach den drei Farbphasen: acht Sekunden doppelte
+Ladung pro Stern, stärkere Anziehung, bis zu zwei zusätzliche Gegner und
+schnellere Ankünfte. Eine volle Entladung bringt zwei Stufen (maximal X/XX)
+und verbraucht den Bonus. Kontakt oder ein Strukturtreffer beendet ihn. Ein vollständig goldener Cursor mit Blitzkern und rotierenden Außenbögen
+zeigt den aktiven Zustand. Ein zusätzlicher Außenbogen zeigt die Restzeit; Pausen halten auch den Overdrive an. Der ursprüngliche
 Playtest behält sie. Das Nachspiel folgt nach dem ersten Abschluss, mit drei
 unterschiedlichen Feldbedingungen statt bloß höherer Gegnergeschwindigkeit.
 
@@ -53,7 +58,8 @@ der Spielzeit, pausiert mit dem Spiel und passt sich der Fenstergröße an.
 | Twin pull | 17–19 | gekreuzte feine Orbits; zusätzliche bewegliche Quelle zieht Licht und Gefahren an | bass |
 | Equilibrium | 20 | Abschluss des Nachspiels | bass |
 
-Die Zahlen werden nicht angezeigt. Strukturbrüche zeigen Schaden; die
+Römische Zahlen I–X und XI–XX stehen über dem Symbol; seine Größe wächst
+mit jeder Stufe deutlich. Strukturbrüche zeigen Schaden; die
 Entwicklung der Kontur zeigt Fortschritt. Bestehende Musikloops werden über die
 vorhandenen Übergänge gewechselt; diese Fassung enthält keine neue Komposition.
 

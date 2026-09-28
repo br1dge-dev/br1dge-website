@@ -41,6 +41,15 @@ export class GravityField {
   safeReturns = 0;
   lastReject = -Infinity;
   lastEscape = -Infinity;
+  powerUntil = -Infinity;
+  nextHeart = 0;
+  heart: { x: number; y: number; born: number } | null = null;
+  powerActive(now: number) { return now < this.powerUntil; }
+  takePowerReward(now: number) {
+    const reward = this.powerActive(now) ? 2 : 1;
+    this.powerUntil = -Infinity;
+    return reward;
+  }
   private activeChapter = '';
   private feedback: { x: number; y: number; tx: number; ty: number; at: number; kind: 'loss' | 'escape' }[] = [];
   private previous: number | undefined;
@@ -50,6 +59,9 @@ export class GravityField {
   private height = 0;
   reset(now: number) {
     this.integrity = 3;
+    this.powerUntil = -Infinity;
+    this.nextHeart = now + 12000;
+    this.heart = null;
     this.hazards = [];
     this.previous = undefined;
     this.history = [];
@@ -88,6 +100,7 @@ export class GravityField {
     this.previous = s.now;
     if (this.width && this.height && (s.width !== this.width || s.height !== this.height)) {
       const sx = s.width / this.width, sy = s.height / this.height;
+      if (this.heart) { this.heart.x *= sx; this.heart.y *= sy; }
       for (const h of this.hazards) {
         h.x *= sx; h.y *= sy;
         h.trail = h.trail.map(p => ({ x: p.x * sx, y: p.y * sy }));
@@ -102,6 +115,23 @@ export class GravityField {
       this.nextSpawn = s.now + 5000;
       return result;
     }
+    // Hearts arrive only after the three project colours have been learned.
+    if (s.level >= 3 && !this.powerActive(s.now)) {
+      if (!this.heart && s.now >= this.nextHeart) {
+        const angle = s.now / 7000;
+        const radius = Math.min(s.width, s.height) * .32;
+        this.heart = { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius, born: s.now };
+      }
+      if (this.heart && s.now - this.heart.born > 10000) {
+        this.heart = null; this.nextHeart = s.now + 10000;
+      }
+      if (this.heart && Math.hypot(s.cursorX - this.heart.x, s.cursorY - this.heart.y) < 22) {
+        this.heart = null; this.powerUntil = s.now + 8000;
+        this.nextHeart = s.now + 24000;
+        this.nextSpawn = s.now;
+      }
+    }
+    const powered = this.powerActive(s.now);
     const chapter = chapterFor(s.level, s.afterglow);
     if (this.activeChapter !== chapter.id) {
       if (this.activeChapter) this.hazards = [];
@@ -109,7 +139,7 @@ export class GravityField {
       this.nextSpawn = Math.max(this.nextSpawn, s.now + 5000);
     }
     // Complexity follows demonstrated play: first feel the chase, then return safely.
-    const maxHazards = this.safeReturns === 0 ? 1 : s.afterglow ? 3 : s.level >= 4 ? 2 : 1;
+    const maxHazards = (this.safeReturns === 0 ? 1 : s.afterglow ? 3 : s.level >= 4 ? 2 : 1) + (powered ? 2 : 0);
     if (s.now >= this.nextSpawn && this.hazards.length < maxHazards) {
       // Golden-angle spacing avoids sudden clusters at a single edge.
       const angle = ++this.sequence * 2.399963;
@@ -118,7 +148,7 @@ export class GravityField {
       const scale = 1 / Math.max(Math.abs(Math.cos(angle)), Math.abs(Math.sin(angle)));
       const x = cx + Math.cos(angle) * rx * scale, y = cy + Math.sin(angle) * ry * scale;
       this.hazards.push({ x, y, vx: 0, vy: 0, born: s.now, phase: angle, grazed: false, trail: [] });
-      this.nextSpawn = s.now + (s.afterglow ? 6000 : Math.max(6500, 11500 - s.level * 500));
+      this.nextSpawn = s.now + (powered ? 2200 : s.afterglow ? 6000 : Math.max(6500, 11500 - s.level * 500));
     }
     const target = chapter.id === 'echo' ? this.history[0] : { x: s.cursorX, y: s.cursorY };
     const tide = this.tide(s.now, chapter.id === 'tides');
@@ -129,7 +159,7 @@ export class GravityField {
       if (s.now - h.born < 1600) continue; // Visible arrival warning; no collision yet.
       const dc = Math.max(1, Math.hypot(cx - h.x, cy - h.y));
       const dp = Math.max(1, Math.hypot(target.x - h.x, target.y - h.y));
-      const attraction = chargePull(s.energy) * 145 * tide * Math.min(1, 340 / dp);
+      const attraction = chargePull(s.energy) * 145 * (powered ? 1.8 : 1) * tide * Math.min(1, 340 / dp);
       let ax = (cx - h.x) / dc * 22 + (target.x - h.x) / dp * attraction;
       let ay = (cy - h.y) / dc * 22 + (target.y - h.y) / dp * attraction;
       if (chapter.id === 'binary') {
@@ -157,12 +187,14 @@ export class GravityField {
       }
       if (!h.grazed && playerDistance < 22 && s.now - this.lastGraze > 1800) {
         h.grazed = true;
+        this.powerUntil = -Infinity;
         this.lastGraze = s.now;
         result.grazed = true;
         this.feedback.push({ x: s.cursorX, y: s.cursorY, tx: h.x, ty: h.y, at: s.now, kind: 'loss' });
       }
       const coreRadius = Math.min(s.width, s.height) * .068;
       if (Math.hypot(h.x - cx, h.y - cy) < coreRadius && s.now - this.lastHit >= 3500) {
+        this.powerUntil = -Infinity;
         this.integrity = Math.max(0, this.integrity - 1);
         this.lastHit = s.now;
         this.hazards = []; // A short recovery window prevents cascading damage.
@@ -179,6 +211,24 @@ export class GravityField {
   draw(ctx: CanvasRenderingContext2D, s: FieldInput) {
     const chapter = chapterFor(s.level, s.afterglow);
     ctx.save();
+    if (this.heart) {
+      const { x, y, born } = this.heart;
+      const age = s.now - born;
+      const fade = Math.min(1, age / 700, (10000 - age) / 900);
+      ctx.save(); ctx.translate(x, y);
+      const pulse = 1 + .07 * Math.sin(s.now / 230);
+      ctx.scale(pulse, pulse);
+      ctx.globalAlpha = Math.max(0, fade);
+      const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 23);
+      glow.addColorStop(0, 'rgba(255,218,84,.24)'); glow.addColorStop(1, 'rgba(255,218,84,0)');
+      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 23, 0, Math.PI * 2); ctx.fill();
+      // A single lightning stroke reads as energy, distinct from the red hazards.
+      ctx.strokeStyle = '#ffe478'; ctx.lineWidth = 2;
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(3, -10); ctx.lineTo(-5, 1);
+      ctx.lineTo(4, 1); ctx.lineTo(-3, 10); ctx.stroke();
+      ctx.restore();
+    }
     if (chapter.id === 'binary') {
       const p = this.well(s.width, s.height, s.now);
       for (let i = 0; i < 16; i++) {
@@ -190,22 +240,38 @@ export class GravityField {
     }
     for (const h of this.hazards) {
       const arrival = Math.min(1, Math.max(0, (s.now - h.born) / 1600));
-      const radius = 3.5 + arrival * .7;
-      const glow = ctx.createRadialGradient(h.x, h.y, radius, h.x, h.y, 15);
+      // Stable individual size, with the old connected-bubble motion in a small red silhouette.
+      const size = 3.8 + (Math.sin(h.phase * 12.9898) * .5 + .5) * 3.4;
+      const time = s.now / 1000;
+      const pulse = 1 + Math.sin(time * 4.3 + h.phase) * .12;
+      const radius = size * (.82 + arrival * .18) * pulse;
+      const halo = radius * 2.5;
+      const glow = ctx.createRadialGradient(h.x, h.y, radius * .7, h.x, h.y, halo);
       glow.addColorStop(0, 'rgba(255,45,65,.22)');
       glow.addColorStop(1, 'rgba(255,35,55,0)');
       ctx.globalAlpha = .5 + arrival * .5;
       ctx.fillStyle = glow;
-      ctx.beginPath(); ctx.arc(h.x, h.y, 15, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(h.x, h.y, halo, 0, Math.PI * 2); ctx.fill();
       // Arrival gently gathers into a point; no extra emblem or ornament.
       if (arrival < 1) {
         ctx.strokeStyle = '#ff4055'; ctx.globalAlpha = (1 - arrival) * .25;
         ctx.lineWidth = .6;
-        ctx.beginPath(); ctx.arc(h.x, h.y, 17 - arrival * 12, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(h.x, h.y, radius + 12 * (1 - arrival), 0, Math.PI * 2); ctx.stroke();
       }
       ctx.globalAlpha = .5 + arrival * .5;
       ctx.fillStyle = '#ff4055';
-      ctx.beginPath(); ctx.arc(h.x, h.y, radius, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.translate(h.x, h.y); ctx.rotate(time * .45 + h.phase);
+      // Overlapping lobes breathe independently but remain one connected, soft mass.
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * .56, 0, Math.PI * 2);
+      for (let i = 0; i < 3; i++) {
+        const angle = i * Math.PI * 2 / 3;
+        const offset = radius * (.42 + .08 * Math.sin(time * 2.7 + h.phase + i));
+        const lobe = radius * (.59 + .15 * Math.sin(time * 4 + h.phase + i * 2));
+        const x = Math.cos(angle) * offset, y = Math.sin(angle) * offset;
+        ctx.moveTo(x + lobe, y); ctx.arc(x, y, lobe, 0, Math.PI * 2);
+      }
+      ctx.fill(); ctx.restore();
     }
     for (const f of this.feedback) {
       const age = (s.now - f.at) / 900;
@@ -234,7 +300,7 @@ function archPoint(t: number, r: number) {
 }
 export function drawEvolvingBridge(ctx: CanvasRenderingContext2D, s: FieldInput, field: GravityField) {
   const chapter = chapterFor(s.level, s.afterglow);
-  const r = Math.min(s.width, s.height) * .10 * (1 + Math.min(1, s.level / 10) * .14);
+  const r = Math.min(s.width, s.height) * (.085 + Math.min(20, s.level) * .0045);
   const progress = Math.min(1, s.level / 10);
   const release = Math.max(0, 1 - (s.now - field.lastRelease) / 1700);
   const recoil = Math.max(0, 1 - (s.now - field.lastReject) / 480);
@@ -242,6 +308,12 @@ export function drawEvolvingBridge(ctx: CanvasRenderingContext2D, s: FieldInput,
   const breathe = 1 + invitation * .018 - Math.sin(recoil * Math.PI) * .055 + Math.sin(s.now / 2100) * .006 + release * .035;
   ctx.save(); ctx.translate(s.width / 2, s.height / 2); ctx.scale(breathe, breathe);
   ctx.lineCap = 'round';
+  if (s.level > 0) {
+    ctx.font = `200 ${Math.max(12, Math.min(s.width, s.height) * .024)}px "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = chapter.color; ctx.globalAlpha = .65 + release * .3;
+    ctx.fillText(romanLevel(s.level), 0, -r * .85 - 10);
+  }
   // Repeated fine contours accumulate into a stable structure, never digits.
   const layers = Math.min(4, Math.floor(s.level / 2));
   for (let layer = layers; layer >= 0; layer--) {
@@ -379,4 +451,46 @@ export function drawProjectOrbits(ctx: CanvasRenderingContext2D, projects: Proje
     ctx.restore();
   }
   return hovered;
+}
+
+
+export function romanLevel(level: number): string {
+  const tens = Math.floor(Math.max(0, Math.min(20, level)) / 10);
+  return 'X'.repeat(tens) + ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'][Math.max(0, Math.min(20, Math.floor(level))) % 10];
+}
+
+export function drawPowerRing(ctx: CanvasRenderingContext2D, s: FieldInput, field: GravityField) {
+  if (!field.powerActive(s.now)) return;
+  const remaining = Math.min(1, (field.powerUntil - s.now) / 8000);
+  const pulse = 1 + Math.sin(s.now / 150) * .025;
+  ctx.save(); ctx.translate(s.cursorX, s.cursorY); ctx.scale(pulse, pulse);
+  const glow = ctx.createRadialGradient(0, 0, 15, 0, 0, 60);
+  glow.addColorStop(0, 'rgba(255,208,65,.14)');
+  glow.addColorStop(.7, 'rgba(255,208,65,.08)');
+  glow.addColorStop(1, 'rgba(255,208,65,0)');
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 60, 0, Math.PI * 2); ctx.fill();
+  // Replace the normal white cursor, preserving its five charge steps in gold.
+  for (let i = 0; i < 5; i++) {
+    const radius = 18 + i * 5;
+    const charge = Math.max(0, Math.min(1, s.energy * 5 - i));
+    ctx.strokeStyle = '#ffda55'; ctx.lineWidth = 3; ctx.globalAlpha = .22;
+    ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+    if (charge > 0) {
+      ctx.beginPath(); ctx.arc(0, 0, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * charge); ctx.stroke();
+    }
+  }
+  // Two revolving brackets change the silhouette even without colour perception.
+  const spin = s.now / 550;
+  ctx.strokeStyle = '#fff0a8'; ctx.globalAlpha = .95; ctx.lineWidth = 2.5;
+  for (let i = 0; i < 2; i++) {
+    const start = spin + i * Math.PI;
+    ctx.beginPath(); ctx.arc(0, 0, 45, start, start + Math.PI * .6); ctx.stroke();
+  }
+  ctx.strokeStyle = '#ffda55'; ctx.globalAlpha = .8; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(0, 0, 51, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining); ctx.stroke();
+  ctx.strokeStyle = '#fff4c0'; ctx.globalAlpha = 1; ctx.lineWidth = 2;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(2, -7); ctx.lineTo(-4, 1); ctx.lineTo(3, 1); ctx.lineTo(-2, 7); ctx.stroke();
+  ctx.restore();
 }

@@ -100,3 +100,30 @@ test('multiple threats unlock only after a chase and a successful return', () =>
   field.update({ ...input, now: 20 });
   assert.equal(field.hazards.length, 2);
 });
+
+
+test('heart pickup grants eight seconds, increases enemy supply and rewards only once', () => {
+  const field = new GravityField(); field.reset(0); field.update(input);
+  field.heart = { x: input.cursorX, y: input.cursorY, born: 0 };
+  field.hazards = [hazard(100, 100)];
+  field.update({ ...input, now: 100 });
+  assert.equal(field.heart, null);
+  assert.equal(field.powerActive(8099), true);
+  assert.equal(field.powerActive(8100), false);
+  assert.equal(field.hazards.length, 2);
+  assert.equal(field.takePowerReward(500), 2);
+  assert.equal(field.takePowerReward(500), 1);
+  field.reset(600);
+  assert.equal(field.powerActive(600), false);
+});
+
+test('contact cancels power and missed hearts disappear without activation', () => {
+  const field = new GravityField(); field.reset(0); field.powerUntil = 8000;
+  field.hazards = [hazard(input.cursorX, input.cursorY)];
+  assert.equal(field.update(input).grazed, true);
+  assert.equal(field.takePowerReward(1), 1);
+  field.hazards = []; field.heart = { x: 10, y: 10, born: 0 };
+  field.update({ ...input, now: 11000 });
+  assert.equal(field.heart, null);
+  assert.equal(field.powerActive(11000), false);
+});
