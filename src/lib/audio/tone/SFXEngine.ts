@@ -30,6 +30,11 @@ class SFXEngineClass {
   private attractActive = false;
   private spiralSuctionActive = false;
 
+  private crackleStop: ReturnType<typeof setTimeout> | null = null;
+  private attractStop: ReturnType<typeof setTimeout> | null = null;
+  private lastCrackleCount = 0;
+  private lastAttraction = 0;
+
   initialized = false;
 
   async init(): Promise<void> {
@@ -454,10 +459,15 @@ class SFXEngineClass {
   setChamberCrackling(count: number): void {
     if (!this.initialized) return;
 
+    count = Math.max(0, Math.min(5, count));
+    if (count === this.lastCrackleCount) return;
+    this.lastCrackleCount = count;
+    if (this.crackleStop !== null) { clearTimeout(this.crackleStop); this.crackleStop = null; }
     if (count <= 0) {
       if (this.crackleActive) {
         this.crackleGain?.gain.linearRampTo(0.0001, 0.5);
-        setTimeout(() => {
+        this.crackleStop = setTimeout(() => {
+          this.crackleStop = null;
           this.crackleNoise?.triggerRelease();
           this.crackleLFO?.stop();
           this.crackleActive = false;
@@ -486,10 +496,16 @@ class SFXEngineClass {
   setBridgeAttraction(strength: number): void {
     if (!this.initialized) return;
 
+    // Quantize the slow fade so high refresh rates do not multiply automation events.
+    strength = Math.round(Math.max(0, Math.min(1, strength)) * 50) / 50;
+    if (strength === this.lastAttraction) return;
+    this.lastAttraction = strength;
+    if (this.attractStop !== null) { clearTimeout(this.attractStop); this.attractStop = null; }
     if (strength <= 0) {
       if (this.attractActive) {
         this.attractGain?.gain.linearRampTo(0.0001, 1.5);
-        setTimeout(() => {
+        this.attractStop = setTimeout(() => {
+          this.attractStop = null;
           this.attractSynth?.triggerRelease();
           this.attractActive = false;
         }, 1500);
@@ -552,8 +568,11 @@ class SFXEngineClass {
   }
 
   dispose(): void {
-    this.setChamberCrackling(0);
-    this.setBridgeAttraction(0);
+    if (this.crackleStop !== null) clearTimeout(this.crackleStop);
+    if (this.attractStop !== null) clearTimeout(this.attractStop);
+    this.crackleStop = this.attractStop = null;
+    this.lastCrackleCount = this.lastAttraction = 0;
+    this.crackleActive = this.attractActive = this.spiralSuctionActive = false;
     this.melodicSynth?.dispose();
     this.melodicGain?.dispose();
     this.subSynth?.dispose();
