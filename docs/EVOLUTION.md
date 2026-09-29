@@ -14,19 +14,25 @@ lösen bestehende Gefahren auf und lassen fünf Sekunden zum Ankommen.
 
 ## Spielregeln
 
-Die bestehende direkte Cursorbewegung und ihre Interpolation bleiben erhalten.
+Die Cursorbewegung bleibt direkt. Evolution rechnet Bewegung, Interpolation,
+Partikelnachschub und Effektlaufzeiten nach verstrichener Zeit mit 60 Hz als
+Referenz; niedrigere Bildraten verlangsamen das Spiel nicht mehr. Der alte
+Playtest behält seine ursprüngliche Bewegung pro Bild.
 Volle Ladung erweitert die Sternanziehung und zieht auch Gefahren an. Diese
 behalten ihren Schwung; Kurven lassen sie vorbeiziehen. Nach 1,6 Sekunden
 sichtbarer Ankunftswarnung bewegen sie sich zum Symbol und reagieren auf den
 Spieler. Gleichzeitig existieren anfangs eine, später zwei und im Nachspiel
 höchstens drei Gefahren. Geschwindigkeiten sind begrenzt und zeitbasiert.
 
-Cursor-Kontakt kostet 18 % Ladung, höchstens einmal je Gefahr, mit 1,8 Sekunden
-Abstand zwischen solchen Verlusten. Ein Treffer am Symbol kostet einen von drei
+Kontakt mit dem sichtbaren Ring kostet 1–4 Ringe: ein Grundring,
+ein weiterer je sieben Level und ein weiterer bei großen Gegnern (gedeckelt auf vier).
+Ein Ring entspricht 20 % Ladung. Bei null oder weniger verbleibender Ladung
+endet der Versuch. 1,8 Sekunden Schutzzeit verhindern Mehrfachtreffer direkt
+hintereinander; durchquerte Gegner werden auch zwischen zwei Bildern erkannt. Ein Treffer am Symbol kostet einen von drei
 Strukturpunkten; er setzt den musikalischen und visuellen Fortschritt nicht
 zurück. Alle aktuellen Gefahren lösen sich bei einem Symboltreffer auf, mit
 sechs Sekunden bis zur nächsten Ankunft. Der dritte Treffer beendet den Versuch.
-Berührung des pulsierenden Restlichts startet vor den Farbphasen, ohne das Tutorial zu wiederholen. Keine
+„Get gud – try again“ unter dem dunkelroten „YOU DIED“ startet vor den Farbphasen, ohne das Tutorial zu wiederholen. Keine
 persistenten Freischaltungen oder Ranglisten.
 
 Nach den drei Farbphasen wird eine vollständige Ladung am Symbol entladen.

@@ -94,3 +94,51 @@ diese Übergabe und der aktuelle Code haben Vorrang.
 Die aktuelle Live-Freigabe autorisiert den Merge nach main und das Production-Deployment. Ein eventuell von
 GitHub/Vercel automatisch gestarteter Preview-Build ist vom manuellen Deployment
 zu unterscheiden.
+
+
+## Framerate-Untersuchung nach Livegang — 29. September
+
+Christian meldet einen Einbruch ab VII. Lokaler Fix in SFXEngine: unveränderte
+Dauersound-Ziele erzeugen keine neuen Audio-Rampen; pro Sound maximal ein
+verzögerter Stopp, bei Reaktivierung/Dispose aufgehoben. Regressionstests vorhanden.
+Kontrollierter 144-Hz-Aufruftest (60 Sekunden konstant + 1 Sekunde Stopps):
+43.488 Rampen/288 Stopptimer vorher, 7 Rampen/2 Timer nachher.
+Temporäre Browsermessung mit realer Runtime: VI 32,38 ms/Bild, VII 33,34 ms/Bild;
+mittlere synchrone Zeichenarbeit 0,37/0,51 ms. In dieser Umgebung etwa 30 Hz,
+kein stufenspezifischer Einbruch reproduziert. Das bestätigt nicht die komplette
+Ursache auf Christians Gerät. Messseiten wieder entfernt. Fix noch lokal.
+
+
+Zweite Messung nach Rückmeldung „weiterhin extrem laggy“: Auch die ganze
+Animation stockt, nicht nur der Cursor. Direkte temporäre Messung im sichtbaren
+Canvas (666 × 761): 33,33 ms/Bild, p95 34,30 ms, Zeichenarbeit 0,37 ms.
+Kontrollmessung: leere Zeichenfläche 33,34 ms, VII 33,36 ms, VII ohne Vignette
+33,25 ms; keine Frames über 50 ms in den kurzen Fenstern. Die eingebettete
+Ansicht liefert hier etwa 30 Hz auch ohne Spielarbeit. Ein Vergleich in einem
+normalen Brave-/Safari-Fenster wurde angefragt; Antwort noch offen. Keine
+zusätzlichen Gameplay- oder Geschwindigkeitsänderungen ohne Beleg. Alle
+Messinstrumentierungen und temporären Seiten wieder entfernt.
+
+
+Dritte Rückmeldung: alles läuft ungefähr mit einem Drittel der Geschwindigkeit.
+Daraufhin die verbliebenen Bewegungen pro Bild in Evolution korrigiert:
+Cursor-Interpolation, Stern-/Farbpartikel, Dämpfung, Partikelnachschub,
+Druckwellen und Leerlauf-Ladungsverlust berücksichtigen nun die verstrichene
+Zeit mit 60 Hz als Referenz. Keine Frame-Kappung, kein mehrfaches Zeichnen;
+Original-/playtest-Verhalten bleibt pro Frame erhalten. Physik-Schritte sind
+auf 100 ms begrenzt, auch für die neuen Gefahren. Tests vergleichen Cursor,
+Burst-Laufzeit/Bewegung, Wellen und Nachschub bei 20/30/60/120 Hz: bestanden.
+54 Tests insgesamt. Diese Korrektur beseitigt die Zeitlupe bei niedriger
+Bildrate; sie verspricht keine höhere Bildausgaberate des eingebetteten Browsers.
+Audio- und Timing-Fixes weiterhin lokal, noch nicht auf Production.
+
+
+## Freigegebenes Update: Ringkollision und Todesscreen
+
+Christian autorisiert danach Livegang inklusive Audio-/Timing-Fixes. Gegner
+berühren den tatsächlich geladenen Ring bzw. den Overdrive-Außenring; eine
+kontinuierliche Prüfung erfasst schnelle Durchquerungen. 1–4 Ringe Schaden
+abhängig von Level und stabiler Gegnergröße, 1,8 Sekunden Trefferpause.
+Restladung <= 0 beendet den Versuch. Dunkelroter „YOU DIED“-Dialog mit
+„Get gud – try again“, Spielzeit angehalten, vorhandene Retry-Logik erhalten.
+57 Tests, Check, Build und Dependency-Audit erfolgreich.

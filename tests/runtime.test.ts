@@ -344,3 +344,53 @@ test('overdrive duration freezes during a manual pause', () => {
   run('toggleEvolutionPause(); clock.advance(100001, () => {}); clock.advance(108002, () => {});');
   assert.equal(run('evolution.powerActive(clock.now)'), false);
 });
+
+
+test('evolution cursor, bursts and ripples retain their speed at 20–120 Hz', () => {
+  const results = [20, 30, 60, 120].map(hz => {
+    const run = game('accepted-preview.js', true);
+    run(`beginEvolution('connection');
+      Math.random = () => .999; ambientParticles.length = 0;
+      cursorX = 100; cursorY = 100; mouseX = 500; mouseY = 100; cursorEnergy = 0;
+      particles.push({x:20,y:20,vx:4,vy:0,life:1,hue:0});
+      ripples.push({x:640,y:360,size:10,alpha:1});
+      previousMotionTime = clock.now;
+      clock.advance(0, render);
+      for (let i=1;i<=${hz}/10;i++) clock.advance(i*1000/${hz}, render);`);
+    return JSON.parse(run('JSON.stringify({cursor:cursorX,burstX:particles[0].x,life:particles[0].life,ripple:ripples[0].size,alpha:ripples[0].alpha})'));
+  });
+  for (const result of results) {
+    assert.ok(Math.abs(result.cursor - (500 - 400 * .75 ** 6)) < .01);
+    assert.ok(Math.abs(result.life - .88) < .0001);
+    assert.ok(Math.abs(result.ripple - 82) < .01);
+    assert.ok(Math.abs(result.burstX - results[0].burstX) < .01);
+  }
+});
+
+test('evolution particle supply does not slow down on a low-refresh display', () => {
+  const supplies = [20, 30, 60, 120].map(hz => {
+    const run = game('accepted-preview.js', true);
+    run(`beginEvolution('connection'); ambientParticles.length=0;
+      // Balanced deterministic sequence makes the spawn probability comparison repeatable.
+      let randomSeed = 13; Math.random = () => ((randomSeed = (randomSeed * 16807) % 2147483647) / 2147483647);
+      let supplied = 0; spawnAmbientParticle = () => { supplied++; };
+      for (let i=0;i<${hz}*60;i++) { motionStep = 60/${hz}; drawAmbientParticles(); }`);
+    return run('supplied');
+  });
+  assert.ok(Math.max(...supplies) / Math.min(...supplies) < 1.12);
+});
+
+
+test('ring depletion opens the death screen, freezes the run and retry restores it', () => {
+  const run = game('accepted-preview.js', true);
+  run(`beginEvolution('connection'); cursorEnergy = .2;
+    evolution.hazards = [{x:cursorX,y:cursorY,vx:0,vy:0,born:clock.now-2000,phase:0,grazed:false,trail:[]}]; render();`);
+  assert.equal(run('evolutionRest.kind'), 'loss');
+  assert.equal(run('cursorEnergy'), 0);
+  assert.equal(run('clock.paused'), true);
+  assert.equal(run('document.getElementById("evolution-death").hidden'), false);
+  assert.equal(run('document.getElementById("evolution-reentry").hidden'), true);
+  run('evolutionRest.elapsed=2000; continueEvolution();');
+  assert.equal(run('clock.paused || youDiedActive'), false);
+  assert.equal(run('document.getElementById("evolution-death").hidden'), true);
+});

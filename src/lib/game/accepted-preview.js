@@ -1,6 +1,6 @@
 // Original-based playtest; targeted visual and modal-pause fixes only.
 import { GameClock } from './clock';
-import { GravityField, chapterFor, musicFor, chargePull, drawEvolvingBridge, drawSettlement, drawProjectOrbits, drawPowerRing, CHAPTERS } from './evolution';
+import { GravityField, chapterFor, musicFor, chargePull, drawEvolvingBridge, drawSettlement, drawProjectOrbits, drawPowerRing, ringRadius, CHAPTERS } from './evolution';
 const clock = new GameClock();
 import { availableDischarge, drawDischargeLink } from '../game/discharge';
 import { CHARGE } from '../game/charge';
@@ -17,6 +17,12 @@ const ctx = canvas.getContext('2d');
 const evolution = canvas.getAttribute('data-evolution') === 'true' ? new GravityField() : null;
 let evolutionRest = null;
 let evolutionPaused = false;
+// Evolution motion is calibrated at 60 Hz, independent of presentation cadence.
+let motionStep = 1;
+let previousMotionTime = null;
+function motionTravel(retention) {
+    return evolution ? (1 - Math.pow(retention, motionStep)) / (1 - retention) : 1;
+}
 // ========================================
 // INIT AUDIO ON FIRST INTERACTION
 // ========================================
@@ -782,11 +788,11 @@ function drawLogo() {
 function drawParticles() {
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vx *= 0.96;
-        p.vy *= 0.96;
-        p.life -= 0.02;
+        p.x += p.vx * motionTravel(.96);
+        p.y += p.vy * motionTravel(.96);
+        p.vx *= Math.pow(0.96, motionStep);
+        p.vy *= Math.pow(0.96, motionStep);
+        p.life -= 0.02 * motionStep;
         if (p.life <= 0) {
             particles.splice(i, 1);
             continue;
@@ -887,7 +893,9 @@ function drawAmbientParticles() {
     const secondWell = evolution && fieldChapter === 'binary' ? evolution.well(W, H, clock.now) : null;
     // Partikel spawnen - auflösungsunabhängige Dichte
     const { maxParticles, spawnRate } = getScaledParticleParams();
-    if (ambientParticles.length < maxParticles && Math.random() < spawnRate) {
+    const expectedSpawns = spawnRate * motionStep;
+    const spawnCount = Math.floor(expectedSpawns) + (Math.random() < expectedSpawns % 1 ? 1 : 0);
+    for (let spawn = 0; spawn < spawnCount && ambientParticles.length < maxParticles; spawn++) {
         spawnAmbientParticle();
     }
     // Draw and update particles
@@ -902,12 +910,12 @@ function drawAmbientParticles() {
             // Gravitation: quadratisch stärker je näher
             const normalizedDist = dist / gravityRadius;
             const pullStrength = Math.pow(1 - normalizedDist, 2) * CHARGE.attractionStrength * (evolution ? (1 + chargePull(cursorEnergy)) * (evolution.powerActive(clock.now) ? 1.6 : 1) : 1) * tideStrength;
-            p.vx += (dx / dist) * pullStrength;
-            p.vy += (dy / dist) * pullStrength;
+            p.vx += ((dx / dist) * pullStrength) * motionStep;
+            p.vy += ((dy / dist) * pullStrength) * motionStep;
             // Partikel beschleunigt sichtbar zum Cursor
             if (dist < 100) {
-                p.vx += (dx / dist) * CHARGE.closeAttractionStrength;
-                p.vy += (dy / dist) * CHARGE.closeAttractionStrength;
+                p.vx += ((dx / dist) * CHARGE.closeAttractionStrength) * motionStep;
+                p.vy += ((dy / dist) * CHARGE.closeAttractionStrength) * motionStep;
             }
         }
         if (secondWell) {
@@ -915,8 +923,8 @@ function drawAmbientParticles() {
             const wd = Math.max(12, Math.hypot(wx, wy));
             if (wd < 170) {
                 const force = (1 - wd / 170) * .08;
-                p.vx += wx / wd * force - wy / wd * .012;
-                p.vy += wy / wd * force + wx / wd * .012;
+                p.vx += (wx / wd * force - wy / wd * .012) * motionStep;
+                p.vy += (wy / wd * force + wx / wd * .012) * motionStep;
             }
         }
         // SHOCKWAVE - pushes particles away from logo on enemy hit
@@ -928,8 +936,8 @@ function drawAmbientParticles() {
             const distFromWave = swDist - shockwave.radius;
             if (Math.abs(distFromWave) < 80 && swDist > 10) {
                 const pushStrength = shockwave.strength * (1 - swDist / shockwave.maxRadius) * 0.8;
-                p.vx += (swDx / swDist) * pushStrength;
-                p.vy += (swDy / swDist) * pushStrength;
+                p.vx += ((swDx / swDist) * pushStrength) * motionStep;
+                p.vy += ((swDy / swDist) * pushStrength) * motionStep;
             }
         }
         // Partikel wird vom Cursor absorbiert - nur wenn nicht voll, nicht idle, und nicht im Tutorial-Warte-Modus
@@ -955,13 +963,13 @@ function drawAmbientParticles() {
                 redParticleActive = true;
             }
         }
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vx *= 0.985;
-        p.vy *= 0.985;
-        p.twinkle += 0.05;
+        p.x += p.vx * motionTravel(.985);
+        p.y += p.vy * motionTravel(.985);
+        p.vx *= Math.pow(0.985, motionStep);
+        p.vy *= Math.pow(0.985, motionStep);
+        p.twinkle += 0.05 * motionStep;
         if (p.absorbed) {
-            p.alpha *= 0.8;
+            p.alpha *= Math.pow(.8, motionStep);
         }
         // Remove
         if (p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50 || p.alpha < 0.01) {
@@ -1714,8 +1722,8 @@ function drawColoredParticles() {
             continue;
         }
         // Kurvige Flugbahn (ähnlich wie Red Particle)
-        p.phase += 0.06;
-        p.turnTimer++;
+        p.phase += 0.06 * motionStep;
+        p.turnTimer += motionStep;
         // Zufällige Richtungswechsel
         if (p.turnTimer > 80 + Math.random() * 60) {
             p.turnTimer = 0;
@@ -1731,19 +1739,19 @@ function drawColoredParticles() {
         const curve = Math.sin(p.phase) * 1.5 + Math.sin(p.phase * 1.7) * 0.8;
         const perpX = -p.vy / speed;
         const perpY = p.vx / speed;
-        p.x += p.vx + perpX * curve;
-        p.y += p.vy + perpY * curve;
+        p.x += (p.vx + perpX * curve) * motionStep;
+        p.y += (p.vy + perpY * curve) * motionStep;
         // Sanfte Abstoßung vom Rand
         const margin = 60;
         const pushStrength = 0.12;
         if (p.x < margin)
-            p.vx += pushStrength;
+            p.vx += (pushStrength) * motionStep;
         if (p.x > W - margin)
-            p.vx -= pushStrength;
+            p.vx -= (pushStrength) * motionStep;
         if (p.y < margin)
-            p.vy += pushStrength;
+            p.vy += (pushStrength) * motionStep;
         if (p.y > H - margin)
-            p.vy -= pushStrength;
+            p.vy -= (pushStrength) * motionStep;
         // Cursor-Gravitation (stärker als bei weißen Partikeln)
         // ABER: Nicht wenn Kammer voll ist (verhindert "Geisterfolger")
         const dxCursor = cursorX - p.x;
@@ -1756,8 +1764,8 @@ function drawColoredParticles() {
         // Gravitation NUR wenn noch Platz in der Kammer ist
         if (distCursor < 200 && distCursor > 5 && canCapture) {
             const pullStrength = Math.pow(1 - distCursor / 200, 2) * 0.25;
-            p.vx += (dxCursor / distCursor) * pullStrength;
-            p.vy += (dyCursor / distCursor) * pullStrength;
+            p.vx += ((dxCursor / distCursor) * pullStrength) * motionStep;
+            p.vy += ((dyCursor / distCursor) * pullStrength) * motionStep;
         }
         if (distCursor < 45 && canCapture) {
             // SOFORT als captured markieren - verhindert jede weitere Verarbeitung
@@ -1812,8 +1820,8 @@ function drawScanlines() {
 function drawRipples() {
     for (let i = ripples.length - 1; i >= 0; i--) {
         const r = ripples[i];
-        r.size += 12;
-        r.alpha -= 0.02;
+        r.size += 12 * motionStep;
+        r.alpha -= 0.02 * motionStep;
         if (r.alpha <= 0) {
             ripples.splice(i, 1);
             continue;
@@ -1939,14 +1947,14 @@ function drawCursor() {
             p.vx += inertiaX;
             p.vy += inertiaY;
             // Sanfte Eigenbewegung
-            p.x += p.vx;
-            p.y += p.vy;
+            p.x += (p.vx) * motionStep;
+            p.y += (p.vy) * motionStep;
             // Dämpfung
-            p.vx *= 0.96;
-            p.vy *= 0.96;
+            p.vx *= Math.pow(0.96, motionStep);
+            p.vy *= Math.pow(0.96, motionStep);
             // Leichte zufällige Bewegung (Brownsche Bewegung)
-            p.vx += (Math.random() - 0.5) * 0.3;
-            p.vy += (Math.random() - 0.5) * 0.3;
+            p.vx += (Math.random() - 0.5) * 0.3 * Math.sqrt(motionStep);
+            p.vy += (Math.random() - 0.5) * 0.3 * Math.sqrt(motionStep);
             // Boundary-Constraint: In der Kammer bleiben (IMMER anwenden)
             const distFromCenter = Math.sqrt(p.x * p.x + p.y * p.y);
             const maxDist = Math.max(1, chamberInnerRadius - p.size - 2); // Mindestens 1
@@ -2280,6 +2288,10 @@ function drawDischargeCue() {
 // Main render
 function render() {
     if (modalShown) return;
+    if (evolution) {
+        motionStep = previousMotionTime === null ? 1 : Math.min(6, Math.max(0, (clock.now - previousMotionTime) * .06));
+        previousMotionTime = clock.now;
+    }
     // If YOU DIED is active, show it and skip normal render
     if (youDiedActive) {
         drawYouDied();
@@ -2304,7 +2316,7 @@ function render() {
         isIdle = true;
         // Langsamer Discharge im Idle
         if (cursorEnergy > 0) {
-            cursorEnergy = Math.max(0, cursorEnergy - 0.002);
+            cursorEnergy = Math.max(0, cursorEnergy - 0.002 * motionStep);
         }
     }
     // UPDATE CURSOR POSITION FIRST - vor allen Partikel-Checks!
@@ -2328,13 +2340,14 @@ function render() {
     const mobileOffsetY = (isMobile && isTouching) ? MOBILE_CURSOR_OFFSET_Y : 0;
     const targetX = mouseX + pullX;
     const targetY = mouseY + pullY + mobileOffsetY;
-    cursorX += (targetX - cursorX) * 0.25;
-    cursorY += (targetY - cursorY) * 0.25;
+    const cursorFollow = evolution ? 1 - Math.pow(.75, motionStep) : .25;
+    cursorX += (targetX - cursorX) * cursorFollow;
+    cursorY += (targetY - cursorY) * cursorFollow;
     if (evolution) {
         const wasPowered = evolution.powerActive(clock.now);
         const result = evolution.update(evolutionInput());
         if (!wasPowered && evolution.powerActive(clock.now)) { AudioSystem.playSuperStarCollect(); HapticManager.levelUp(); }
-        if (result.grazed) { cursorEnergy = Math.max(0, cursorEnergy - .18); AudioSystem.playRejectDischarge(); }
+        if (result.grazed) { cursorEnergy = Math.max(0, cursorEnergy - (result.damage ?? 1) / 5); AudioSystem.playRejectDischarge(); }
         if (result.hit) { spawnShockwave(centerX, centerY, 1.4); AudioSystem.playSpiralDamage(); HapticManager.levelUp(); }
         if (result.reward) {
             for (let i = 0; i < 6; i++) {
@@ -2774,7 +2787,7 @@ soundToggleBtn?.addEventListener('touchend', (e) => {
     toggleSound();
 });
 function evolutionInput() {
-    return { now: clock.now, width: W, height: H, cursorX, cursorY, energy: cursorEnergy, ready: !!getAvailableDischarge(),
+    return { now: clock.now, width: W, height: H, cursorX, cursorY, energy: cursorEnergy, ringRadius: ringRadius(cursorEnergy, getCurrentRings(), evolution.powerActive(clock.now)), ready: !!getAvailableDischarge(),
         level: upgradeLevel, afterglow: postCreditsMode, tutorial: gamePhase === GAME_PHASE_TUTORIAL, completing: gameCompleted };
 }
 function beginEvolution(chapterId = 'awakening', skipTutorial = false) {
@@ -2782,6 +2795,7 @@ function beginEvolution(chapterId = 'awakening', skipTutorial = false) {
     clock.clearTimers();
     evolutionRest = null; evolutionPaused = false;
     evolution.reset(clock.now);
+    previousMotionTime = null; motionStep = 1;
     const chapter = CHAPTERS.find(c => c.id === chapterId) || CHAPTERS[0];
     upgradeLevel = chapter.from;
     postCreditsMode = ['echo', 'tides', 'binary', 'harmony'].includes(chapter.id);
@@ -2813,6 +2827,7 @@ function beginEvolution(chapterId = 'awakening', skipTutorial = false) {
     AudioSystem.setGameLevel(musicFor(upgradeLevel, postCreditsMode));
     if (upgradeLevel > 0 && AudioSystem.ready && !AudioSystem.muted) AudioSystem.startBgMusic();
     const reentry = document.getElementById('evolution-reentry'); if (reentry) reentry.hidden = true;
+    const death = document.getElementById('evolution-death'); if (death) death.hidden = true;
     modalShown = false;
     clock.setPaused(document.hidden);
     seedAmbientParticles();
@@ -2839,11 +2854,14 @@ function pauseEvolution() {
 function openEvolutionRest(kind) {
     pauseEvolution();
     evolutionRest = { kind, started: null, elapsed: 0 };
+    const death = document.getElementById('evolution-death');
+    if (death) death.hidden = kind !== 'loss';
     const reentry = document.getElementById('evolution-reentry');
     if (reentry) {
-        reentry.hidden = false;
+        reentry.hidden = kind === 'loss';
         reentry.setAttribute('aria-label', kind === 'loss' ? 'Begin a new attempt' : kind === 'final' ? 'Begin again' : 'Continue into the afterglow');
-        reentry.focus?.({ preventScroll: true });
+        if (kind === 'loss') document.getElementById('evolution-retry')?.focus?.({ preventScroll: true });
+        else reentry.focus?.({ preventScroll: true });
     }
 }
 function showEvolutionEnding(final) {
@@ -2871,7 +2889,7 @@ function drawEvolutionRest(timestamp) {
         ctx.fillStyle = `rgba(220,233,226,${Math.min(.22, p.alpha * .3)})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
     }
-    drawSettlement(ctx, W, H, evolutionRest.elapsed, evolutionRest.kind === 'loss');
+    if (evolutionRest.kind !== 'loss') drawSettlement(ctx, W, H, evolutionRest.elapsed, false);
 }
 function toggleEvolutionPause() {
     if (!evolution || evolutionRest) return;
@@ -2888,6 +2906,7 @@ function initEvolution() {
     document.getElementById('evolution-reentry')?.addEventListener('click', event => {
         event.stopPropagation(); continueEvolution();
     });
+    document.getElementById('evolution-retry')?.addEventListener('click', event => { event.stopPropagation(); continueEvolution(); });
     document.getElementById('pause-toggle')?.addEventListener('click', event => {
         event.stopPropagation(); toggleEvolutionPause();
     });

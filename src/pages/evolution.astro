@@ -44,11 +44,21 @@
       #pause-toggle[aria-pressed="true"] .play { display: block; }
       button:focus-visible { outline: 1px solid #a1bdb0; outline-offset: 3px; border-radius: 50%; }
       #evolution-reentry { position: fixed; z-index: 20; top: 50%; left: 50%; transform: translate(-50%, -50%); width: clamp(110px, 24vmin, 190px); height: clamp(110px, 26vmin, 210px); border: 0; background: none; border-radius: 50%; cursor: pointer; }
+      #evolution-death { position:fixed; inset:0; z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; background:rgba(0,0,0,.65); animation:death-in 1.1s ease-out both; }
+      #evolution-death h1 { margin:0; color:#9e2025; font:400 clamp(38px,9vw,92px)/1.2 Georgia,serif; letter-spacing:.12em; text-align:center; text-shadow:0 0 26px rgba(145,15,25,.15); }
+      #evolution-retry { border-radius:2px; color:#b9aaa5; border:1px solid rgba(160,120,115,.28); background:transparent; padding:13px 23px; font:300 14px/1.3 "Helvetica Neue",sans-serif; letter-spacing:.06em; cursor:pointer; }
+      #evolution-retry:hover,#evolution-retry:focus-visible { color:#eee2dd; border-color:#9e2025; }
+      @keyframes death-in { from{opacity:0} to{opacity:1} }
+      @media(prefers-reduced-motion:reduce){#evolution-death{animation:none}}
       astro-dev-toolbar { display: none; }
     </style>
   </head>
   <body>
     <canvas id="canvas" data-evolution="true" aria-label="Interactive field of light and gravity"></canvas>
+    <section id="evolution-death" role="dialog" aria-modal="true" aria-labelledby="death-title" hidden>
+      <h1 id="death-title">YOU DIED</h1>
+      <button id="evolution-retry">Get gud – try again</button>
+    </section>
     <button id="evolution-reentry" aria-label="Continue" hidden></button>
     <button id="pause-toggle" class="control" aria-label="Pause game" aria-pressed="false">
       <svg viewBox="0 0 24 24" class="pause" aria-hidden="true"><path d="M8 6v12M16 6v12" /></svg>

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GravityField, chargePull, chapterFor, musicFor, type FieldInput, type Hazard } from '../src/lib/game/evolution.ts';
+import { GravityField, contactDamage, hazardSize, ringRadius, chargePull, chapterFor, musicFor, type FieldInput, type Hazard } from '../src/lib/game/evolution.ts';
 const input: FieldInput = { now: 0, width: 1280, height: 720, cursorX: 900, cursorY: 450, energy: 0, level: 4, afterglow: false, tutorial: false, completing: false };
 const hazard = (x = 300, y = 360): Hazard => ({ x, y, vx: 0, vy: 0, born: -2000, phase: 0, grazed: false, trail: [] });
 
@@ -29,11 +29,12 @@ test('three separate impacts end a run, with a recovery window and no level pena
   assert.equal(input.level, 4);
 });
 
-test('warning time is harmless and cursor contact only grazes once per hazard', () => {
+test('warning time is harmless and contact damage has a recovery window', () => {
   const field = new GravityField(); field.reset(0); field.hazards = [{ ...hazard(900, 450), born: 0 }];
   assert.equal(field.update(input).grazed, false);
-  assert.equal(field.update({ ...input, now: 1700 }).grazed, true);
-  assert.equal(field.update({ ...input, now: 4000 }).grazed, false);
+  assert.equal(field.update({ ...input, energy: 1, now: 1700 }).grazed, true);
+  assert.equal(field.update({ ...input, energy: 1, now: 2500 }).grazed, false);
+  assert.equal(field.update({ ...input, energy: 1, now: 4000 }).grazed, true);
   assert.equal(field.integrity, 3);
 });
 
@@ -120,10 +121,34 @@ test('heart pickup grants eight seconds, increases enemy supply and rewards only
 test('contact cancels power and missed hearts disappear without activation', () => {
   const field = new GravityField(); field.reset(0); field.powerUntil = 8000;
   field.hazards = [hazard(input.cursorX, input.cursorY)];
-  assert.equal(field.update(input).grazed, true);
+  assert.equal(field.update({ ...input, energy: 1 }).grazed, true);
   assert.equal(field.takePowerReward(1), 1);
   field.hazards = []; field.heart = { x: 10, y: 10, born: 0 };
   field.update({ ...input, now: 11000 });
   assert.equal(field.heart, null);
   assert.equal(field.powerActive(11000), false);
+});
+
+
+test('outer ring collision scales damage with level and actual enemy size', () => {
+  assert.equal(contactDamage(1, 4), 1);
+  assert.equal(contactDamage(1, 7), 2);
+  assert.equal(contactDamage(14, 7), 4);
+  const field = new GravityField(); field.reset(0);
+  field.hazards = [hazard(input.cursorX + ringRadius(1) + 2, input.cursorY)];
+  const result = field.update({ ...input, energy: 1, level: 7 });
+  assert.equal(result.grazed, true);
+  assert.equal(result.damage, contactDamage(7, hazardSize(0)));
+  assert.equal(result.died, false);
+});
+
+test('crossing a threat between frames still hits and zero remaining rings is lethal', () => {
+  for (const energy of [0, .2, .1]) {
+    const field = new GravityField(); field.reset(0);
+    field.update({ ...input, cursorX: 700, cursorY: 100, energy });
+    field.hazards = [hazard(800, 100)];
+    const result = field.update({ ...input, cursorX: 900, cursorY: 100, energy, now: 33 });
+    assert.equal(result.grazed, true);
+    assert.equal(result.died, true);
+  }
 });
