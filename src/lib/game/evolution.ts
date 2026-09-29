@@ -22,13 +22,31 @@ export function chargePull(energy: number): number {
 }
 export interface FieldInput {
   now: number; width: number; height: number; cursorX: number; cursorY: number;
-  ready?: boolean; energy: number; level: number; afterglow: boolean; tutorial: boolean; completing: boolean;
+  ringRadius?: number; ready?: boolean; energy: number; level: number; afterglow: boolean; tutorial: boolean; completing: boolean;
 }
 export interface Hazard {
   x: number; y: number; vx: number; vy: number; born: number; phase: number;
   approached?: boolean; escaped?: boolean;
   grazed: boolean; trail: { x: number; y: number }[];
 }
+export function hazardSize(phase: number): number {
+  return 3.8 + (Math.sin(phase * 12.9898) * .5 + .5) * 3.4;
+}
+export function ringRadius(energy: number, unlocked = 5, powered = false): number {
+  if (powered) return 53;
+  const rings = Math.min(unlocked, Math.ceil(Math.max(0, energy) * 5));
+  return rings ? 5 + energy * 18 + 5 + (rings - 1) * 5 + 2 : 5;
+}
+export function contactDamage(level: number, size: number): number {
+  return Math.min(4, 1 + Math.floor(Math.max(0, level) / 7) + (size >= 6 ? 1 : 0));
+}
+function segmentDistance(ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay;
+  const length = dx * dx + dy * dy;
+  const t = length ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / length)) : 0;
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+
 export class GravityField {
   integrity = 3;
   hazards: Hazard[] = [];
@@ -50,6 +68,7 @@ export class GravityField {
     this.powerUntil = -Infinity;
     return reward;
   }
+  private previousCursor: { x: number; y: number } | null = null;
   private activeChapter = '';
   private feedback: { x: number; y: number; tx: number; ty: number; at: number; kind: 'loss' | 'escape' }[] = [];
   private previous: number | undefined;
@@ -64,6 +83,7 @@ export class GravityField {
     this.heart = null;
     this.hazards = [];
     this.previous = undefined;
+    this.previousCursor = null;
     this.history = [];
     this.lastHit = this.lastGraze = this.lastRelease = -Infinity;
     this.nextSpawn = now + 7000;
@@ -94,12 +114,13 @@ export class GravityField {
       }
     }
   }
-  update(s: FieldInput): { hit: boolean; grazed: boolean; died: boolean; reward?: { x: number; y: number } } {
-    const result: { hit: boolean; grazed: boolean; died: boolean; reward?: { x: number; y: number } } = { hit: false, grazed: false, died: this.integrity <= 0 };
-    const dt = this.previous === undefined ? 0 : Math.min(.04, Math.max(0, (s.now - this.previous) / 1000));
+  update(s: FieldInput): { hit: boolean; grazed: boolean; died: boolean; damage?: number; reward?: { x: number; y: number } } {
+    const result: { hit: boolean; grazed: boolean; died: boolean; damage?: number; reward?: { x: number; y: number } } = { hit: false, grazed: false, died: this.integrity <= 0 };
+    const dt = this.previous === undefined ? 0 : Math.min(.1, Math.max(0, (s.now - this.previous) / 1000));
     this.previous = s.now;
     if (this.width && this.height && (s.width !== this.width || s.height !== this.height)) {
       const sx = s.width / this.width, sy = s.height / this.height;
+      if (this.previousCursor) this.previousCursor = { x: s.cursorX, y: s.cursorY };
       if (this.heart) { this.heart.x *= sx; this.heart.y *= sy; }
       for (const h of this.hazards) {
         h.x *= sx; h.y *= sy;
@@ -108,6 +129,8 @@ export class GravityField {
       this.history = this.history.map(p => ({ ...p, x: p.x * sx, y: p.y * sy }));
     }
     this.width = s.width; this.height = s.height;
+    const previousCursor = this.previousCursor ?? { x: s.cursorX, y: s.cursorY };
+    this.previousCursor = { x: s.cursorX, y: s.cursorY };
     const cx = s.width / 2, cy = s.height / 2;
     this.history.push({ x: s.cursorX, y: s.cursorY, at: s.now });
     while (this.history.length > 1 && (this.history[1].at < s.now - 650 || this.history.length > 180)) this.history.shift();
@@ -157,6 +180,7 @@ export class GravityField {
     const worldScale = Math.max(.55, Math.min(1, Math.min(s.width, s.height) / 720));
     for (const h of this.hazards) {
       if (s.now - h.born < 1600) continue; // Visible arrival warning; no collision yet.
+      const previousX = h.x, previousY = h.y;
       const dc = Math.max(1, Math.hypot(cx - h.x, cy - h.y));
       const dp = Math.max(1, Math.hypot(target.x - h.x, target.y - h.y));
       const attraction = chargePull(s.energy) * 145 * (powered ? 1.8 : 1) * tide * Math.min(1, 340 / dp);
@@ -185,13 +209,22 @@ export class GravityField {
         result.reward = { x: h.x, y: h.y };
         this.feedback.push({ x: h.x, y: h.y, tx: s.cursorX, ty: s.cursorY, at: s.now, kind: 'escape' });
       }
-      if (!h.grazed && playerDistance < 22 && s.now - this.lastGraze > 1800) {
+      const contactRadius = (s.ringRadius ?? ringRadius(s.energy, 5, powered)) + hazardSize(h.phase) * 1.25;
+      const sweptDistance = segmentDistance(previousX - previousCursor.x, previousY - previousCursor.y,
+        h.x - s.cursorX, h.y - s.cursorY);
+      if (sweptDistance <= contactRadius && s.now - this.lastGraze > 1800) {
         h.grazed = true;
         this.powerUntil = -Infinity;
         this.lastGraze = s.now;
         result.grazed = true;
+        result.damage = contactDamage(s.level, hazardSize(h.phase));
+        if (s.energy - result.damage / 5 <= 1e-9) {
+          this.integrity = 0;
+          result.died = true;
+        }
         this.feedback.push({ x: s.cursorX, y: s.cursorY, tx: h.x, ty: h.y, at: s.now, kind: 'loss' });
       }
+      if (result.died) break;
       const coreRadius = Math.min(s.width, s.height) * .068;
       if (Math.hypot(h.x - cx, h.y - cy) < coreRadius && s.now - this.lastHit >= 3500) {
         this.powerUntil = -Infinity;
@@ -241,7 +274,7 @@ export class GravityField {
     for (const h of this.hazards) {
       const arrival = Math.min(1, Math.max(0, (s.now - h.born) / 1600));
       // Stable individual size, with the old connected-bubble motion in a small red silhouette.
-      const size = 3.8 + (Math.sin(h.phase * 12.9898) * .5 + .5) * 3.4;
+      const size = hazardSize(h.phase);
       const time = s.now / 1000;
       const pulse = 1 + Math.sin(time * 4.3 + h.phase) * .12;
       const radius = size * (.82 + arrival * .18) * pulse;
