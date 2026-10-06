@@ -50,7 +50,7 @@ class MusicLoopSystemClass {
   private _initialized = false;
   private _started = false;
   private currentLevel = 0;
-  private currentTrack: TrackName = 'base';
+  private currentTrack: TrackName | null = 'base';
   private startTime = 0;
 
   get initialized(): boolean {
@@ -173,12 +173,13 @@ class MusicLoopSystemClass {
         const now = this.audioContext!.currentTime;
         track.gain.gain.linearRampToValueAtTime(0, now + 0.5);
 
+        const source = track.source;
+        track.source = null;
         setTimeout(() => {
           try {
-            track.source?.stop();
-            track.source?.disconnect();
+            source.stop();
+            source.disconnect();
           } catch {}
-          track.source = null;
         }, 600);
       }
     }
@@ -207,6 +208,7 @@ class MusicLoopSystemClass {
       if (this.currentTrack) {
         this.setTrackVolume(this.currentTrack, 0);
       }
+      this.currentTrack = null;
       return;
     }
 

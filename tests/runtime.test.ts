@@ -23,7 +23,7 @@ function game(sourceFile = 'runtime.ts', expansion = false) {
     getAttribute(name: string) { return this.attributes.get(name); }
     closest() { return null; }
     remove() {}
-    appendChild() {}
+    appendChild(child: Element & { id?: string }) { if (child.id) elements.set(child.id, child); }
     querySelector() { return new Element(); }
     querySelectorAll() { return []; }
   }
@@ -37,6 +37,9 @@ function game(sourceFile = 'runtime.ts', expansion = false) {
     return elements.get(id);
   };
   const audioState = {
+    musicLevel: 0, musicStarts: 0,
+    setGameLevel(level: number) { this.musicLevel = level; },
+    startBgMusic() { this.musicStarts++; },
     muted: false, initialized: false, ready: false, initCalls: 0, resumeCalls: 0,
     async init() { this.initCalls++; this.initialized = true; },
     async resume() { this.resumeCalls++; this.ready = true; },
@@ -50,7 +53,7 @@ function game(sourceFile = 'runtime.ts', expansion = false) {
   const context = vm.createContext({
     uiTimers, listeners,
     audioStub: audioState,
-    console, Date, Math: Object.create(Math), Element, exports: {},
+    console, Date, URLSearchParams, Math: Object.create(Math), Element, exports: {},
     window: { innerWidth: 1280, innerHeight: 720, addEventListener() {} },
     navigator: { maxTouchPoints: 0 },
     document: { hidden: false, getElementById: getElement, createElement: () => new Element(),
@@ -293,7 +296,7 @@ test('expansion failure clears pending success and retry skips only the tutorial
   assert.equal(run('modalShown || youDiedActive || postCreditsMode'), false);
 });
 
-test('expansion reaches the wordless finale and keeps it paused', () => {
+test('expansion reaches the success card and keeps it paused', () => {
   const run = game('accepted-preview.js', true);
   run(`beginEvolution('binary'); upgradeLevel = 19; cursorEnergy = 1;
     for (const listener of listeners.click) {
@@ -302,7 +305,7 @@ test('expansion reaches the wordless finale and keeps it paused', () => {
     clock.advance(0, () => {}); clock.advance(4100, () => {});`);
   assert.equal(run('upgradeLevel'), 20);
   assert.equal(run('evolutionRest.kind'), 'final');
-  assert.equal(run('document.getElementById("evolution-reentry").hidden'), false);
+  assert.equal(run('document.getElementById("evolution-reentry").hidden'), true);
   assert.equal(run('modalShown && clock.paused'), true);
   assert.equal(run('audioStub.muted'), false);
 });
@@ -321,15 +324,15 @@ test('settlement animates without advancing gameplay and ignores immediate reent
 });
 
 
-test('overdrive doubles a release and clamps progression at both finales', () => {
-  for (const [chapter, level, expected] of [['tension', 5, 7], ['connection', 9, 10], ['binary', 19, 20]]) {
+test('power never skips progression levels and both finales remain reachable', () => {
+  for (const [chapter, level, expected] of [['tension', 5, 6], ['connection', 9, 10], ['binary', 19, 20]]) {
     const run = game('accepted-preview.js', true);
     run(`beginEvolution('${chapter}'); upgradeLevel = ${level}; cursorEnergy = 1; evolution.powerUntil = clock.now + 8000;
       for (const listener of listeners.click) {
         if (listener !== initAudioOnInteraction) listener({clientX:centerX, clientY:centerY});
       }`);
     assert.equal(run('upgradeLevel'), expected);
-    assert.equal(run('evolution.powerActive(clock.now)'), false);
+    assert.equal(run('evolution.powerActive(clock.now)'), true);
     if (expected === 10 || expected === 20) {
       run('clock.advance(0, () => {}); clock.advance(4100, () => {});');
       assert.equal(run('modalShown && clock.paused'), true);
@@ -393,4 +396,116 @@ test('ring depletion opens the death screen, freezes the run and retry restores 
   run('evolutionRest.elapsed=2000; continueEvolution();');
   assert.equal(run('clock.paused || youDiedActive'), false);
   assert.equal(run('document.getElementById("evolution-death").hidden'), true);
+});
+
+
+test('retry restores audible base music while respecting explicit mute', async () => {
+  for (const muted of [false, true]) {
+    const run = game('accepted-preview.js', true);
+    run(`audioStub.ready = true; audioStub.muted = ${muted}; showEvolutionFailure(); evolutionRest.elapsed = 1500; continueEvolution();`);
+    await Promise.resolve();
+    assert.equal(run('audioStub.musicLevel'), 1);
+    assert.equal(run('audioStub.musicStarts > 0'), !muted);
+    assert.equal(run('modalShown || youDiedActive'), false);
+  }
+});
+
+test('overcharge keeps collecting past a full ring and resets on release', () => {
+  const run = game('accepted-preview.js', true);
+  run(`beginEvolution('tension'); cursorEnergy = 1;
+    ambientParticles.length = 0; spawnAmbientParticle();
+    Object.assign(ambientParticles[0], {x:cursorX, y:cursorY, vx:0, vy:0, absorbed:false});
+    drawAmbientParticles();`);
+  assert.ok(run('cursorEnergy') > 1);
+  run(`cursorEnergy = 3; for (const listener of listeners.click) {
+    if (listener !== initAudioOnInteraction) listener({clientX:centerX, clientY:centerY});
+  }`);
+  assert.equal(run('upgradeLevel'), 5);
+  assert.equal(run('cursorEnergy'), 0);
+});
+
+test('debug crosses chapters and clamps levels without stale endings', () => {
+  const run = game('accepted-preview.js', true);
+  run('debugLevel(9)');
+  assert.equal(run('upgradeLevel'), 10);
+  assert.equal(run('postCreditsMode'), false);
+  assert.equal(run('evolutionRest.kind'), 'success');
+  assert.equal(run('modalShown && clock.paused'), true);
+  run('debugLevel(-1)');
+  assert.equal(run('upgradeLevel'), 9);
+  assert.equal(run('postCreditsMode'), false);
+  run('debugLevel(50)');
+  assert.equal(run('upgradeLevel'), 20);
+  run('debugLevel(-50)');
+  assert.equal(run('upgradeLevel'), 1);
+  assert.equal(run('gameCompleted || modalShown'), false);
+});
+
+test('mobile resize preserves valid dimensions and repaints paused bridge', () => {
+  const run = game('accepted-preview.js', true);
+  run(`toggleEvolutionPause(); window.innerWidth = 390; window.innerHeight = 844; resize(); repaintEvolution();`);
+  assert.equal(run('W'), 390);
+  assert.equal(run('H'), 844);
+  assert.equal(run('evolutionPaused && clock.paused'), true);
+  run('window.innerWidth = 0; window.innerHeight = 0; resize();');
+  assert.equal(run('W'), 390);
+  assert.equal(run('H'), 844);
+});
+
+
+test('both evolution milestones render original card contents and continue correctly', () => {
+  const run = game('accepted-preview.js', true);
+  run('showEvolutionEnding(false)');
+  assert.match(run('document.getElementById("level10-modal").innerHTML'), /Congratulations/);
+  assert.match(run('document.getElementById("level10-modal").innerHTML'), /Switch Angel/);
+  run('closeModal(document.getElementById("level10-modal"))');
+  assert.equal(run('upgradeLevel'), 10);
+  assert.equal(run('postCreditsMode && !modalShown && !clock.paused'), true);
+  run('showEvolutionEnding(true)');
+  assert.match(run('document.getElementById("super-success-modal").innerHTML'), /Labskaus/);
+  assert.equal(run('clock.paused'), true);
+  run('closeModal(document.getElementById("super-success-modal"))');
+  assert.equal(run('upgradeLevel'), 1);
+  assert.equal(run('postCreditsMode || modalShown || clock.paused'), false);
+});
+
+test('first debug interaction starts the correct music after audio unlock', async () => {
+  const run = game('accepted-preview.js', true);
+  await run('debugLevel(6)');
+  assert.equal(run('audioStub.ready'), true);
+  assert.equal(run('audioStub.musicLevel'), 8);
+  assert.ok(run('audioStub.musicStarts') > 0);
+  await run('debugLevel(3)');
+  assert.equal(run('audioStub.musicLevel'), 10);
+  assert.equal(run('evolutionRest.kind'), 'success');
+  run('audioStub.muted = true; audioStub.musicStarts = 0');
+  await run('debugLevel(10)');
+  assert.equal(run('evolutionRest.kind'), 'final');
+  assert.equal(run('audioStub.musicStarts'), 0);
+});
+
+
+test('evolution begins on I while preserving the learn-by-playing opening', () => {
+  const run = game('accepted-preview.js', true);
+  assert.equal(run('upgradeLevel'),1);
+  assert.equal(run('tutorialSubPhase'),0);
+  assert.equal(run('gamePhase'),constants.GAME_PHASE_TUTORIAL);
+  assert.equal(run('coloredBridgePhaseComplete'),false);
+  run('debugLevel(-100)');
+  assert.equal(run('upgradeLevel'),1);
+});
+
+test('opening charges faster while later progression stays single-step', () => {
+  const run = game('accepted-preview.js', true);
+  const collect = () => run(`cursorEnergy = 0; isIdle = false;
+    ambientParticles.length = 0; spawnAmbientParticle();
+    Object.assign(ambientParticles[0], {x:cursorX,y:cursorY,vx:0,vy:0,absorbed:false,isSuperStar:false});
+    drawAmbientParticles(); cursorEnergy;`);
+  assert.equal(collect(), .012);
+  run("beginEvolution('awakening', true)");
+  assert.equal(collect(), .01);
+  run("beginEvolution('tension')");
+  assert.equal(collect(), .008);
+  run('evolution.powerUntil = clock.now + 12000');
+  assert.equal(collect(), .012);
 });

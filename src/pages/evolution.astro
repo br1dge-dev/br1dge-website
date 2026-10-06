@@ -51,11 +51,22 @@
       #evolution-retry:focus-visible { color:#e0ceca; outline:none; text-decoration:underline; text-decoration-color:#784346; text-underline-offset:8px; text-decoration-thickness:1px; }
       @keyframes death-in { from{opacity:0} to{opacity:1} }
       @media(prefers-reduced-motion:reduce){#evolution-death{animation:none}}
+      #evolution-debug { position:fixed; top:max(4px, env(safe-area-inset-top)); right:max(4px, env(safe-area-inset-right)); z-index:1100; display:flex; mix-blend-mode:difference; }
+      #evolution-debug button { width:32px; height:40px; padding:0; display:grid; place-items:center; border:0; background:none; cursor:pointer; }
+      #evolution-debug button::after { content:""; width:4px; height:4px; border-radius:50%; background:#dfe7dc; opacity:.55; box-shadow:0 0 4px #dfe7dc55; }
+      #evolution-debug button:hover::after, #evolution-debug button:focus-visible::after { opacity:1; }
+      #level10-modal #close-btn, #super-success-modal #close-btn { top:48px !important; }
+      #level10-modal, #super-success-modal { overflow-y:auto; cursor:auto !important; }
+      #level10-modal button, #level10-modal a, #super-success-modal button, #super-success-modal a { cursor:pointer !important; }
       astro-dev-toolbar { display: none; }
     </style>
   </head>
   <body>
     <canvas id="canvas" data-evolution="true" aria-label="Interactive field of light and gravity"></canvas>
+    <div id="evolution-debug" hidden>
+      <button id="level-down" aria-label="Level down" title="Level down"></button>
+      <button id="level-up" aria-label="Level up" title="Level up"></button>
+    </div>
     <section id="evolution-death" role="dialog" aria-modal="true" aria-labelledby="death-title" hidden>
       <h1 id="death-title">YOU DIED</h1>
       <button id="evolution-retry">Get gud – try again</button>

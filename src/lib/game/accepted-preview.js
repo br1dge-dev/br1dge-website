@@ -1,6 +1,6 @@
 // Original-based playtest; targeted visual and modal-pause fixes only.
 import { GameClock } from './clock';
-import { GravityField, chapterFor, musicFor, chargePull, drawEvolvingBridge, drawSettlement, drawProjectOrbits, drawPowerRing, ringRadius, CHAPTERS } from './evolution';
+import { GravityField, chapterFor, musicFor, chargePull, drawEvolvingBridge, drawSettlement, drawProjectOrbits, drawPowerRing, drawOvercharge, ringRadius, CHAPTERS } from './evolution';
 const clock = new GameClock();
 import { availableDischarge, drawDischargeLink } from '../game/discharge';
 import { CHARGE } from '../game/charge';
@@ -247,8 +247,16 @@ const SPIRAL_MAX_SPEED = 1.5; // Max speed when fully fed
 const SPIRAL_FLEE_SPEED = 3.0;
 const SPIRAL_DEATH_DURATION = 3500;
 function resize() {
-    W = canvas.width = window.innerWidth;
-    H = canvas.height = window.innerHeight;
+    const width = Math.max(1, window.innerWidth || W || 1);
+    const height = Math.max(1, window.innerHeight || H || 1);
+    // Reassigning either dimension erases the canvas, even when unchanged.
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
+    if (evolution && W > 0 && H > 0) {
+        cursorX *= width / W; mouseX *= width / W; prevCursorX *= width / W;
+        cursorY *= height / H; mouseY *= height / H; prevCursorY *= height / H;
+    }
+    W = width; H = height;
     centerX = W / 2;
     centerY = H / 2;
 }
@@ -263,6 +271,12 @@ let modalShown = false;
 let modalCursorX = 0, modalCursorY = 0;
 let modalTargetX = 0, modalTargetY = 0;
 function closeModal(modal) {
+    if (evolution) {
+        AudioSystem.playModalClose();
+        const next = evolutionRest?.kind === 'success' ? 'echo' : 'awakening';
+        beginEvolution(next, true);
+        return;
+    }
     // Audio: Modal close
     AudioSystem.playModalClose();
     // Reset gameCompleted so next modal can trigger
@@ -275,7 +289,7 @@ function closeModal(modal) {
     }, 800);
 }
 function restartGame(modal) {
-    if (evolution) { beginEvolution('awakening'); return; }
+    if (evolution) { beginEvolution('awakening', true); return; }
     // Reset game state
     upgradeLevel = 0;
     logoBaseScale = 1;
@@ -347,9 +361,9 @@ function showRestartButton() {
     });
 }
 function showSuperSuccessModal() {
-    if (evolution) { showEvolutionEnding(true); return; }
     if (modalShown)
         return;
+    if (evolution) openEvolutionRest('final');
     modalShown = true;
     clock.setPaused(true);
     isTouching = false;
@@ -415,9 +429,9 @@ function showSuperSuccessModal() {
     requestAnimationFrame(() => { modal.style.opacity = '1'; });
 }
 function showModal() {
-    if (evolution) { showEvolutionEnding(false); return; }
     if (modalShown)
         return;
+    if (evolution) openEvolutionRest('success');
     modalShown = true;
     clock.setPaused(true);
     isTouching = false;
@@ -909,7 +923,7 @@ function drawAmbientParticles() {
         if (dist < gravityRadius && dist > 8) {
             // Gravitation: quadratisch stärker je näher
             const normalizedDist = dist / gravityRadius;
-            const pullStrength = Math.pow(1 - normalizedDist, 2) * CHARGE.attractionStrength * (evolution ? (1 + chargePull(cursorEnergy)) * (evolution.powerActive(clock.now) ? 1.6 : 1) : 1) * tideStrength;
+            const pullStrength = Math.pow(1 - normalizedDist, 2) * CHARGE.attractionStrength * (evolution ? (1 + chargePull(cursorEnergy)) * (evolution.powerActive(clock.now) ? 1.5 : 1) : 1) * tideStrength;
             p.vx += ((dx / dist) * pullStrength) * motionStep;
             p.vy += ((dy / dist) * pullStrength) * motionStep;
             // Partikel beschleunigt sichtbar zum Cursor
@@ -941,12 +955,12 @@ function drawAmbientParticles() {
             }
         }
         // Partikel wird vom Cursor absorbiert - nur wenn nicht voll, nicht idle, und nicht im Tutorial-Warte-Modus
-        if (dist < CHARGE.captureRadius && !p.absorbed && cursorEnergy < MAX_ENERGY && !isIdle && !(gamePhase === GAME_PHASE_TUTORIAL && logoReadyForDischarge)) {
+        if (dist < CHARGE.captureRadius && !p.absorbed && cursorEnergy < chargeCapacity() && !isIdle && !(gamePhase === GAME_PHASE_TUTORIAL && logoReadyForDischarge)) {
             p.absorbed = true;
             const prevEnergy = cursorEnergy;
             // Every normal star gives visible progress; no slower tutorial phase.
-            const energyGain = CHARGE.energyPerStar * (evolution?.powerActive(clock.now) ? 2 : 1) * (p.isSuperStar ? CHARGE.superStarMultiplier : 1);
-            cursorEnergy = Math.min(MAX_ENERGY, cursorEnergy + energyGain);
+            const energyGain = CHARGE.energyPerStar * (evolution ? evolutionChargeMultiplier() : 1) * (p.isSuperStar ? CHARGE.superStarMultiplier : 1);
+            cursorEnergy = Math.min(chargeCapacity(), cursorEnergy + energyGain);
             p.alpha *= 0.2;
             // Audio & Haptic: Super star has special sound, normal stars throttled
             if (p.isSuperStar) {
@@ -1851,7 +1865,8 @@ function drawCursor() {
     }
     // Größe
     const baseSize = 5;
-    const energySize = cursorEnergy * 18;
+    if (evolution) drawOvercharge(ctx, evolutionInput());
+    const energySize = (evolution ? Math.min(1, cursorEnergy) : cursorEnergy) * 18;
     const cursorSize = baseSize + energySize;
     ctx.save();
     ctx.translate(cursorX, cursorY);
@@ -2013,7 +2028,7 @@ function drawCursor() {
 // MINI-BRIDGE SPAWN - Big Bang from Logo Center
 // ========================================
 function spawnMiniBridge() {
-    if (evolution) evolution.release(clock.now, centerX, centerY);
+    if (evolution) evolution.release(clock.now, centerX, centerY, cursorEnergy, Math.min(W, H));
     // Nur spawnen wenn wir noch in einer gültigen Farbphase sind (0, 1, 2)
     if (currentColorPhase >= CHAMBER_COLORS_SEQUENCE.length) {
         return;
@@ -2066,7 +2081,7 @@ function spawnMiniBridge() {
     const logoX2 = W / 2;
     const logoY2 = H / 2;
     // Multiple Shockwaves from logo - big bang effect
-    for (let s = 0; s < 5; s++) {
+    for (let s = 0; s < (evolution ? 0 : 5); s++) {
         clock.schedule(() => {
             ripples.push({
                 x: logoX2,
@@ -2420,8 +2435,8 @@ document.addEventListener('click', (e) => {
     const logoRadius = Math.min(W, H) * (evolution ? .13 : .22 * logoBaseScale);
     const exactCenterX = W / 2;
     const exactCenterY = H / 2;
-    // Ripple immer
-    ripples.push({
+    // Evolution uses one visible, damaging wave; no decorative click wave.
+    if (!evolution) ripples.push({
         x: clickX,
         y: clickY,
         size: 5,
@@ -2459,7 +2474,7 @@ document.addEventListener('click', (e) => {
     ringsMax = tutorialRingsMax;
     ringsExpanded = tutorialRingsMax; // Tutorial allows immediate discharge
     if (dist < logoRadius && dischargeKind === 'tutorial') {
-        if (evolution) evolution.release(clock.now, centerX, centerY);
+        if (evolution) evolution.release(clock.now, centerX, centerY, cursorEnergy, Math.min(W, H));
         // Start background music AFTER tutorial completes
         // Music only starts after colored phase begins (gamePhase != GAME_PHASE_TUTORIAL)
         // This is handled in the discharge logic when transitioning to GAME_PHASE_COLORED
@@ -2509,11 +2524,11 @@ document.addEventListener('click', (e) => {
     // Normal Mode: Discharge wenn Ringe voll UND Colored Phase abgeschlossen
     const currentLevelCap = postCreditsMode ? 20 : 10;
     if (dist < logoRadius && dischargeKind === 'level') {
-        if (evolution) evolution.release(clock.now, centerX, centerY);
+        if (evolution) evolution.release(clock.now, centerX, centerY, cursorEnergy, Math.min(W, H));
         const prevLevel = upgradeLevel;
         // SIMPLIFIED: 1 red particle = 1 level, always
         // No special rules, no max stack bonus
-        const levelsToAdd = evolution ? evolution.takePowerReward(clock.now) : isInverted ? redStackCount : 1;
+        const levelsToAdd = evolution ? 1 : isInverted ? redStackCount : 1;
         upgradeLevel = Math.min(currentLevelCap, upgradeLevel + levelsToAdd);
         if (upgradeLevel > prevLevel) {
             console.log(`%c[GAME] Level UP: ${prevLevel} → ${upgradeLevel} (red discharge, inverted: ${isInverted}, stack: ${redStackCount})`, 'color: #39ff14; font-family: monospace;');
@@ -2607,7 +2622,7 @@ document.addEventListener('click', (e) => {
             });
         }
         // Mehrere Shockwaves
-        for (let s = 0; s < 3; s++) {
+        for (let s = 0; s < (evolution ? 0 : 3); s++) {
             clock.schedule(() => {
                 ripples.push({
                     x: exactCenterX,
@@ -2786,6 +2801,12 @@ soundToggleBtn?.addEventListener('touchend', (e) => {
     e.preventDefault();
     toggleSound();
 });
+function evolutionChargeMultiplier() {
+    if (evolution.powerActive(clock.now)) return 1.2;
+    if (gamePhase === GAME_PHASE_TUTORIAL) return 1.2;
+    return coloredBridgePhaseComplete ? .8 : 1;
+}
+function chargeCapacity() { return evolution && coloredBridgePhaseComplete ? 3 : MAX_ENERGY; }
 function evolutionInput() {
     return { now: clock.now, width: W, height: H, cursorX, cursorY, energy: cursorEnergy, ringRadius: ringRadius(cursorEnergy, getCurrentRings(), evolution.powerActive(clock.now)), ready: !!getAvailableDischarge(),
         level: upgradeLevel, afterglow: postCreditsMode, tutorial: gamePhase === GAME_PHASE_TUTORIAL, completing: gameCompleted };
@@ -2793,6 +2814,8 @@ function evolutionInput() {
 function beginEvolution(chapterId = 'awakening', skipTutorial = false) {
     if (!evolution) return;
     clock.clearTimers();
+    document.getElementById('level10-modal')?.remove();
+    document.getElementById('super-success-modal')?.remove();
     evolutionRest = null; evolutionPaused = false;
     evolution.reset(clock.now);
     previousMotionTime = null; motionStep = 1;
@@ -2804,10 +2827,10 @@ function beginEvolution(chapterId = 'awakening', skipTutorial = false) {
     logoBaseScale = logoScale = logoTargetScale = 1;
     logoGlow = logoBreathPhase = 0;
     logoReadyForDischarge = false;
-    tutorialSubPhase = upgradeLevel > 0 || skipTutorial ? 2 : 0;
+    tutorialSubPhase = chapter.id !== 'awakening' || skipTutorial ? 2 : 0;
     tutorialDischargeCount = tutorialSubPhase;
     gamePhase = tutorialSubPhase === 2 ? GAME_PHASE_COLORED : GAME_PHASE_TUTORIAL;
-    currentColorPhase = upgradeLevel > 0 ? 3 : 0;
+    currentColorPhase = chapter.id !== 'awakening' ? 3 : 0;
     coloredBridgePhaseComplete = currentColorPhase === 3;
     chamberActive = gamePhase !== GAME_PHASE_TUTORIAL && !coloredBridgePhaseComplete;
     chamberParticles.length = coloredParticles.length = floatingBridges.length = 0;
@@ -2824,8 +2847,8 @@ function beginEvolution(chapterId = 'awakening', skipTutorial = false) {
     AudioSystem.setSpiralSuction(0);
     AudioSystem.setChamberCrackling(0);
     AudioSystem.setBridgeAttraction(0);
-    AudioSystem.setGameLevel(musicFor(upgradeLevel, postCreditsMode));
-    if (upgradeLevel > 0 && AudioSystem.ready && !AudioSystem.muted) AudioSystem.startBgMusic();
+    AudioSystem.setGameLevel(skipTutorial ? Math.max(1, musicFor(upgradeLevel, postCreditsMode)) : musicFor(upgradeLevel, postCreditsMode));
+    if ((upgradeLevel > 0 || skipTutorial) && AudioSystem.ready && !AudioSystem.muted) AudioSystem.startBgMusic();
     const reentry = document.getElementById('evolution-reentry'); if (reentry) reentry.hidden = true;
     const death = document.getElementById('evolution-death'); if (death) death.hidden = true;
     modalShown = false;
@@ -2841,6 +2864,7 @@ function beginEvolution(chapterId = 'awakening', skipTutorial = false) {
         });
     }
     document.getElementById('pause-toggle')?.setAttribute('aria-pressed', 'false');
+    document.getElementById('pause-toggle')?.setAttribute('aria-label', 'Pause game');
 }
 
 function pauseEvolution() {
@@ -2858,7 +2882,7 @@ function openEvolutionRest(kind) {
     if (death) death.hidden = kind !== 'loss';
     const reentry = document.getElementById('evolution-reentry');
     if (reentry) {
-        reentry.hidden = kind === 'loss';
+        reentry.hidden = true;
         reentry.setAttribute('aria-label', kind === 'loss' ? 'Begin a new attempt' : kind === 'final' ? 'Begin again' : 'Continue into the afterglow');
         if (kind === 'loss') document.getElementById('evolution-retry')?.focus?.({ preventScroll: true });
         else reentry.focus?.({ preventScroll: true });
@@ -2866,8 +2890,8 @@ function openEvolutionRest(kind) {
 }
 function showEvolutionEnding(final) {
     if (modalShown) return;
-    openEvolutionRest(final ? 'final' : 'success');
-    AudioSystem.playModalEnter();
+    if (final) showSuperSuccessModal();
+    else showModal();
 }
 function showEvolutionFailure() {
     clock.clearTimers();
@@ -2878,6 +2902,9 @@ function showEvolutionFailure() {
 function continueEvolution() {
     if (!evolutionRest || evolutionRest.elapsed < 1000) return;
     const kind = evolutionRest.kind;
+    void initAudioOnInteraction().then(() => {
+        if (!AudioSystem.muted) AudioSystem.startBgMusic();
+    });
     beginEvolution(kind === 'success' ? 'echo' : 'awakening', kind === 'loss');
 }
 function drawEvolutionRest(timestamp) {
@@ -2900,9 +2927,43 @@ function toggleEvolutionPause() {
     button?.setAttribute('aria-pressed', String(evolutionPaused));
     button?.setAttribute('aria-label', evolutionPaused ? 'Resume game' : 'Pause game');
 }
+async function debugLevel(delta) {
+    if (!evolution) return;
+    const level = Math.max(1, Math.min(20, upgradeLevel + delta));
+    beginEvolution(chapterFor(level, level >= 10).id, true);
+    upgradeLevel = level;
+    if (level >= 3) {
+        for (const [index, color] of CHAMBER_COLORS_SEQUENCE.entries()) {
+            floatingBridges.push({ x: W / 2, y: H / 2, color, url: COLOR_URLS[color],
+                birthTime: clock.now - 1800, orbitAngle: index * Math.PI * 2 / 3, hitRadius: 22 });
+        }
+    }
+    if (level === 10 || level === 20) {
+        gameCompleted = true;
+        postCreditsMode = level === 20;
+        showEvolutionEnding(level === 20);
+    }
+    // Await the first click's audio unlock, then use the latest debug state.
+    await initAudioOnInteraction();
+    AudioSystem.setGameLevel(Math.max(1, musicFor(upgradeLevel, postCreditsMode)));
+    if (AudioSystem.ready && !AudioSystem.muted) await AudioSystem.startBgMusic();
+}
 function initEvolution() {
     if (!evolution) return;
     beginEvolution();
+    const debug = document.getElementById('evolution-debug');
+    if (debug && new URLSearchParams(window.location?.search || '').get('debug') === '1') {
+        debug.hidden = false;
+        for (const [id, delta] of [['level-down', -1], ['level-up', 1]]) {
+            document.getElementById(id)?.addEventListener('click', event => {
+                event.stopPropagation(); debugLevel(delta);
+            });
+        }
+    }
+    canvas.addEventListener('contextlost', event => event.preventDefault());
+    canvas.addEventListener('contextrestored', () => { resize(); repaintEvolution(); });
+    window.addEventListener('resize', repaintEvolution);
+    window.addEventListener('pageshow', () => { resize(); repaintEvolution(); });
     document.getElementById('evolution-reentry')?.addEventListener('click', event => {
         event.stopPropagation(); continueEvolution();
     });
@@ -2916,10 +2977,18 @@ function initEvolution() {
     });
     document.addEventListener('visibilitychange', () => clock.setPaused(modalShown || document.hidden));
 }
+function repaintEvolution() {
+    if (!evolution || evolutionRest || !evolutionPaused) return;
+    ctx.clearRect(0, 0, W, H);
+    drawProjectOrbits(ctx, floatingBridges, W, H, clock.now, mouseX, mouseY);
+    drawEvolvingBridge(ctx, evolutionInput(), evolution);
+    evolution.draw(ctx, evolutionInput());
+    drawCursor();
+}
 function frame(timestamp) {
+    requestAnimationFrame(frame);
     if (evolutionRest) drawEvolutionRest(timestamp);
     else clock.advance(timestamp, render);
-    requestAnimationFrame(frame);
 }
 // Init
 resize();
