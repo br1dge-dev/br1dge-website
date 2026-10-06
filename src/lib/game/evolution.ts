@@ -1,6 +1,6 @@
 /** Optional expansion for /evolution. The accepted playtest keeps its original rules. */
 export const CHAPTERS = [
-  { id: 'awakening', name: 'Awakening', from: 0, to: 2, music: 1, color: '#c8d8dc' },
+  { id: 'awakening', name: 'Awakening', from: 1, to: 2, music: 1, color: '#c8d8dc' },
   { id: 'resonance', name: 'Resonance', from: 2, to: 4, music: 3, color: '#bddedb' },
   { id: 'tension', name: 'Tension', from: 4, to: 7, music: 5, color: '#d8c7ae' },
   { id: 'connection', name: 'Connection', from: 7, to: 10, music: 8, color: '#cadbc4' },
@@ -24,18 +24,20 @@ export interface FieldInput {
   now: number; width: number; height: number; cursorX: number; cursorY: number;
   ringRadius?: number; ready?: boolean; energy: number; level: number; afterglow: boolean; tutorial: boolean; completing: boolean;
 }
+export const POWER_DURATION = 12000;
 export interface Hazard {
   x: number; y: number; vx: number; vy: number; born: number; phase: number;
-  approached?: boolean; escaped?: boolean;
+  approached?: boolean; escaped?: boolean; size?: number;
   grazed: boolean; trail: { x: number; y: number }[];
 }
 export function hazardSize(phase: number): number {
   return 3.8 + (Math.sin(phase * 12.9898) * .5 + .5) * 3.4;
 }
 export function ringRadius(energy: number, unlocked = 5, powered = false): number {
+  if (energy > 1) return 56 + Math.ceil(energy - 1) * 8 + 2;
   if (powered) return 53;
   const rings = Math.min(unlocked, Math.ceil(Math.max(0, energy) * 5));
-  return rings ? 5 + energy * 18 + 5 + (rings - 1) * 5 + 2 : 5;
+  return rings ? 5 + Math.min(1, energy) * 18 + 5 + (rings - 1) * 5 + 2 : 5;
 }
 export function contactDamage(level: number, size: number): number {
   return Math.min(4, 1 + Math.floor(Math.max(0, level) / 7) + (size >= 6 ? 1 : 0));
@@ -63,11 +65,8 @@ export class GravityField {
   nextHeart = 0;
   heart: { x: number; y: number; born: number } | null = null;
   powerActive(now: number) { return now < this.powerUntil; }
-  takePowerReward(now: number) {
-    const reward = this.powerActive(now) ? 2 : 1;
-    this.powerUntil = -Infinity;
-    return reward;
-  }
+  private waves: { x: number; y: number; born: number; radius: number; previous: number; max: number; positions: Map<Hazard, {x: number; y: number}> }[] = [];
+  private defeats: {x: number; y: number; size: number; at: number}[] = [];
   private previousCursor: { x: number; y: number } | null = null;
   private activeChapter = '';
   private feedback: { x: number; y: number; tx: number; ty: number; at: number; kind: 'loss' | 'escape' }[] = [];
@@ -78,6 +77,7 @@ export class GravityField {
   private height = 0;
   reset(now: number) {
     this.integrity = 3;
+    this.waves = []; this.defeats = [];
     this.powerUntil = -Infinity;
     this.nextHeart = now + 12000;
     this.heart = null;
@@ -101,18 +101,33 @@ export class GravityField {
     const r = Math.min(width, height) * .3;
     return { x: width / 2 + Math.cos(now / 18000) * r, y: height / 2 + Math.sin(now / 18000) * r * .7 };
   }
-  release(now: number, x: number, y: number) {
+  release(now: number, x: number, y: number, energy = 1, extent = Math.min(this.width, this.height) || 720) {
     this.lastRelease = now;
     this.releases++;
     if (this.encountered) this.safeReturns++;
-    for (const h of this.hazards) {
-      const d = Math.max(1, Math.hypot(h.x - x, h.y - y));
-      if (d < 260) {
-        const kick = 120 * (1 - d / 300);
-        h.vx += (h.x - x) / d * kick;
-        h.vy += (h.y - y) / d * kick;
-      }
+    const excess = Math.max(0, Math.min(2, energy - 1));
+    this.waves.push({ x, y, born: now, radius: 0, previous: 0,
+      max: extent * (.30 + excess * .12) * (this.powerActive(now) ? 1.15 : 1),
+      positions: new Map(this.hazards.map(h => [h, {x:h.x, y:h.y}])) });
+  }
+  private advanceWaves(now: number) {
+    for (const wave of this.waves) {
+      wave.previous = wave.radius;
+      wave.radius = wave.max * Math.min(1, Math.max(0, (now - wave.born) / 900));
+      this.hazards = this.hazards.filter(h => {
+        const previous = wave.positions.get(h) ?? h;
+        const ax = previous.x - wave.x, ay = previous.y - wave.y;
+        const bx = h.x - wave.x, by = h.y - wave.y;
+        const size = (h.size ?? hazardSize(h.phase)) * 1.25;
+        const hit = h.born <= wave.born && segmentDistance(ax, ay, bx, by) - size <= wave.radius
+          && Math.max(Math.hypot(ax, ay), Math.hypot(bx, by)) + size >= wave.previous;
+        if (hit) this.defeats.push({x:h.x, y:h.y, size, at:now});
+        wave.positions.set(h, {x:h.x, y:h.y});
+        return !hit;
+      });
     }
+    this.waves = this.waves.filter(w => now - w.born < 900);
+    this.defeats = this.defeats.filter(d => now - d.at < 500);
   }
   update(s: FieldInput): { hit: boolean; grazed: boolean; died: boolean; damage?: number; reward?: { x: number; y: number } } {
     const result: { hit: boolean; grazed: boolean; died: boolean; damage?: number; reward?: { x: number; y: number } } = { hit: false, grazed: false, died: this.integrity <= 0 };
@@ -120,6 +135,13 @@ export class GravityField {
     this.previous = s.now;
     if (this.width && this.height && (s.width !== this.width || s.height !== this.height)) {
       const sx = s.width / this.width, sy = s.height / this.height;
+      const radialScale = Math.min(s.width, s.height) / Math.min(this.width, this.height);
+      for (const wave of this.waves) {
+        wave.x *= sx; wave.y *= sy;
+        wave.radius *= radialScale; wave.previous *= radialScale; wave.max *= radialScale;
+        for (const point of wave.positions.values()) { point.x *= sx; point.y *= sy; }
+      }
+      for (const defeat of this.defeats) { defeat.x *= sx; defeat.y *= sy; }
       if (this.previousCursor) this.previousCursor = { x: s.cursorX, y: s.cursorY };
       if (this.heart) { this.heart.x *= sx; this.heart.y *= sy; }
       for (const h of this.hazards) {
@@ -129,6 +151,7 @@ export class GravityField {
       this.history = this.history.map(p => ({ ...p, x: p.x * sx, y: p.y * sy }));
     }
     this.width = s.width; this.height = s.height;
+    this.advanceWaves(s.now);
     const previousCursor = this.previousCursor ?? { x: s.cursorX, y: s.cursorY };
     this.previousCursor = { x: s.cursorX, y: s.cursorY };
     const cx = s.width / 2, cy = s.height / 2;
@@ -138,7 +161,7 @@ export class GravityField {
       this.nextSpawn = s.now + 5000;
       return result;
     }
-    // Hearts arrive only after the three project colours have been learned.
+    // Resonance seeds arrive only after the three project colours have been learned.
     if (s.level >= 3 && !this.powerActive(s.now)) {
       if (!this.heart && s.now >= this.nextHeart) {
         const angle = s.now / 7000;
@@ -149,20 +172,21 @@ export class GravityField {
         this.heart = null; this.nextHeart = s.now + 10000;
       }
       if (this.heart && Math.hypot(s.cursorX - this.heart.x, s.cursorY - this.heart.y) < 22) {
-        this.heart = null; this.powerUntil = s.now + 8000;
-        this.nextHeart = s.now + 24000;
+        this.heart = null; this.powerUntil = s.now + POWER_DURATION;
+        this.nextHeart = s.now + POWER_DURATION + 12000;
         this.nextSpawn = s.now;
       }
     }
     const powered = this.powerActive(s.now);
     const chapter = chapterFor(s.level, s.afterglow);
     if (this.activeChapter !== chapter.id) {
-      if (this.activeChapter) this.hazards = [];
+      // Existing threats survive chapter transitions; only a visible wave kills them.
       this.activeChapter = chapter.id;
       this.nextSpawn = Math.max(this.nextSpawn, s.now + 5000);
     }
     // Complexity follows demonstrated play: first feel the chase, then return safely.
-    const maxHazards = (this.safeReturns === 0 ? 1 : s.afterglow ? 3 : s.level >= 4 ? 2 : 1) + (powered ? 2 : 0);
+    const excess = Math.max(0, s.energy - 1);
+    const maxHazards = (this.safeReturns === 0 ? 1 : s.afterglow ? 3 : s.level >= 4 ? 2 : 1) + (powered ? 2 : 0) + Math.ceil(excess * 2);
     if (s.now >= this.nextSpawn && this.hazards.length < maxHazards) {
       // Golden-angle spacing avoids sudden clusters at a single edge.
       const angle = ++this.sequence * 2.399963;
@@ -170,8 +194,8 @@ export class GravityField {
       const rx = Math.max(50, s.width / 2 - margin), ry = Math.max(50, s.height / 2 - margin);
       const scale = 1 / Math.max(Math.abs(Math.cos(angle)), Math.abs(Math.sin(angle)));
       const x = cx + Math.cos(angle) * rx * scale, y = cy + Math.sin(angle) * ry * scale;
-      this.hazards.push({ x, y, vx: 0, vy: 0, born: s.now, phase: angle, grazed: false, trail: [] });
-      this.nextSpawn = s.now + (powered ? 2200 : s.afterglow ? 6000 : Math.max(6500, 11500 - s.level * 500));
+      this.hazards.push({ x, y, vx: 0, vy: 0, born: s.now, phase: angle, size: hazardSize(angle) * (s.level >= 3 && this.sequence % 3 === 0 ? 2.5 : 1), grazed: false, trail: [] });
+      this.nextSpawn = s.now + (powered ? 2200 : s.afterglow ? 6000 : Math.max(6500, 11500 - s.level * 500)) / (1 + excess);
     }
     const target = chapter.id === 'echo' ? this.history[0] : { x: s.cursorX, y: s.cursorY };
     const tide = this.tide(s.now, chapter.id === 'tides');
@@ -195,7 +219,7 @@ export class GravityField {
       h.vx = (h.vx + ax * dt * worldScale) * Math.exp(-dt * .3);
       h.vy = (h.vy + ay * dt * worldScale) * Math.exp(-dt * .3);
       const magnitude = Math.max(1, Math.hypot(h.vx, h.vy));
-      const cap = speed * worldScale;
+      const cap = speed * worldScale * ((h.size ?? hazardSize(h.phase)) > 10 ? .8 : 1);
       if (magnitude > cap) { h.vx *= cap / magnitude; h.vy *= cap / magnitude; }
       h.x += h.vx * dt; h.y += h.vy * dt;
       h.trail.push({ x: h.x, y: h.y });
@@ -209,15 +233,15 @@ export class GravityField {
         result.reward = { x: h.x, y: h.y };
         this.feedback.push({ x: h.x, y: h.y, tx: s.cursorX, ty: s.cursorY, at: s.now, kind: 'escape' });
       }
-      const contactRadius = (s.ringRadius ?? ringRadius(s.energy, 5, powered)) + hazardSize(h.phase) * 1.25;
+      const contactRadius = (s.ringRadius ?? ringRadius(s.energy, 5, powered)) + (h.size ?? hazardSize(h.phase)) * 1.25;
       const sweptDistance = segmentDistance(previousX - previousCursor.x, previousY - previousCursor.y,
         h.x - s.cursorX, h.y - s.cursorY);
       if (sweptDistance <= contactRadius && s.now - this.lastGraze > 1800) {
         h.grazed = true;
-        this.powerUntil = -Infinity;
+        if (powered) this.powerUntil = Math.max(s.now, this.powerUntil - 4000);
         this.lastGraze = s.now;
         result.grazed = true;
-        result.damage = contactDamage(s.level, hazardSize(h.phase));
+        result.damage = Math.max(1, contactDamage(s.level, h.size ?? hazardSize(h.phase)) - (powered ? 1 : 0));
         if (s.energy - result.damage / 5 <= 1e-9) {
           this.integrity = 0;
           result.died = true;
@@ -230,7 +254,7 @@ export class GravityField {
         this.powerUntil = -Infinity;
         this.integrity = Math.max(0, this.integrity - 1);
         this.lastHit = s.now;
-        this.hazards = []; // A short recovery window prevents cascading damage.
+        this.hazards = this.hazards.filter(other => other !== h); // Only the impacting body is consumed.
         this.nextSpawn = s.now + 6000;
         result.hit = true;
         result.died = this.integrity === 0;
@@ -244,6 +268,21 @@ export class GravityField {
   draw(ctx: CanvasRenderingContext2D, s: FieldInput) {
     const chapter = chapterFor(s.level, s.afterglow);
     ctx.save();
+    for (const wave of this.waves) {
+      ctx.strokeStyle = '#d7e9d1'; ctx.lineWidth = 2;
+      ctx.globalAlpha = .65 * (1 - .6 * wave.radius / wave.max);
+      ctx.beginPath(); ctx.arc(wave.x, wave.y, wave.radius, 0, Math.PI * 2); ctx.stroke();
+    }
+    for (const defeat of this.defeats) {
+      const t = (s.now - defeat.at) / 500;
+      ctx.fillStyle = '#ff8b88'; ctx.globalAlpha = (1 - t) ** 2;
+      for (let i = 0; i < 6; i++) {
+        const angle = i * Math.PI / 3;
+        const r = defeat.size * (.4 + t * 2);
+        ctx.beginPath(); ctx.arc(defeat.x + Math.cos(angle) * r, defeat.y + Math.sin(angle) * r, 1.5 * (1 - t), 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
     if (this.heart) {
       const { x, y, born } = this.heart;
       const age = s.now - born;
@@ -253,13 +292,9 @@ export class GravityField {
       ctx.scale(pulse, pulse);
       ctx.globalAlpha = Math.max(0, fade);
       const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 23);
-      glow.addColorStop(0, 'rgba(255,218,84,.24)'); glow.addColorStop(1, 'rgba(255,218,84,0)');
+      glow.addColorStop(0, 'rgba(199,219,170,.24)'); glow.addColorStop(1, 'rgba(199,219,170,0)');
       ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 23, 0, Math.PI * 2); ctx.fill();
-      // A single lightning stroke reads as energy, distinct from the red hazards.
-      ctx.strokeStyle = '#ffe478'; ctx.lineWidth = 2;
-      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(3, -10); ctx.lineTo(-5, 1);
-      ctx.lineTo(4, 1); ctx.lineTo(-3, 10); ctx.stroke();
+      drawResonanceMark(ctx, s.now, 1);
       ctx.restore();
     }
     if (chapter.id === 'binary') {
@@ -274,7 +309,7 @@ export class GravityField {
     for (const h of this.hazards) {
       const arrival = Math.min(1, Math.max(0, (s.now - h.born) / 1600));
       // Stable individual size, with the old connected-bubble motion in a small red silhouette.
-      const size = hazardSize(h.phase);
+      const size = h.size ?? hazardSize(h.phase);
       const time = s.now / 1000;
       const pulse = 1 + Math.sin(time * 4.3 + h.phase) * .12;
       const radius = size * (.82 + arrival * .18) * pulse;
@@ -405,10 +440,6 @@ export function drawEvolvingBridge(ctx: CanvasRenderingContext2D, s: FieldInput,
       ctx.bezierCurveTo(-r * .2, r * (1.05 + .08 * Math.sin(s.now / 1600 + j)), r * .2, r * (.65 + j * .13), r * .58, r * .93); ctx.stroke();
     }
   }
-  if (release > 0) {
-    ctx.globalAlpha = release * .2; ctx.strokeStyle = chapter.color; ctx.lineWidth = .8;
-    ctx.beginPath(); ctx.arc(0, r * .2, r * (1.1 + (1 - release) * 2.5), 0, Math.PI * 2); ctx.stroke();
-  }
   ctx.restore();
 }
 
@@ -494,19 +525,19 @@ export function romanLevel(level: number): string {
 
 export function drawPowerRing(ctx: CanvasRenderingContext2D, s: FieldInput, field: GravityField) {
   if (!field.powerActive(s.now)) return;
-  const remaining = Math.min(1, (field.powerUntil - s.now) / 8000);
+  const remaining = Math.min(1, (field.powerUntil - s.now) / POWER_DURATION);
   const pulse = 1 + Math.sin(s.now / 150) * .025;
   ctx.save(); ctx.translate(s.cursorX, s.cursorY); ctx.scale(pulse, pulse);
   const glow = ctx.createRadialGradient(0, 0, 15, 0, 0, 60);
-  glow.addColorStop(0, 'rgba(255,208,65,.14)');
-  glow.addColorStop(.7, 'rgba(255,208,65,.08)');
-  glow.addColorStop(1, 'rgba(255,208,65,0)');
+  glow.addColorStop(0, 'rgba(199,219,170,.14)');
+  glow.addColorStop(.7, 'rgba(199,219,170,.08)');
+  glow.addColorStop(1, 'rgba(199,219,170,0)');
   ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 60, 0, Math.PI * 2); ctx.fill();
-  // Replace the normal white cursor, preserving its five charge steps in gold.
+  // Replace the normal white cursor, preserving its five charge steps in pale green.
   for (let i = 0; i < 5; i++) {
     const radius = 18 + i * 5;
     const charge = Math.max(0, Math.min(1, s.energy * 5 - i));
-    ctx.strokeStyle = '#ffda55'; ctx.lineWidth = 3; ctx.globalAlpha = .22;
+    ctx.strokeStyle = '#c7dbaa'; ctx.lineWidth = 3; ctx.globalAlpha = .22;
     ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.stroke();
     ctx.globalAlpha = 1;
     if (charge > 0) {
@@ -515,15 +546,40 @@ export function drawPowerRing(ctx: CanvasRenderingContext2D, s: FieldInput, fiel
   }
   // Two revolving brackets change the silhouette even without colour perception.
   const spin = s.now / 550;
-  ctx.strokeStyle = '#fff0a8'; ctx.globalAlpha = .95; ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#ecf7de'; ctx.globalAlpha = .95; ctx.lineWidth = 2.5;
   for (let i = 0; i < 2; i++) {
     const start = spin + i * Math.PI;
     ctx.beginPath(); ctx.arc(0, 0, 45, start, start + Math.PI * .6); ctx.stroke();
   }
-  ctx.strokeStyle = '#ffda55'; ctx.globalAlpha = .8; ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#c7dbaa'; ctx.globalAlpha = .8; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.arc(0, 0, 51, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining); ctx.stroke();
-  ctx.strokeStyle = '#fff4c0'; ctx.globalAlpha = 1; ctx.lineWidth = 2;
-  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(2, -7); ctx.lineTo(-4, 1); ctx.lineTo(3, 1); ctx.lineTo(-2, 7); ctx.stroke();
+  ctx.globalAlpha = 1;
+  drawResonanceMark(ctx, s.now, .7);
+  ctx.restore();
+  drawOvercharge(ctx, s);
+}
+
+function drawResonanceMark(ctx: CanvasRenderingContext2D, now: number, scale: number) {
+  ctx.save(); ctx.scale(scale, scale);
+  ctx.strokeStyle = '#e5eed9'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-5, 6); ctx.lineTo(-5, 0);
+  ctx.arc(0, 0, 5, Math.PI, Math.PI * 2); ctx.lineTo(5, 6); ctx.stroke();
+  ctx.strokeStyle = '#c7dbaa'; ctx.lineWidth = .8;
+  ctx.beginPath(); ctx.ellipse(0, 0, 14, 6, now / 2200, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+
+export function drawOvercharge(ctx: CanvasRenderingContext2D, s: FieldInput) {
+  if (s.energy <= 1) return;
+  ctx.save(); ctx.translate(s.cursorX, s.cursorY);
+  for (let i = 0; i < 2; i++) {
+    const charge = Math.max(0, Math.min(1, s.energy - 1 - i));
+    if (!charge) continue;
+    ctx.strokeStyle = i ? '#efa59d' : '#c7dbaa'; ctx.lineWidth = 2;
+    ctx.globalAlpha = .15;
+    ctx.beginPath(); ctx.arc(0, 0, 64 + i * 8, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = .9;
+    ctx.beginPath(); ctx.arc(0, 0, 64 + i * 8, -Math.PI / 2, -Math.PI / 2 + charge * Math.PI * 2); ctx.stroke();
+  }
   ctx.restore();
 }
