@@ -142,3 +142,66 @@ abhängig von Level und stabiler Gegnergröße, 1,8 Sekunden Trefferpause.
 Restladung <= 0 beendet den Versuch. Dunkelroter „YOU DIED“-Dialog mit
 „Get gud – try again“, Spielzeit angehalten, vorhandene Retry-Logik erhalten.
 57 Tests, Check, Build und Dependency-Audit erfolgreich.
+
+
+## 2026-10-06: Resonanz, Überladung und Debug (lokal)
+
+- Power-up: 20 s statt 8 s, bleibt beim Entladen aktiv. 3× Sternenergie
+  gegenüber dem bisherigen Normalwert, 2,4× Anziehung. Ringtreffer kosten
+  4 s Restdauer und einen Ring weniger Schaden (mindestens einer).
+- Kleines ∩ mit rotierendem Orbit statt Blitz, blassgrüner aktiver Cursor.
+- Nach den Farbphasen bis 3× Ladung: zwei Außenringe, je voller Zusatzladung
+  ein Bonuslevel. Mit Resonanz maximal vier Level pro Entladung; X/XX bleiben
+  Abschlussgrenzen. Normales Laden 30 % langsamer. Überladung erhöht
+  Gegnerlimit und Spawnfrequenz; die Gesamtsimulation bleibt begrenzt.
+- Jeder dritte Gegner ab Level III ist 2,5× größer und 20 % langsamer;
+  sichtbare Größe fließt in Trefferprüfung und Schaden ein.
+- `?debug=1`: zwei Sterne oben rechts, links Level runter, rechts hoch,
+  0–XX samt Kapitelmusik. Kein Debug-HUD ohne URL-Parameter.
+- Retry setzt hörbare Basismusik, respektiert Mute und entsperrt Audio erneut.
+  Musik-Testfälle sichern Level 0 → gleicher Track sowie Stop/Start-Rennen ab.
+- Canvas: keine unnötigen Größenresets, gültige Fallbackmaße, Cursor bei
+  Größenwechsel neu positioniert, pausierte Szene neu gezeichnet, Kontext-
+  Wiederherstellung behandelt. RAF überlebt einen einzelnen Zeichenfehler.
+  Ursprüngliches sporadisches Verschwinden auf realem Mobile noch nicht
+  eindeutig reproduziert; keine Behauptung eines bestätigten iOS-Fixes.
+- 64 automatisierte Tests bestanden; Check ohne Fehler/Warnungen, Build erfolgreich.
+
+
+### Nachkorrektur: Success-Cards und Debug
+
+X/XX zeigen wieder die ursprünglichen weißen Success-Cards einschließlich
+Links, Projekten/Credits (X) und Labskaus (XX). Gameplay bleibt währenddessen
+pausiert; Continue führt ins Afterglow, Abschluss XX zurück zum neuen Versuch.
+Debug-Auf-/Abstufen erreicht beide Cards und wartet vor dem Musikstart auf die
+Audio-Initialisierung. Aktuelles Level wird nach dem Await erneut ausgewertet,
+damit schnelle Klickfolgen keine alte Musikstufe wiederherstellen.
+Die Debug-Symbole sind zwei feste 4-px-Lichtpunkte in separaten Klickflächen,
+keine Sterne, außerhalb der Partikelphysik. 66 Tests bestanden.
+
+
+### Balancing-Korrektur: einzelne Fortschrittsschritte und eindeutige Welle
+
+Aktueller Stand ersetzt die obigen 20-s-/Bonuslevel-Werte: Resonanz 12 s,
+Sternenergie .009 statt .03, normal .0055 statt .007. Zusätzlicher Sog 1,5×
+statt 2,4×. Jede Entladung genau ein Level, auch mit Resonanz/Überladung.
+Überladung bleibt bis 3× erhalten und belohnt Risiko mit Wellenreichweite:
+30 % der kurzen Bildschirmseite, plus 12 Prozentpunkte pro Zusatzladung;
+Resonanz erweitert diese Reichweite um 15 %. Sichtbare Front läuft 900 ms.
+Jeder bereits vorhandene Gegner, dessen Körper die Front kreuzt, zerplatzt,
+unabhängig von seiner Größe. Außerhalb bleiben Gegner bestehen; neu nach
+Entladung spawnende Gegner werden von dieser Welle nicht rückwirkend getroffen.
+Keine stillen Gegner-Löschungen bei Kapitelwechseln; ein Einschlag ins Zentrum
+verbraucht nur den einschlagenden Gegner. Keine dekorativen Entladungsringe,
+die Treffer suggerieren. Rote Zerfallspartikel bestätigen einen Abschuss.
+Wellenkollision auch bei übersprungenen Frames und bewegten Gegnern geprüft.
+
+
+### Einstieg bei I und weicheres Ladetempo
+
+Evolution beginnt jetzt tatsächlich auf Level 1 (sichtbar I), einschließlich
+Neustart und unterer Debug-Grenze. Lernphase bleibt erhalten, erster Projekt-
+fortschritt wird II; Abschlusskarten weiter bei X und XX. Die letzte pauschale
+Drosselung ist abgeschwächt: Sternenergie .012 im Einstieg, .010 während der
+Farbphasen, .008 später; Resonanz .012 für weiterhin 12 s. Ein Level je Entladung
+und die eindeutige Trefferwelle bleiben bestehen. 73 Tests, Check und Build grün.
