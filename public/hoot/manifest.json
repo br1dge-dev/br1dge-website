@@ -1,0 +1,341 @@
+{
+  "title": "SIR Hoot \u2014 whatthehoot collaboration assets",
+  "edition": "01",
+  "date": "2026-10-08",
+  "counts": {
+    "figures": 4,
+    "heads": 7,
+    "body_parts": 5,
+    "props": 2,
+    "total_png": 18
+  },
+  "assets": [
+    {
+      "id": "01-front",
+      "title": "Front \u00b7 at ease",
+      "category": "figures",
+      "file": "assets/figures/01-front.png",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "815ebd09658554bffdee3150d80ccc53d0e7222bd13816d326e6d14ad81d1560",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        28,
+        171,
+        1429,
+        960
+      ]
+    },
+    {
+      "id": "02-right",
+      "title": "Three-quarter \u00b7 right",
+      "category": "figures",
+      "file": "assets/figures/02-right.png",
+      "width": 1672,
+      "height": 941,
+      "sha256": "f845ce9128ffc9099263052cb4e551a166b3a9bb3d59919174c0beb517e4a859",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        53,
+        57,
+        1617,
+        884
+      ]
+    },
+    {
+      "id": "03-left",
+      "title": "Three-quarter \u00b7 left",
+      "category": "figures",
+      "file": "assets/figures/03-left.png",
+      "width": 1672,
+      "height": 941,
+      "sha256": "eb817a1ee8c64fa052940c9b28659999e48a15c1729a5f569e4c6a4f6d8d039a",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        93,
+        99,
+        1559,
+        860
+      ]
+    },
+    {
+      "id": "04-victory",
+      "title": "Victory \u00b7 sword salute",
+      "category": "figures",
+      "file": "assets/figures/04-victory.png",
+      "width": 1536,
+      "height": 1024,
+      "sha256": "5ac6dc0d35cae7234ab91fc63b9dafb00386fb4bc6e93a8097db66d4713820f4",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        69,
+        54,
+        1431,
+        966
+      ]
+    },
+    {
+      "id": "05-neutral",
+      "title": "Neutral",
+      "category": "heads",
+      "file": "assets/heads/05-neutral.png",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "3148ce6ab5ad977843522580c81a0b07b3fc31d86a53e584e355a414662b4e51",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        200,
+        24,
+        1235,
+        1056
+      ]
+    },
+    {
+      "id": "06-happy",
+      "title": "Delighted",
+      "category": "heads",
+      "file": "assets/heads/06-happy.png",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "b88417422dc56af70bbcf38c65b7667f64ae775318bb34ee03a2fceb9ddefa12",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        195,
+        22,
+        1250,
+        1049
+      ]
+    },
+    {
+      "id": "07-surprised",
+      "title": "Surprised",
+      "category": "heads",
+      "file": "assets/heads/07-surprised.png",
+      "width": 1374,
+      "height": 1145,
+      "sha256": "eb5c8aa2f56210d5a14f7c9a757112d6e176f4a1b9c80f12f444ddceb18b8c97",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        157,
+        63,
+        1198,
+        1094
+      ]
+    },
+    {
+      "id": "08-blink",
+      "title": "Blink",
+      "category": "heads",
+      "file": "assets/heads/08-blink.png",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "3dd9bf9f163ed4810e98895b25b08fcc0e9775f1d9eaa62ca153d265c6e08a07",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        184,
+        40,
+        1257,
+        1049
+      ]
+    },
+    {
+      "id": "09-determined",
+      "title": "Determined",
+      "category": "heads",
+      "file": "assets/heads/09-determined.png",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "5854b2dc19ffc968211f1fc2d4bf903e3f16158650b43d3e52d6c9f063065ddf",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        185,
+        16,
+        1261,
+        1072
+      ]
+    },
+    {
+      "id": "10-right",
+      "title": "Head \u00b7 right",
+      "category": "heads",
+      "file": "assets/heads/10-right.png",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "bdeaf0251fac018a58c98bf0b6584e7596d00efc74aac03aba3a109122c0a7aa",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        222,
+        26,
+        1253,
+        1061
+      ]
+    },
+    {
+      "id": "11-left",
+      "title": "Head \u00b7 left",
+      "category": "heads",
+      "file": "assets/heads/11-left.png",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "b40473277745e77631d9d6981c0b6a6a9aab1eab3ece5d04f7c9fcfbc3fefe1c",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        266,
+        73,
+        1254,
+        1021
+      ]
+    },
+    {
+      "id": "12-torso",
+      "title": "Torso",
+      "category": "parts",
+      "file": "assets/parts/12-torso.png",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "e9d3344649dd64fe76e3b5f7f34a9657eb1808c1b6a24e00d4cbb38ad44a470a",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        352,
+        248,
+        1115,
+        903
+      ]
+    },
+    {
+      "id": "13-right-wing",
+      "title": "Right wing \u00b7 grip",
+      "category": "parts",
+      "file": "assets/parts/13-right-wing.png",
+      "width": 1536,
+      "height": 1024,
+      "sha256": "2da6534b7546a3d2b2c26d6a034ffbd7332e8d79dd02bbcfaaa96de3213334c4",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        283,
+        86,
+        1341,
+        930
+      ]
+    },
+    {
+      "id": "14-left-wing",
+      "title": "Left wing \u00b7 shield side",
+      "category": "parts",
+      "file": "assets/parts/14-left-wing.png",
+      "width": 1536,
+      "height": 1024,
+      "sha256": "7cd8e2643f2f1c4cd87d93546491d8df0c7ff62deb4cf14d661a28b21a9954f9",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        378,
+        203,
+        1172,
+        800
+      ]
+    },
+    {
+      "id": "15-right-foot",
+      "title": "Right foot + ankle",
+      "category": "parts",
+      "file": "assets/parts/15-right-foot.png",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "03ed51a258ce8781657244951b1cdb324418054a0b5e195b9c86142d7fbca420",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        328,
+        191,
+        1153,
+        910
+      ]
+    },
+    {
+      "id": "16-left-foot",
+      "title": "Left foot + ankle",
+      "category": "parts",
+      "file": "assets/parts/16-left-foot.png",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "f623fb31379a4246e8a4c1527df59e44763da114206f5f46b4d425181dcc3852",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        340,
+        230,
+        1135,
+        891
+      ],
+      "integration_note": "Residual material-depth mismatch: left toes are thicker than right. Refine to match before close-up rig use."
+    },
+    {
+      "id": "17-sword",
+      "title": "Oversized sword",
+      "category": "props",
+      "file": "assets/props/17-sword.png",
+      "width": 1672,
+      "height": 941,
+      "sha256": "97169de07efe42e7ee62ebdd9922947fa0f15ddeda6c1152ef69836462acb3c2",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        60,
+        84,
+        1606,
+        922
+      ]
+    },
+    {
+      "id": "18-shield",
+      "title": "Plain shield",
+      "category": "props",
+      "file": "assets/props/18-shield.png",
+      "width": 1278,
+      "height": 1230,
+      "sha256": "2dcfc078463e69c1de0312e6b5b57171d75823e759588bd6c10d3cb7a72ee84a",
+      "format": "PNG RGBA",
+      "native_resolution": true,
+      "upscaled": false,
+      "content_bounds_alpha_gt_16": [
+        190,
+        71,
+        1088,
+        1164
+      ]
+    }
+  ],
+  "assembly": "Independent source images. Fit scale, overlap and pivots to the target animation rig.",
+  "known_variation": "Left foot retains slightly more toe thickness than right; refine the pair before close-up use."
+}
